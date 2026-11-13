@@ -110,13 +110,13 @@ export const drawnSpring = (i: number, d: Detail): Geo | undefined => springs.ge
 const tint = new Map<number, Material>();
 const q8 = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 8) / 8;
 export const MATS = {
-  body: M.make({ base: [0.3, 0.34, 0.4], metal: 0.3, rough: 0.45, label: 'body (an analogy: no real valve is drawn)' }),
+  body: M.make({ base: [0.36, 0.37, 0.39], metal: 0.5, rough: 0.62, label: 'cast grey iron body (an analogy: no particular valve is drawn)' }),
   glass: M.make({ ...M.glass, transmit: 0.92, label: 'glass front (so the inside shows)' }),
-  seat: M.make({ base: [0.72, 0.6, 0.38], metal: 0.7, rough: 0.35, label: 'seat' }),
-  disc: M.make({ base: [0.82, 0.82, 0.85], metal: 0.8, rough: 0.25, label: 'plunger and stem' }),
-  diaphragm: M.make({ base: [0.12, 0.12, 0.13], metal: 0, rough: 0.6, label: 'rubber diaphragm' }),
-  spring: M.make({ base: [0.75, 0.77, 0.8], metal: 0.85, rough: 0.3, label: 'spring steel' }),
-  pipe: M.make({ base: [0.55, 0.57, 0.6], metal: 0.6, rough: 0.4, label: 'pipe (cut in half)' }),
+  seat: M.make({ base: [0.8, 0.55, 0.32], metal: 0.9, rough: 0.18, label: 'machined bronze seat' }),
+  disc: M.make({ base: [0.78, 0.8, 0.83], metal: 0.9, rough: 0.2, label: 'steel plunger and stem' }),
+  diaphragm: M.make({ base: [0.05, 0.05, 0.055], metal: 0, rough: 0.5, coat: 0.3, label: 'black rubber diaphragm' }),
+  spring: M.make({ base: [0.6, 0.63, 0.68], metal: 0.95, rough: 0.25, label: 'spring steel' }),
+  pipe: M.make({ base: [0.72, 0.45, 0.3], metal: 0.85, rough: 0.35, label: 'copper pipe (cut in half)' }),
   water: M.make({ base: [0.25, 0.55, 0.95], metal: 0, rough: 0.1, transmit: 0.55, tint: [0.35, 0.65, 1], label: 'water' }),
   pellet: M.make({ base: [1, 0.8, 0.3], metal: 0, rough: 0.4, emit: [1, 0.75, 0.25], glow: 0.9, label: 'a slug of the gate’s water: it moves only while the diaphragm does' }),
   /** The gate line's fluid, deeper with its pressure. */

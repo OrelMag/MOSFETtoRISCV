@@ -66,6 +66,8 @@ export interface StudioStage {
   look(view: OrbitView): void;
   /** `casts`: the set casts shadows (the shadow's fit then takes it in). */
   instances(key: string, geo: Geo, mat: Material, data: Float32Array, casts?: boolean): void;
+  /** Leave the tour (a host whose model changes under it: its beats may no longer be the same). */
+  endTour(): void;
   /** Parts moved by the physics this frame. */
   move(moves: Moves): void;
   studio(): Studio | null;
@@ -481,6 +483,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
 
   return {
     el, slot, chips, hint, refresh, goTo,
+    endTour() { if (beat >= 0) endTour(); },
     look(v: OrbitView) {
       if (!st) { o.home = v; return; }
       cancelAnimationFrame(tween); tween = 0;

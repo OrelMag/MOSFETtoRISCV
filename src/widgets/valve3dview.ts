@@ -138,6 +138,7 @@ export function valveView(link?: BiasLink): Widget {
     mode = m; out = 0;
     if (m === 'one' && link) { vin = link.vg / VDD; vds = link.vd / VDD; } open = { n: 0, p: 0 }; gateQ = 0; firstDraw = true;
     oneBtn.setAttribute('aria-pressed', String(m === 'one')); pairBtn.setAttribute('aria-pressed', String(m === 'pair'));
+    stage.endTour(); // the pair has its own beats: the one valve's tour would leave its text behind
     repaint();
     stage.goTo(VALVE_HOME[m]);
   }
