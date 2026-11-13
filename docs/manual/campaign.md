@@ -1,5 +1,7 @@
 # The campaign
 
+[← Back to the manual](README.md)
+
 ## What it is for
 
 The campaign is a game of levels. Each level asks you to build one block of a processor from the blocks you have
@@ -125,9 +127,10 @@ Your circuit and your progress are saved in this browser as you go. To carry the
   - On a fresh start it shows **Start here**, with a **Begin** button and a summary of every act.
   - For a level, it shows:
     - **Why you need it**, and **Goes into**: the chain of later levels that use this block.
-    - **The problem**, **Without it** (what you would do instead) and **What it costs**: the par and the
-      alternatives, measured.
-    - **Used later in**, **Builds on** and **Pitfalls**.
+    - **The problem** and **What it costs**: the par and the alternatives, measured.
+    - **Used later in**: the levels that place this block.
+    - **More: without it, alternatives, pitfalls**, folded: what you would do instead, and the usual mistakes.
+    - **The task**, **Success criteria**, **Grading**, **Tips** and **Codex**, as on the level screen.
     - **Go deeper**: the chapters of the journey that teach the same thing.
   - The level's buttons are at the bottom: **Play**, **Show answer** and **Skip** for a build level, **Done
     reading** for a lesson. A drill or a program is played in the panel itself.
@@ -209,8 +212,8 @@ one at a time, so you can watch the case that fails.
 1. The table lists the cases. A red ✕ marks a wrong output, with the value it wanted (**want 1**).
 2. Move through the cases with **First test**, **Previous test**, **Next test** and the play button (**Play the
    tests on the circuit**, which stops at a failing one). Drag the scrub bar to jump.
-3. **previous failure** and **next failure** jump between the failing cases. The speed menu (**5/s**) sets the play
-   rate.
+3. **previous failure** and **next failure** jump between the failing cases. The speed menu (**1/s** to
+   **max**) sets the play rate.
 4. While the player is open, the canvas shows your circuit at the selected case's inputs. If you fix something, the
    current row is recomputed on your edited circuit at once, and **edited since: check again** reminds you to Check.
 5. To close the player:
@@ -258,7 +261,7 @@ The challenge strip has the same help as buttons:
 - **Walk me through it** starts the walkthrough.
 - **Show answer** opens the walkthrough at its last step, with **Use this answer** and **Build it myself** at the bottom.
 - **Do it for me** asks *Replace your circuit with the answer?* Click **Replace** to put the reference answer in your
-  chip, or **Cancel**. **Undo** (Ctrl+Z) brings your own circuit back.
+  chip, or **Cancel**. **Undo** (**Ctrl Z**) brings your own circuit back.
 
 ### Follow the walkthrough or build along
 
@@ -407,8 +410,8 @@ you finish or skip the level that teaches it. With **Unlock all**, every entry s
 1. Click **Codex** in the header.
 2. The left column lists the entries **By act** or **By kind**. Narrow them with **All**, **Components**, **Laws**,
    **Tools**, **Tricks** and **Concepts**, or type in the search box above.
-3. The front page has **Start reading**, the recently discovered entries, what the next level will add, and your
-   progress per act.
+3. The front page has **Start reading**, a link to the analogy index, and **Next to discover**: what the next level
+   will add.
 4. Click an entry to read it. An entry has:
    - a summary, and the level that unlocks it;
    - **Read in**: the chapters that teach it;
@@ -439,7 +442,7 @@ The 3D models link, at the top of the codex's left column, lists every machine a
 On an open model:
 
 1. Drag to orbit, and right-drag or Shift-drag to pan (two fingers on a touch screen). To zoom, click the model and
-   then scroll (or Ctrl + scroll, or pinch). Double-click to reset the view.
+   then scroll (or **Ctrl** + scroll, or pinch). Double-click to reset the view.
 2. Move the sliders under the model to drive it. Each model has its own; here they are the gate and drain voltages,
    the width W and the length L.
 3. **Cutaway** slices the model open, and **Explode** pulls its parts apart.
@@ -509,3 +512,5 @@ The [sandbox page](sandbox.md) lists every mouse and touch gesture.
   count as solved. Click the level, click **Un-skip**, and play it.
 - **Your progress is missing on another computer or browser.** Progress lives in the browser it was made in. Use
   **Export campaign** there and **Import campaign** here.
+
+Next: [The workbench](workbench.md)
