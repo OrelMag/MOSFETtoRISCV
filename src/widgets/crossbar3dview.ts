@@ -42,6 +42,7 @@ export function crossbarView(): Widget {
     aspect: 1.45,
     // the switch fitted as a sphere round its middle: it fills the column
     homeRadius: 185,
+    homeRadiusNarrow: 260, // a phone: every badge's dot inside the frame and clear of the scale bar
     scaleBar: (len) => (len >= 10 ? `${len / 10} cm` : `${len} mm`),
     limits: { minDist: 40, maxDist: 2400, maxPan: 600 },
     onBeat: (i) => beat(i),

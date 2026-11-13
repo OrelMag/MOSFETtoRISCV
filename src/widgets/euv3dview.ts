@@ -26,6 +26,8 @@ export function euvView(initial: Scene = 'source'): Widget {
   // ---------------------------------------------------------------- the source
   const loop = frameLoop((_now, dt) => {
     if (!playing || scene !== 'source') return;
+    // the flat drawing redraws the whole SVG: it stays on the flash (the default time) instead of playing
+    if (stage?.isFlat()) { setPlaying(false); return; }
     src.tau = (src.tau + (dt * 1e6) / periodUs(src.fKhz) / SLOW) % 1;
     tauIn.value = String(src.tau);
     stage?.refresh();
@@ -57,7 +59,7 @@ export function euvView(initial: Scene = 'source'): Widget {
     let rows: [string, string][];
     if (scene === 'source') {
       const sp = spacingMm(src.vMs, src.fKhz), m = mainAt(src), t = src.tau, pIf = powerAtIf(20), need = onTargetNeeded(20, 200);
-      chip.textContent = t < m ? (t < 0.04 ? 'Pre-pulse' : 'The target falls to the focus') : t - m < 0.25 ? 'Main pulse: plasma, 13.5 nm light' : 'Next droplet';
+      chip.textContent = t < m ? (t < 0.04 ? 'Pre-pulse' : 'The target falls to the focus') : t - m < 0.25 ? 'Main pulse: plasma' : 'Next droplet';
       chip.className = `r3-chip ${t >= m && t - m < 0.25 ? 'warn' : ''}`;
       rows = [
         ['Droplets', `${src.fKhz} kHz at ${src.vMs} m/s: ${sp.toFixed(2)} mm apart, one every ${f1(periodUs(src.fKhz))} µs`],

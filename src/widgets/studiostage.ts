@@ -33,6 +33,8 @@ export interface StudioStageOptions {
   /** Fit home to a sphere of this radius round the framed box's centre instead of the box's corners (a round model: a
    *  radiation pattern, a ring), which would otherwise leave it small. */
   homeRadius?: number;
+  /** homeRadius on a canvas narrow enough for badges (a phone): further out, so no main part's anchor sits under a badge at the edge. */
+  homeRadiusNarrow?: number;
   /** The canvas's aspect (w / h) when the model's own would mislead: a model built only once on the page (empty at
    *  first), or one whose home view is a set camera (fit: false). */
   aspect?: number;
@@ -48,6 +50,8 @@ export interface StudioStageOptions {
   onKnobs?: (k: { cut: number; explode: number }) => void;
   limits?: Partial<OrbitLimits>;
   note?: string;
+  /** The note's longer part (sources, every simplification): plain text in a folded "Sources and simplifications" after the hint. */
+  noteMore?: string;
   /** The model now, at a detail: 'flat' for the SVG fallback (fewer facets). */
   build: (detail: 'full' | 'flat') => Model3;
 }
@@ -118,7 +122,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     h('label', { class: 'r3-sl' }, h('span', null, 'Explode'), exIn),
     h('div', { class: 'r3-btns' }, prev, next, resetBtn));
   const hint = h('div', { class: 'r3-hint' });
-  const el = h('div', { class: 'st' }, stage, list, cap, slot, bar, hint);
+  const more = o.noteMore ? h('details', { class: 'deeper st-more' }, h('summary', null, 'Sources and simplifications'), h('p', null, o.noteMore)) : null;
+  const el = h('div', { class: 'st' }, stage, list, cap, slot, bar, hint, ...(more ? [more] : []));
 
   const colors = new CssColors(el); // in the stage: its --st-* tokens apply, and the host's (a model's palette) are inherited
   const resolve = (c: Colour): RGB => (typeof c === 'string' ? colors.rgb(c) : c);
@@ -172,10 +177,11 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   const homeView = (): OrbitView => {
     if (o.fit === false || homeGiven || !st) return o.home;
     const box = homeBox();
-    if (o.homeRadius) {
+    const radius = (isNarrow() && o.homeRadiusNarrow) || o.homeRadius;
+    if (radius) {
       const c: Vec3 = [(box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2];
       const half = Math.atan(Math.tan(st.camera.fov / 2) * Math.min(1, contentAspect())) * 0.94;
-      return { yaw: o.home.yaw, pitch: o.home.pitch, target: c, dist: o.homeRadius / Math.sin(half) };
+      return { yaw: o.home.yaw, pitch: o.home.pitch, target: c, dist: radius / Math.sin(half) };
     }
     const f = fitView(box, o.home.yaw, o.home.pitch, st.camera.fov, contentAspect(), 0.06);
     return { yaw: o.home.yaw, pitch: o.home.pitch, target: f.target, dist: f.dist };
@@ -247,7 +253,9 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     for (const side of ['l', 'r'] as const) {
       const col = seen.filter((q) => (q.r.a.gutter ?? (q.x < W / 2 ? 'l' : 'r')) === side).sort((a, b) => a.y - b.y);
       // the right column stops above the corner buttons, the left above the scale bar
-      const ys = spread(col.map((q) => q.y), narrow ? 24 : 22, 12, side === 'r' ? H - 56 : o.scaleBar ? H - 40 : H - 12);
+      // on a phone the left badges start below the status chips (top left, over the canvas)
+      const top = narrow && side === 'l' && chips.childElementCount ? Math.max(12, chips.offsetTop + chips.offsetHeight + 18) : 12;
+      const ys = spread(col.map((q) => q.y), narrow ? 24 : 22, top, side === 'r' ? H - (narrow ? 70 : 56) : o.scaleBar ? H - (narrow ? 58 : 40) : H - 12);
       col.forEach((q, i) => {
         const y = ys[i];
         let gx: number, elbow: number;
@@ -275,14 +283,20 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     leaders.replaceChildren(...lines);
   };
 
-  /** The scale bar: the 1-2-5 length nearest 90 px at the camera's target. */
+  /** The scale bar: the 1-2-5 length nearest 90 px at the camera's target, short enough to end before the corner tools
+   *  (on a phone a long one ran under them). */
   const placeScale = () => {
     if (!st || !o.scaleBar) return;
     const u = st.camera.unitsPerPx(canvas.clientHeight || 1), want = 90 * u, p = 10 ** Math.floor(Math.log10(want));
-    const len = [1, 2, 5, 10].map((m) => m * p).reduce((a, b) => (Math.abs(Math.log(b / want)) < Math.abs(Math.log(a / want)) ? b : a));
+    const room = Math.max(24, (canvas.clientWidth || 300) - 2 * gutNow - 20 - toolsW());
+    const fits = [0.1, 0.2, 0.5, 1, 2, 5, 10].map((m) => m * p).filter((l) => l / u <= room);
+    const len = (fits.length ? fits : [0.1 * p]).reduce((a, b) => (Math.abs(Math.log(b / want)) < Math.abs(Math.log(a / want)) ? b : a));
     (scaleBar.firstChild as HTMLElement).style.width = `${(len / u).toFixed(1)}px`;
     scaleLbl.textContent = o.scaleBar(len);
   };
+
+  /** The corner tools' width (they sit bottom right, over the canvas). */
+  const toolsW = () => { const t = view.querySelector<HTMLElement>('.r3-tools, .m3-tools'); return t ? t.getBoundingClientRect().width + 10 : 140; };
 
   // ---------------------------------------------------------------- the card
 
@@ -467,6 +481,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     canvas.style.display = m === 'flat' ? 'none' : '';
     flat.style.display = m === 'flat' ? '' : 'none';
     leaders.style.display = badges.style.display = m === 'flat' ? 'none' : '';
+    // the flat drawing is fitted, not to scale: no bar (it showed as a stray square)
+    scaleBar.style.display = m === 'flat' || !o.scaleBar ? 'none' : '';
     // the gutters keep their columns (hidden, not removed), so the view stays in the middle one
     gutL.style.visibility = gutR.style.visibility = m === 'flat' ? 'hidden' : '';
     frame.setFlat(m === 'flat');
