@@ -69,7 +69,7 @@ export function lightAt(shape: Shape, dx: number, dy: number): number {
 export const newTex = (mode: DataTex['mode']): DataTex => ({ w: TEX, h: TEX, pixels: new Uint8Array(TEX * TEX * 4), rev: 0, mode, smooth: true });
 
 // an emit texture is added as light at twice its value (gl/studio.ts): these are half the colours seen
-const POS: [number, number, number] = [0.55, 0.32, 0.1], NEG: [number, number, number] = [0.12, 0.26, 0.55], DARK: [number, number, number] = [0.02, 0.022, 0.02];
+const POS: [number, number, number] = [0.55, 0.32, 0.1], NEG: [number, number, number] = [0.12, 0.26, 0.55], DARK: [number, number, number] = [0.03, 0.036, 0.04];
 const P1: [number, number, number] = [0.22, 0.5, 0.26];
 /** Stamp one spot into a texture: its charge `amp` (0 … 1) of a shape, or (display) its light. Each spot owns its cell. */
 export function stamp(tex: DataTex, line: number, digit: number, shape: Shape | null, amp: number, kind: 'charge' | 'light'): void {
@@ -110,27 +110,41 @@ const bx = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: numb
 
 /** The glass: neck with its pressed stem, the funnel (williams3dparts.ts funnelRadius), a faceplate domed a little. */
 function envelopeProfile(): [number, number][] {
-  const pts: [number, number][] = [[4, -212], [10, -210], [15, -206], [W.NECK_R, -200], [W.NECK_R, W.JOIN_X - 20]];
+  const pts: [number, number][] = [[0, -212], [4, -212], [10, -210], [15, -206], [W.NECK_R, -200], [W.NECK_R, W.JOIN_X - 20]];
   for (let i = 0; i <= 24; i++) { const x = W.JOIN_X - 10 + ((W.FACE_X - 12 - (W.JOIN_X - 10)) * i) / 24; pts.push([funnelRadius(x), x]); }
   const R = W.FACE_R + 6;
   pts.push([R, W.FACE_X - 4], [R - 3, W.FACE_X + 2], [R - 14, FACE_OUT - 2.2], [R * 0.6, FACE_OUT - 0.6], [R * 0.3, FACE_OUT - 0.15], [0, FACE_OUT]);
   return pts;
 }
+/** A closed wall of thickness `t(p)` inside an outer profile (lathe's [r, y], outside on the right as it runs): the cut
+ *  then shows the wall's edge and its inner face, where a single surface would show only its back. */
+export function shell(outer: [number, number][], t: (p: [number, number]) => number): [number, number][] {
+  const inner = outer.map((p, k): [number, number] => {
+    const a = outer[Math.max(0, k - 1)], b = outer[Math.min(outer.length - 1, k + 1)], dr = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dr, dy) || 1;
+    const w = t(p);
+    return [Math.max(0, p[0] - (dy / l) * w), p[1] + (dr / l) * w];
+  });
+  return [...outer, ...inner.reverse(), outer[0]];
+}
+/** The glass wall: 2.5 mm on the neck and funnel (drawn), the faceplate W.GLASS thick so its inside is the face. */
+const WALL = 2.5;
+const glassWall = (p: [number, number]) => (p[1] >= W.FACE_X - 4 ? W.GLASS : WALL);
 
 interface Statics {
   glass: Geo; aquadag: Geo; phosphor: Geo; face: Geo; base: Geo; pins: Geo;
   heater: Geo; cathode: Geo; gun: Geo; yPlates: Geo; xPlates: Geo;
-  mesh: Geo; plate: Geo; box: Geo; boxPlain: Geo; chassis: Record<ChassisKey, Geo>; valves: Geo; leads: Geo; leadTube: Geo;
+  mesh: Geo; plate: Geo; box: Geo; boxPlain: Geo; edge: Geo; chassis: Record<ChassisKey, Geo>; valves: Geo; valveCores: Geo; leads: Geo; leadTube: Geo;
 }
 const memo = new Map<string, Statics>();
 function statics(detail: 'full' | 'flat'): Statics {
   const hit = memo.get(detail);
   if (hit) return hit;
   const seg = detail === 'flat' ? 20 : 64, sides = detail === 'flat' ? 5 : 8;
-  const glass = onAxis(lathe(envelopeProfile(), { seg, crease: 60 }));
+  const glass = onAxis(lathe(shell(envelopeProfile(), glassWall), { seg, crease: 60 }));
+  // the coating lies on the glass's inside: a film 0.8 mm thick (drawn thicker than it is, so its cut edge shows)
   const aq: [number, number][] = [];
-  for (let i = 0; i <= 16; i++) { const x = W.JOIN_X + 20 + ((W.FACE_X - 30 - W.JOIN_X - 20) * i) / 16; aq.push([funnelRadius(x) - 1.2, x]); }
-  const aquadag = onAxis(lathe(aq, { seg }));
+  for (let i = 0; i <= 16; i++) { const x = W.JOIN_X + 20 + ((W.FACE_X - 30 - W.JOIN_X - 20) * i) / 16; aq.push([funnelRadius(x) - WALL - 0.05, x]); }
+  const aquadag = onAxis(lathe(shell(aq, () => 0.8), { seg, crease: 60 }));
   const phosphor = onAxis(lathe([[W.FACE_R, W.FACE_X - 0.2], [0, W.FACE_X - 0.2]], { seg }));
   const face = plane(W.RASTER, W.RASTER);
   // the gun on the axis: heater in the cathode sleeve, the control grid's cup, the first and second anodes (proportions drawn)
@@ -170,6 +184,8 @@ function statics(detail: 'full' | 'flat'): Statics {
   const chassis = Object.fromEntries(CHASSIS.map((c) => [c.key, bx(c.x - CH.w / 2, c.x + CH.w / 2, SHELF_Y - CH.h / 2, SHELF_Y + CH.h / 2, -CH.d / 2, CH.d / 2, 3)])) as Record<ChassisKey, Geo>;
   const bulb = lathe([[0, 0], [9, 0], [10, 6], [10, 34], [8, 40], [3, 44], [0, 45]], { seg: 20 });
   const valves = merge(CHASSIS.flatMap((c) => [-28, 28].map((dx) => transform(bulb, tr([c.x + dx, SHELF_Y + CH.h / 2, 0])))), 'valves');
+  const core = lathe([[0, 8], [2.4, 8], [2.4, 30], [0, 30]], { seg: 12, crease: 50 });
+  const valveCores = merge(CHASSIS.flatMap((c) => [-28, 28].map((dx) => transform(core, tr([c.x + dx, SHELF_Y + CH.h / 2, 0])))), 'valve cathodes');
   // the signal's path: plate corner to the amplifier, amplifier → discriminator → beam control, beam control to the gun's grid
   const top = SHELF_Y + CH.h / 2, path: Vec3[][] = [
     [[PLATE_X + 1, -PLATE_HALF, PLATE_HALF], [PLATE_X + 8, -PLATE_HALF - 30, PLATE_HALF - 20], [PLATE_X + 8, top + 20, 20], [CHASSIS[0].x + 40, top + 6, 20], [CHASSIS[0].x + 40, top, 20]],
@@ -179,7 +195,7 @@ function statics(detail: 'full' | 'flat'): Statics {
   ];
   const leads = merge(path.slice(1).map((p) => tube(p, 1.2, { sides, bend: 6 })), 'leads');
   const leadTube = tube(path[0], 1.2, { sides, bend: 6 });
-  const s: Statics = { glass, aquadag, phosphor, face, base, pins, heater, cathode, gun, yPlates, xPlates, mesh, plate, box: walls(false), boxPlain: walls(true), chassis, valves, leads, leadTube };
+  const s: Statics = { glass, aquadag, phosphor, face, base, pins, heater, cathode, gun, yPlates, xPlates, mesh, plate, box: walls(false), boxPlain: walls(true), edge: cutEdge(sides), chassis, valves, valveCores, leads, leadTube };
   memo.set(detail, s);
   return s;
 }
@@ -195,8 +211,10 @@ export function beamGeo(cell: number): Geo {
 
 const PLAIN = 'no source found for its size or shape: drawn';
 export const MATS = {
-  glass: M.glass,
-  aquadag: M.make({ base: [0.08, 0.08, 0.08], metal: 0.15, rough: 0.75, label: 'aquadag (colloidal graphite) on the inside of the funnel' }),
+  glass: M.make({ ...M.glass, transmit: 0.86, rough: 0.03, label: 'glass (the envelope, evacuated)' }),
+  /** The glass's cut edge, lit: a drawing aid on the section, not a part. */
+  edge: M.make({ base: [0.78, 0.88, 0.86], metal: 0, rough: 0.2, emit: [0.55, 0.7, 0.68], glow: 0.35, bloom: 0.3, label: 'the glass cut through (its edge)' }),
+  aquadag: M.make({ base: [0.14, 0.14, 0.15], metal: 0.35, rough: 0.45, label: 'aquadag (colloidal graphite) on the inside of the funnel' }),
   phosphor: M.make({ base: [0.3, 0.32, 0.29], metal: 0, rough: 0.85, label: 'phosphor on the inside of the face' }),
   charge: (tex: DataTex): Material => M.make({ base: [0.04, 0.04, 0.04], metal: 0, rough: 0.9, bloom: 0.25, data: tex, label: 'the stored charge, drawn as colour: amber where the face is positive, blue where negative' }),
   light: (tex: DataTex): Material => M.make({ base: [0.04, 0.04, 0.04], metal: 0, rough: 0.6, bloom: 0.6, data: tex, label: 'the display tube’s phosphor (P1 green: drawn)' }),
@@ -206,7 +224,7 @@ export const MATS = {
   plate: M.make({ ...M.aluminium, label: 'metal pick-up plate (the metal: not found)' }),
   mesh: M.make({ ...M.copper, rough: 0.4, label: 'wire mesh pick-up plate (the wire: not found)' }),
   box: M.make({ base: [0.33, 0.35, 0.34], metal: 0.2, rough: 0.55, label: 'sheet-steel screening box, painted' }),
-  chassis: M.make({ base: [0.42, 0.43, 0.44], metal: 0.6, rough: 0.45, label: 'valve chassis' }),
+  chassis: M.make({ base: [0.17, 0.175, 0.18], metal: 0.5, rough: 0.5, label: 'valve chassis' }),
   live: (m: Material, k = 0.8): Material => ({ ...m, emit: [1, 0.7, 0.3], glow: k }),
   lead: M.make({ ...M.copper, rough: 0.35, label: 'screened lead' }),
 };
@@ -221,6 +239,8 @@ export interface WilliamsState {
   /** Which regenerator stage is working now. */
   active: ChassisKey | null;
   pickup: 'mesh' | 'plate';
+  /** The cutaway's opening, 0 … 1 (its edge is drawn when fully open). */
+  cut?: number;
   /** The main store's face (charge) and the display's (light); the accumulator's and control tube's faces. */
   charge: DataTex; display: DataTex; acc: DataTex; ctl: DataTex;
 }
@@ -232,9 +252,9 @@ const C50 = 'University of Manchester, Computer50';
 /** One tube's items (the main store, or a copy beside it), at z = dz. */
 function tubeItems(S: Statics, dz: number, group: string, faceMat: Material, name: string, opts: { gun?: boolean; pickup?: 'mesh' | 'plate' | null; plain?: boolean } = {}): Item[] {
   const at: Vec3 = [0, 0, dz], main = !opts.plain, out: Item[] = [];
-  out.push({ geo: S.glass, mat: MATS.glass, at, name: 'glass envelope', group: main ? 'tube' : group, cut: 'open', order: 2,
+  out.push({ geo: S.glass, mat: MATS.glass, at, name: 'glass envelope', group: main ? 'tube' : group, cut: 'section', order: 2,
     info: { dim: `${W.FACE_D} mm across the face (12 inches): sources differ`, source: LAV, note: 'evacuated; the neck holds the gun and the plates, the funnel opens to the face' } });
-  out.push({ geo: S.aquadag, mat: MATS.aquadag, at, name: 'aquadag coating', group: main ? 'tube' : group, cut: 'open', order: 1, info: { note: 'a conducting graphite layer on the funnel’s inside: it collects the secondary electrons the beam knocks off (drawn)' } });
+  out.push({ geo: S.aquadag, mat: MATS.aquadag, at, name: 'aquadag coating', group: main ? 'tube' : group, cut: 'section', order: 1, info: { note: 'a conducting graphite layer on the funnel’s inside: it collects the secondary electrons the beam knocks off (drawn)' } });
   out.push({ geo: S.phosphor, mat: MATS.phosphor, at, name: 'phosphor', group: main ? 'face' : group, cut: 'open' });
   out.push({ geo: S.face, mat: faceMat, at: [W.FACE_X, 0, dz], rot: FACE_Q, name, group: main ? 'face' : group, cut: 'open', shadow: false,
     info: main ? { dim: `32 × 32 spots, ${W.PITCH} mm apart (pitch drawn)`, source: 'Wikipedia, “Williams tube”: a positive spot where secondaries left, a negative ring where they land', note: 'charge, not light: a dot and a dash leave different patches, and the pick-up plate tells them apart' } : undefined });
@@ -254,6 +274,7 @@ function tubeItems(S: Statics, dz: number, group: string, faceMat: Material, nam
 export function williamsModel(s: WilliamsState, detail: 'full' | 'flat' = 'full'): Model3 {
   const S = statics(detail), items: Item[] = [];
   items.push(...tubeItems(S, 0, 'store', MATS.charge(s.charge), 'stored charge', { pickup: s.pickup }));
+  if ((s.cut ?? 0) > 0.98) items.push({ geo: S.edge, mat: MATS.edge, name: 'glass envelope', group: 'tube', cut: 'none', shadow: false });
   for (const it of items) if (it.group === 'gun' || it.group === 'plates') it.explode = [-110, 0, 0];
   for (const it of items) if (it.group === 'pickup') it.explode = [110, 0, 0];
   for (const it of items) if (it.group === 'box') it.explode = [0, 320, 0];
@@ -265,6 +286,7 @@ export function williamsModel(s: WilliamsState, detail: 'full' | 'flat' = 'full'
   items.push({ geo: S.leadTube, mat: s.plate !== 0 ? MATS.live(MATS.lead, 0.6) : MATS.lead, name: 'lead to the amplifier', group: 'regen', cut: 'none', info: { note: 'a pulse of millivolts: the plate is coupled to the face through the glass' } });
   for (const c of CHASSIS) items.push({ geo: S.chassis[c.key], mat: s.active === c.key ? MATS.live(MATS.chassis, 0.7) : MATS.chassis, name: c.name, group: 'regen', explode: [0, -120, 0], cut: 'none', info: { note: `${c.note} (one box stands for the stage’s valves: drawn)` } });
   items.push({ geo: S.valves, mat: MATS.glass, name: 'valves', group: 'regen', explode: [0, -120, 0], cut: 'none', order: 3, info: { note: 'two bulbs a chassis stand for its valves: the count is not from a source' } });
+  items.push({ geo: S.valveCores, mat: MATS.heater, name: 'valves', group: 'regen', explode: [0, -120, 0], cut: 'none', shadow: false });
   items.push({ geo: S.leads, mat: s.active === 'ctl' ? MATS.live(MATS.lead, 0.6) : MATS.lead, name: 'regenerator wiring', group: 'regen', cut: 'none', info: { note: 'amplifier → discriminator → beam control → the gun’s grid: what was read is written back' } });
   // the display tube and the other two store tubes, in a row beside the main store (never cut)
   const row: Item[] = [
@@ -297,10 +319,11 @@ export function williamsModel(s: WilliamsState, detail: 'full' | 'flat' = 'full'
     { title: 'Charge leaks', text: 'The patches leak away in a fraction of a second, so the beam keeps going round, rewriting each spot long before it fades. Press Let it leak: the beam stops and the patches fade.', view: faceView, cut: 0, hide: ['pickup', 'box', 'tube', 'gun', 'plates', 'regen', 'display', 'stores'] },
     { title: 'Three stores and a display', text: 'The Baby had three store tubes, the main store of 32 words, the accumulator and the control tube, and a fourth tube with no plate in front: the display, which showed any of them (Computer50). That is how the bits were seen. Each tube sat in a metal screening box against interference (Computer50, Digital60).', view: { yaw: 1.35, pitch: 0.22, target: [FACE_OUT, 0, (ROW.ctl) / 2], dist: 2600 }, frame: ['tube', 'display', 'stores', 'box', 'pickup', 'face'], hide: [] },
   ];
-  return { items, anchors, beats, cuts: { planes: [{ n: [0, 0, 1], d: 0 }], open: [BOX.half + 40] }, floor: SHELF_Y - CH.h / 2 - 2, look: { exposure: 1.05 } };
+  // the key from behind and above the far side: a rim on the bulb against the board, the cut edge lit
+  return { items, anchors, beats, cuts: { planes: [{ n: [0, 0, 1], d: 0 }], open: [BOX.half + 40] }, floor: SHELF_Y - CH.h / 2 - 2, look: { exposure: 1.1, keyDir: [-0.45, 0.75, -0.5] } };
 }
 
-export const WILLIAMS_HOME = { yaw: 0.62, pitch: 0.3, target: [40, -50, 0] as Vec3, dist: 1250 };
+export const WILLIAMS_HOME = { yaw: 0.95, pitch: 0.24, target: [40, -50, 0] as Vec3, dist: 1250 };
 
 /** The Baby's other two store tubes' patterns: one word on the accumulator, two on the control tube (any words). */
 export function staticFace(words: number[], tex: DataTex): DataTex {
@@ -308,3 +331,10 @@ export function staticFace(words: number[], tex: DataTex): DataTex {
   return tex;
 }
 export { cellOf };
+
+/** The glass wall's middle along the cut plane (z = 0), above and below the axis: where the section's edge is drawn. */
+function cutEdge(sides: number): Geo {
+  const mid = envelopeProfile().filter((p) => p[0] > 3).map((p): [number, number] => [p[0] - glassWall(p) / 2, p[1]]);
+  const up: Vec3[] = mid.map(([r, x]) => [x, r, 0]), down: Vec3[] = mid.map(([r, x]) => [x, -r, 0]);
+  return merge([tube(up, 1.1, { sides, bend: 2 }), tube(down, 1.1, { sides, bend: 2 })], 'cut edge');
+}

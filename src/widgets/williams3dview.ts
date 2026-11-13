@@ -56,7 +56,8 @@ export class Store {
 export function williamsView(words: number[] = Array.from({ length: LINES }, (_, i) => (0x0f0f0f0f >>> (i % 8)) | (i & 1 ? 1 : 0))): Widget {
   const bits = Array.from({ length: N }, (_, i) => (words[Math.floor(i / DIGITS)] >>> i % DIGITS) & 1);
   let store = new Store(bits);
-  let mode: 'paused' | 'scan' | 'leak' = 'paused', rate = 64, pickup: 'mesh' | 'plate' = 'mesh', started = false;
+  // started: the beam is drawn from the first view, on spot (0, 0), so it ties the gun to the face
+  let mode: 'paused' | 'scan' | 'leak' = 'paused', rate = 64, pickup: 'mesh' | 'plate' = 'mesh', started = true, cut = 1;
   const charge = newTex('emit'), display = newTex('emit');
   const acc = staticFace([0x5a5a5a5a], newTex('emit')), ctl = staticFace([0x00000013, 0x6000e004], newTex('emit'));
   const lastSeen = new Float64Array(N).fill(-1e9);
@@ -70,8 +71,10 @@ export function williamsView(words: number[] = Array.from({ length: LINES }, (_,
   const beamOn = () => started && mode !== 'leak';
   function state(): WilliamsState {
     const { i, f } = here(), on = beamOn();
-    const active: ChassisKey | null = !on ? null : f < 0.25 ? 'amp' : f < 0.5 ? 'disc' : 'ctl';
-    return { cell: on ? i : null, plate: on && f < 0.5 ? (store.reads(i) ? 1 : -1) : 0, active, pickup, charge, display, acc, ctl };
+    // the stages light once the beam has moved (at the first view it waits on spot (0, 0): drawn, not yet reading)
+    const live = on && (mode !== 'paused' || store.t > 0);
+    const active: ChassisKey | null = !live ? null : f < 0.25 ? 'amp' : f < 0.5 ? 'disc' : 'ctl';
+    return { cell: on ? i : null, plate: live && f < 0.5 ? (store.reads(i) ? 1 : -1) : 0, active, pickup, charge, display, acc, ctl, cut };
   }
   const stage = studioStage({
     aria: 'A Williams-Kilburn store tube in 3D in its screening box: an electron gun, deflection plates, the face carrying 32 by 32 patches of charge, the pick-up plate in front, the regenerator under it, and beside it the display tube and the other two store tubes',
@@ -82,6 +85,7 @@ export function williamsView(words: number[] = Array.from({ length: LINES }, (_,
     knobs: { cut: 1 },
     limits: { minDist: 150, maxDist: 6000 },
     note: 'Drawn at 12 inches (300 mm) as a CV1131 after Lavington; the University’s Computer50 pages put the Baby’s store on a 6-inch tube: the sources differ. Every dimension inside the tube is drawn, not measured, as are the box, the regenerator’s chassis and the 6 mm between spots. The face is drawn as its charge, amber where positive and blue where negative: a map, not light (the store tube’s own phosphor was hidden behind the plate). The pattern on the display tube beside it is light. Time: the beam is slowed thousands of times; “Let it leak” runs the tube’s own time at a twentieth.',
+    onKnobs: (k) => { if ((k.cut > 0.98) !== (cut > 0.98)) { cut = k.cut; stage?.refresh(); } cut = k.cut; },
     build: (detail) => williamsModel(state(), detail),
   });
 
@@ -137,7 +141,7 @@ export function williamsView(words: number[] = Array.from({ length: LINES }, (_,
   const rwBtn = btn('Write back after reading', () => { store.rewrite = !store.rewrite; rwBtn.setAttribute('aria-pressed', String(store.rewrite)); kick(); });
   rwBtn.setAttribute('aria-pressed', 'true');
   const pickBtn = btn('Pick-up: wire mesh', () => { pickup = pickup === 'mesh' ? 'plate' : 'mesh'; pickBtn.textContent = pickup === 'mesh' ? 'Pick-up: wire mesh' : 'Pick-up: metal plate'; kick(); });
-  const resetBtn = btn('Reset', () => { store = new Store(bits); store.rewrite = rwBtn.getAttribute('aria-pressed') === 'true'; started = false; lastSeen.fill(-1e9); live.textContent = 'The store is full again.'; setMode('paused'); paintAll(); kick(); });
+  const resetBtn = btn('Reset', () => { store = new Store(bits); store.rewrite = rwBtn.getAttribute('aria-pressed') === 'true'; lastSeen.fill(-1e9); live.textContent = 'The store is full again.'; setMode('paused'); paintAll(); kick(); });
   const speed = h('input', { type: 'range', min: 2, max: 10, step: 0.1, value: Math.log2(rate), 'aria-label': 'Beam speed, digits a second' }) as HTMLInputElement;
   const speedOut = h('output', null, `${rate}/s`);
   speed.addEventListener('input', () => { rate = 2 ** Number(speed.value); speedOut.textContent = `${Math.round(rate)}/s`; readout(); });
