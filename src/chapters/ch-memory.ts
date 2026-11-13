@@ -1011,8 +1011,8 @@ export const chMemory: Chapter = {
     {
       title: 'Read-only memory',
       body: `
-        <p>If the contents never change, the flip-flops can go. <span data-show="u0">A decoder</span> raises one word line; output bit j is
-        <span data-show="u1 u3 u4 u5 u6 u7 u8">the OR of the word lines</span>
+        <p>If the contents never change, the flip-flops can go. <span data-show="dec">A decoder</span> raises one word line; output bit j is
+        <span data-show="b0 b2 b3 b4 b5 b6 b7">the OR of the word lines</span>
         of every word whose bit j is 1. The data is in the wiring. Mask ROMs were made exactly like this, the pattern set by one metal layer;
         a fuse PROM (programmable ROM) blows the unwanted connections once; flash keeps the same array but stores each connection as charge, so it can be rewritten.</p>
         <p>This one holds the squares of 0–15. The CPU's instruction memory in <a href="#/c/cpu/0">chapter ${numOf('cpu')}</a> is a ROM too (built there from constants and a

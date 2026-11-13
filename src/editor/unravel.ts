@@ -618,7 +618,9 @@ export function treeLength(doc: ChipDoc, ids: readonly string[], poly: (w: WireD
 
 export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefOf,
   /** A wire's drawn path (collapseWires caches them across one batch: nothing moves, so each wire is drawn once). */
-  poly: (w: WireDoc) => ReturnType<typeof polyline> = (w) => polyline(doc, w, defOf)): Edited & { labels?: string[]; wires?: string[] } {
+  poly: (w: WireDoc) => ReturnType<typeof polyline> = (w) => polyline(doc, w, defOf),
+  /** Refuse a short two-ended wire (the learner's collapse); an importer untangling crossings passes false. */
+  keepShort = true): Edited & { labels?: string[]; wires?: string[] } {
   const nm = name.trim();
   if (!nm) return { doc, reason: 'a pointer needs a name' };
   if (!doc.wires.some((w) => w.id === id)) return { doc, reason: `no wire '${id}'` };
@@ -630,7 +632,7 @@ export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefO
   if (!own.size && doc.labels.some((l) => l.name === nm)) return { doc, reason: `“${nm}” is already a pointer of another net` };
   const real = ends.filter((e) => !('label' in e));
   if (!real.length) return { doc, reason: 'nothing on this wire to point from' };
-  if (real.length === 2 && treeLength(doc, tree, poly) < SHORT_WIRE) return { doc, reason: `this wire is too short for pointers (under ${SHORT_WIRE} units): they would touch, so it stays a wire` };
+  if (keepShort && real.length === 2 && treeLength(doc, tree, poly) < SHORT_WIRE) return { doc, reason: `this wire is too short for pointers (under ${SHORT_WIRE} units): they would touch, so it stays a wire` };
 
   const gone = new Set(tree);
   const wires = doc.wires.filter((w) => !gone.has(w.id));
@@ -682,7 +684,8 @@ export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefO
 }
 
 /** Collapses each drawn tree among `ids` under its suggested name. */
-export function collapseWires(doc: ChipDoc, ids: string[], defOf: DefOf): Edited & { labels: string[]; kept: number } {
+/** `keepShort` false: every tree goes (untangle.ts: an import's crossings, where a kept wire may lie along another net). */
+export function collapseWires(doc: ChipDoc, ids: string[], defOf: DefOf, keepShort = true): Edited & { labels: string[]; kept: number } {
   let out = doc;
   const why: string[] = [];
   const labels: string[] = [];
@@ -696,8 +699,8 @@ export function collapseWires(doc: ChipDoc, ids: string[], defOf: DefOf): Edited
     for (const t of wireTree(out, id)) done.add(t);
     const tree = wireTree(out, id), real = treeEnds(out, tree).filter((e) => !('label' in e));
     // a short wire between two ends stays a wire: collapsing everything is not a reason to make pointers that touch
-    if (real.length === 2 && treeLength(out, tree, poly) < SHORT_WIRE) { kept++; continue; }
-    const r = collapseWire(out, id, suggestName(out, id, defOf), defOf, poly);
+    if (keepShort && real.length === 2 && treeLength(out, tree, poly) < SHORT_WIRE) { kept++; continue; }
+    const r = collapseWire(out, id, suggestName(out, id, defOf), defOf, poly, keepShort);
     if (r.reason) why.push(r.reason);
     else { out = r.doc; labels.push(...r.labels!); }
   }

@@ -814,7 +814,7 @@ const PLAYER_DRIVE = `(async () => {
   const c = document.querySelector('.sb-canvas'), svg = c && c.querySelector('svg');
   if (!svg) return ['no canvas'];
   const px = () => c.clientWidth / +svg.getAttribute('viewBox').split(' ')[2];
-  const before = px(), vb0 = svg.getAttribute('viewBox');
+  const before = px(), vb0 = svg.getAttribute('viewBox'), size = () => c.clientWidth + '×' + c.clientHeight, size0 = size();
   const check = [...document.querySelectorAll('button')].find((b) => /^Check/.test(b.textContent.trim()) && b.offsetParent);
   if (!check) return ['no Check button'];
   check.click(); await wait(2500);
@@ -825,7 +825,16 @@ const PLAYER_DRIVE = `(async () => {
   const corner = (v) => v.split(' ').slice(0, 2).map((n) => (+n).toFixed(3)).join(' ');
   if (corner(svg.getAttribute('viewBox')) !== corner(vb0)) bad.push('the view moved when the test player opened: ' + corner(vb0) + ' → ' + corner(svg.getAttribute('viewBox')));
   const close = document.querySelector('[data-chal=player] [data-tp=close]');
-  if (close) { close.click(); await wait(1500); if (svg.getAttribute('viewBox') !== vb0) bad.push('closing the player did not fit the view again'); }
+  if (close) {
+    close.click(); await wait(1500);
+    // fitted again: what Fit to view gives now (the strip may have grown with the result, so not always vb0)
+    const vb1 = svg.getAttribute('viewBox'), r = c.getBoundingClientRect();
+    svg.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 4, clientY: r.top + 4, button: 2 }));
+    await wait(300);
+    const fit = [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Fit to view/.test(m.textContent.trim()));
+    if (!fit) bad.push('no Fit to view in the canvas menu');
+    else { fit.click(); await wait(500); if (svg.getAttribute('viewBox') !== vb1) bad.push('closing the player did not fit the view again: ' + vb1 + ' in ' + size() + ', fitted ' + svg.getAttribute('viewBox') + ' (opened at ' + vb0 + ' in ' + size0 + ')'); }
+  }
   return bad;
 })()`;
 

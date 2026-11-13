@@ -1855,8 +1855,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .stage { height: 72vh; }
   /* a widget step: the stage is as tall as its widget, not 72vh (a short panel left ~360 px of empty stage below it); the widget
      host flows instead of filling an absolute box. Scenes keep 72vh. */
-  .stage.widget-mode { height: auto; min-height: 200px; }
-  .stage.widget-mode > .canvas { flex: none; overflow: visible; }
+  .stage.widget-mode { height: auto; min-height: 200px; min-width: 0; }
+  /* never wider than the page: a wide table (the memory hierarchy's) scrolls sideways inside the stage, as in the 72vh box */
+  .stage.widget-mode > .canvas { flex: none; max-width: 100%; overflow-x: auto; overflow-y: hidden; }
   .stage.widget-mode > .canvas > .widget-host { position: relative; inset: auto; overflow: visible; }
   .hero { grid-template-columns: 1fr; }
   /* the buttons in a tidy grid: the primary one across, the rest two to a row (not ragged by label length) */
