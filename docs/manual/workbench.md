@@ -337,8 +337,9 @@ Click **Benchmarks**.
 - **Speed against cost** plots every processor in the site: its mean time on the same programs (Fibonacci, insertion
   sort, matrix multiply and more) against its size in NAND gates. Down and left is better.
 - The **Cost** and **Energy** switches above it change what the plot shows.
-- The table below gives each processor's NAND gates, clock period and its result on each program. Open a row for its
-  cache misses, stalls and energy.
+- The table below gives each processor's NAND gates, clock period and its result on each program. **Show** above it
+  chooses the result: **Time**, **Cycles**, **CPI**, **Energy** or **Energy / instr.** Open a row for its cache misses,
+  stalls and energy.
 
 ![Benchmarks: speed against cost](img/workbench/21-benchmarks.png)
 
