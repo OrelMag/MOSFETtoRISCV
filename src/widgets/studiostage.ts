@@ -414,14 +414,20 @@ export function studioStage(o: StudioStageOptions): StudioStage {
       const base = resolve(it.mat.base), em = it.mat.emit ? resolve(it.mat.emit).map((v) => v * Math.min(1, it.mat.glow ?? 0)) : [0, 0, 0];
       for (let t = 0; t < I.length; t += 3) {
         const w = [I[t], I[t + 1], I[t + 2]].map((i) => applyMat(M, [P[3 * i], P[3 * i + 1], P[3 * i + 2]]));
-        const c: Vec3 = [(w[0][0] + w[1][0] + w[2][0]) / 3, (w[0][1] + w[1][1] + w[2][1]) / 3, (w[0][2] + w[1][2] + w[2][2]) / 3];
-        if (cut && isCut(cuts, c)) continue;
-        const q = w.map(pr), n = norm3(crossv(sub3(w[1], w[0]), sub3(w[2], w[0])));
+        // one plane: the triangle clipped to what is kept (a face straddling the cut is cut, not kept or dropped whole); a
+        // wedge (two planes keep the union of two sides) still goes by the triangle's centre
+        let poly: Vec3[] = w;
+        if (cut && cuts.length === 1) { poly = clipKeep(w, cuts[0]); if (poly.length < 3) continue; }
+        else if (cut) {
+          const c: Vec3 = [(w[0][0] + w[1][0] + w[2][0]) / 3, (w[0][1] + w[1][1] + w[2][1]) / 3, (w[0][2] + w[1][2] + w[2][2]) / 3];
+          if (isCut(cuts, c)) continue;
+        }
+        const q = poly.map(pr), n = norm3(crossv(sub3(w[1], w[0]), sub3(w[2], w[0])));
         if ((q[1][0] - q[0][0]) * (q[2][1] - q[0][1]) - (q[2][0] - q[0][0]) * (q[1][1] - q[0][1]) <= 0 && !glass) continue;
         const lit = 0.45 + 0.55 * Math.max(0, dot3(n, L)), col = base.map((v, i) => Math.min(1, v * lit + em[i]));
         const fill = `rgb(${col.map((v) => Math.round(v * 255)).join(' ')} / ${glass ? 0.12 : 1})`;
-        faces.push({ pts: q.map((v) => [v[0], v[1]]), z: (q[0][2] + q[1][2] + q[2][2]) / 3, fill, it: ii });
-        far[ii] = Math.min(far[ii], q[0][2], q[1][2], q[2][2]);
+        faces.push({ pts: q.map((v) => [v[0], v[1]]), z: q.reduce((a, v) => a + v[2], 0) / q.length, fill, it: ii });
+        far[ii] = Math.min(far[ii], ...q.map((v) => v[2]));
         for (const v of q) { x0 = Math.min(x0, v[0]); x1 = Math.max(x1, v[0]); y0 = Math.min(y0, v[1]); y1 = Math.max(y1, v[1]); }
       }
     }
@@ -438,6 +444,16 @@ export function studioStage(o: StudioStageOptions): StudioStage {
       g.append(s('text', { x: X(x), y: Y(y), class: 'm3-flat-lbl', 'text-anchor': 'middle' }, a.text));
     }
     flat.replaceChildren(g);
+  };
+  /** A convex polygon cut to the side a cut keeps (n·p ≤ d). */
+  const clipKeep = (pts: Vec3[], c: { n: Vec3; d: number }): Vec3[] => {
+    const out: Vec3[] = [], f = (p: Vec3) => dot3(c.n, p) - c.d;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length], fa = f(a), fb = f(b);
+      if (fa <= 0) out.push(a);
+      if ((fa <= 0) !== (fb <= 0)) { const t = fa / (fa - fb); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]); }
+    }
+    return out;
   };
   const crossv = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
