@@ -74,10 +74,10 @@ export const HOLD_SWING = rad(14);
 
 const mk = (o: Material): Material => M.make(o);
 export const MATS = {
-  frame: mk({ base: [0.16, 0.165, 0.17], metal: 0.35, rough: 0.55, coat: 0.15, label: 'die-cast frame, black enamel' }),
+  frame: mk({ base: [0.46, 0.48, 0.5], metal: 0.25, rough: 0.5, coat: 0.2, label: 'die-cast frame, grey enamel' }),
   steel: mk({ ...M.steel, label: 'steel' }),
   ratchet: mk({ base: [0.6, 0.6, 0.6], metal: 1, rough: 0.28, label: 'hardened steel' }),
-  iron: mk({ base: [0.42, 0.43, 0.45], metal: 1, rough: 0.45, label: 'soft iron (armature, core)' }),
+  iron: mk({ base: [0.5, 0.51, 0.53], metal: 0.55, rough: 0.45, label: 'soft iron, plated (armature, core, yoke)' }),
   bronze: mk({ base: [0.86, 0.6, 0.38], metal: 1, rough: 0.28, label: 'phosphor bronze (spring wipers)' }),
   contact: mk({ base: [1, 1, 1], metal: 0.6, rough: 0.32, label: 'nickel silver (bank contact)' }),
   insulator: mk({ ...M.phenolicPaper, label: 'phenolic paper (insulating sheet)' }),
