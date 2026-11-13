@@ -16,16 +16,18 @@ puzzles, the **Workbench** to look up one part, and the **Sandbox** to build you
 
 Five minutes, from the home page to having taken a gate apart and answered its question.
 
-1. Open the home page. On the right is the list of chapters, grouped into sections; the first sections are open.
+1. Open the home page. On the right is the list of chapters by section, with **Transistors to gates** open (the page
+   says "Your section starts open"; click any other section to unfold it).
 
    ![The home page: the title and buttons on the left, the list of chapters by section on the right](img/journey/01-home.png)
 
-2. Under **Transistors to gates**, click **04 Gates from NAND**. The chapter opens at its first step.
+2. Under **Transistors to gates**, click **04 Gates from NAND**. The chapter opens at its first step. The first time,
+   two cards point out the controls ("1 OF 2 · Open any box …"): read them, or click **Skip**.
 
    ![The section Transistors to gates with its five chapters, 04 Gates from NAND among them](img/journey/02-home-chapter-list.png)
 
-3. Click the third dot under the chapter's title (its tooltip reads **Step 3: OR: De Morgan's trick**). You can also
-   click **Next** at the bottom left twice. Read the text on the left: it says how an OR gate is made from three NAND
+3. Click the third dot under the chapter's title (its tooltip reads **Step 3: OR: De Morgan's trick (has a check)**). You can also
+   click **Next** at the bottom of the text twice. Read the text on the left: it says how an OR gate is made from three NAND
    gates.
 
    ![Chapter 4, step 3: the text on the left, the OR circuit of three NAND gates in the middle, the Inspector on the right](img/journey/04-step3.png)
