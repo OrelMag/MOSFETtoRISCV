@@ -266,8 +266,22 @@ export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, bl
     // pass 1); of the rest, every one of them if a look allows it, else the look most of them take (the larger on a tie): one
     // style, the rest unnamed; none left: the group stays as it is
     const keepsOld = (l: NameLayout, who: number[]) => g.every((i) => !(wasDrawn.has(i) && out[i]) || (who.includes(i) && (out[i]!.px < NAME_PX || l.px >= NAME_PX)));
-    const best = looks.map((l) => ({ l, who: takers(l) })).filter((x) => keepsOld(x.l, x.who))
-      .sort((x, y) => y.who.length - x.who.length || y.l.px - x.l.px)[0];
+    const scored = looks.map((l) => ({ l, who: takers(l) }));
+    // a look every one of them takes wins (the largest), even over a name pass 1 kept at full size: in a tight column the full
+    // names it kept clear of each other alternate with names squeezed small or none (iir-5's five multipliers on a phone). Tried:
+    // the looks they got, the name inside the block, and the quiet sizes over it (the blocks are alike, so the first one's)
+    const b0 = boxes[g[0]], full0 = textOf(b0), cands = [...looks];
+    for (const t of new Set([full0, abbreviate(full0)])) {
+      const f = fitLayout(b0, scale, t);
+      if (f) cands.push(f);
+      cands.push(...overLayouts(b0, t, overMax));
+    }
+    const whole = cands.filter((l) => l.px >= MIN_TEXT_PX || !l.over).map((l) => ({ l, who: takers(l) })).filter((x) => x.who.length === g.length)
+      .sort((x, y) => y.l.px - x.l.px)[0];
+    const most = (xs: typeof scored) => xs.sort((x, y) => y.who.length - x.who.length || y.l.px - x.l.px)[0];
+    // no look keeps the old names: the look most of them take all the same (they all say one thing, so one style on most of
+    // them reads better than three sizes and a gap)
+    const best = whole ?? most(scored.filter((x) => keepsOld(x.l, x.who))) ?? most(scored);
     if (!best) continue;
     for (const i of g) out[i] = best.who.includes(i) ? best.l : null;
   }

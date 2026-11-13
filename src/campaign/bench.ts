@@ -145,7 +145,9 @@ export function benchChip(core: ComponentDef, coreId: string, coreName: string, 
   // the core is held in reset for its first cycle, as on the level's bench (a multicycle core's state machine
   // starts there): a flip-flop powered on at 0 holds rst for one cycle, and again after every Reset
   const rst = b.op1(OR, ['rst', b.op1(NOT, [b.op1(DFF, [b.op1(TIE1, [], undefined, 'tie'), 'clk'], 'powered on', 'por')], undefined, 'porn')], 'reset, first cycle', 'rsto');
-  const c = b.op(core, ['clk', rst, '', '', ...(irq ? [''] : [])], 'your core', 'core');
+  // by name, not position: a core drawn as a chip compiles its ports in pin order, which its drawing may change
+  const byName: Record<string, string> = { clk: 'clk', rst };
+  const c = b.op(core, core.ports.filter((p) => p.dir === 'in').map((p) => byName[p.name] ?? ''), 'your core', 'core');
   const pcs = b.op(splitter([k, 16 - k], 4), [`${c}.pc`], undefined, 'pcs');
   const ds = b.op(splitter([ramK, 16 - ramK], 4), [`${c}.daddr`], 'address', 'ds');
   const dw = irq ? b.op(splitter([1, 15], 4), [`${c}.dwdata`], undefined, 'dw') : '';

@@ -19,6 +19,13 @@ function modal(title: string, body: (Node | string)[], foot: HTMLElement[]): HTM
   return d;
 }
 
+/** A short line at the bottom of the page that a screen reader announces (the download itself shows nothing). */
+function note(msg: string): void {
+  const el = h('div', { class: 'bk-note', role: 'status' }, msg);
+  document.body.append(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
 const list = (lines: string[]) => h('ul', { class: 'bk-list' }, lines.map((l) => h('li', null, l)));
 
 /** Download everything the site keeps in this browser as one file. */
@@ -28,6 +35,7 @@ export function exportBackup(): void {
   const text = makeBackup(kv, __APP_VERSION__);
   saveFile(backupName(), text);
   void keepProgress();
+  note(`Backup saved as ${backupName()}`);
 }
 
 const okBtn = (label = 'OK', fn?: () => void) => h('button', { class: 'btn sm primary', onclick: (e: Event) => { (e.target as HTMLElement).closest('dialog')?.close(); fn?.(); } }, label);
@@ -54,6 +62,10 @@ const delta = (a: Summary, b: Summary): string[] => {
   add(b.puzzles - a.puzzles, 'puzzles solved');
   add(b.projects - a.projects, 'sandbox projects');
   add(b.chips - a.chips, 'chips');
+  add(b.notes - a.notes, 'notes');
+  add(b.bookmarks - a.bookmarks, 'bookmarks');
+  add(b.reviewed - a.reviewed, 'review questions');
+  add(b.testedOut - a.testedOut, 'chapters tested out');
   add(b.other - a.other, 'small preferences');
   return out;
 };

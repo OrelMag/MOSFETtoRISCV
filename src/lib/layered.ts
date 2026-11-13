@@ -17,7 +17,7 @@ export interface LayeredOptions {
   pinned?: string[];
   /** Nets (by driver end) forced to wires, or to pointers (false). */
   wires?: Record<string, boolean>;
-  /** Column per instance name, overriding the depth (relative, 0 = first). */
+  /** Columns to move a part by from its depth (negative: earlier); the columns are then counted from the first one used. */
   column?: Record<string, number>;
   /** Rows to move a part by after the layout settled (negative: up): out of the way of a wire that must pass it. */
   nudge?: Record<string, number>;
@@ -106,8 +106,10 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
       if (rs.length) layer.set(n, Math.min(...rs) - 1);
     }
   }
-  const minL = Math.min(...names.map((n) => layer.get(n)!));
-  for (const n of names) layer.set(n, layer.get(n)! - minL + (opts.column?.[n] ?? 0));
+  for (const n of names) layer.set(n, layer.get(n)! + (opts.column?.[n] ?? 0));
+  // an override may move a part before the first column: the columns start again at 0
+  const minC = Math.min(...names.map((n) => layer.get(n)!));
+  for (const n of names) layer.set(n, layer.get(n)! - minC);
   const L = Math.max(...names.map((n) => layer.get(n)!)) + 1;
   const cols: string[][] = Array.from({ length: L }, () => []);
   for (const n of names) cols[layer.get(n)!].push(n);
@@ -264,9 +266,34 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
     nl = next;
   }
   if (opts.aspect) nl = fold(nl, opts.aspect);
+  // avoid was judged before the fold moved whole bands: a wire clear then may cross a part now, so it is labels after all
+  if (opts.aspect && opts.avoid) nl = reclear(nl);
   const { pins, instances, nets: outNets } = nl;
   void byName;
   return { pins, instances, nets: outNets };
+
+  /** The avoid rule again, on the drawing as it now stands: a wire (not named in opts.wires) with a part between its ends is labels. */
+  function reclear(n0: ReturnType<typeof lay>): ReturnType<typeof lay> {
+    const at = new Map(n0.instances.map((i) => [i.name, i.at!]));
+    const pos = (end: string): [number, number] => {
+      const n = inst(end);
+      if (!n) return n0.pins[end] ?? [0, 0];
+      const p = geom.get(n)!.ports[portOf(end)]?.pos ?? [0, 0];
+      return [at.get(n)![0] + p[0], at.get(n)![1] + p[1]];
+    };
+    const blocked = (de: string, se: string): boolean => {
+      const d = pos(de), q = pos(se);
+      if (q[0] <= d[0]) return true;
+      const x0 = d[0], x1 = q[0], y0 = Math.min(d[1], q[1]) - 0.5, y1 = Math.max(d[1], q[1]) + 0.5, own = new Set([inst(de), inst(se)]);
+      return n0.instances.some((i) => {
+        if (own.has(i.name)) return false;
+        const g = geom.get(i.name)!, [ix, iy] = i.at!;
+        return !(ix + g.w <= x0 || ix >= x1 || iy + g.h <= y0 || iy >= y1);
+      });
+    };
+    const nets = n0.nets.map((n) => (n.tags || opts.wires?.[n.ends[0]] !== undefined || !n.ends.slice(1).some((e) => blocked(n.ends[0], e)) ? n : { ...n, tags: true as const }));
+    return { ...n0, nets };
+  }
 
   /**
    * A drawing far wider than `target` (w / h): its columns in 2–4 bands stacked top to bottom, as many as bring the whole
@@ -404,11 +431,13 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
     const pitches: [number, number] = Array.isArray(opts.pinPitch) ? opts.pinPitch : [opts.pinPitch ?? 2, opts.pinPitch ?? 2];
     const pins: Record<string, [number, number]> = {};
     const outX = width + Math.max(6, Math.ceil(Math.max(0, ...ports.filter((p) => p.dir === 'out').map((p) => tagWidth(p.name))) + 12));
+    // pinOrder holds folded too: a level drawn as a chip compiles its ports in pin order, and a bench may bind them by position
+    const rank = (n: string) => opts.pinOrder?.indexOf(n) ?? -1;
     const place = (side: PortDef[], px: number, pitch: number) => {
       const want = side.map((p) => {
         const ys = nl.nets.filter((n) => n.ends.includes(p.name)).flatMap((n) => n.ends.map(portAt)).filter((q): q is [number, number] => !!q).map((q) => q[1]);
         return { p: p.name, y: ys.length ? ys.reduce((a, v) => a + v, 0) / ys.length : 2 };
-      }).sort((a, b) => a.y - b.y);
+      }).sort((a, b) => (rank(a.p) >= 0 && rank(b.p) >= 0 ? rank(a.p) - rank(b.p) : a.y - b.y));
       let yy = 2;
       for (const q of want) { const t = Math.max(yy, Math.round(q.y)); pins[q.p] = [px, t]; yy = t + pitch; }
     };

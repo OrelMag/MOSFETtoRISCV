@@ -50,7 +50,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 @media (max-width: 1760px) { .brand small { display: none; } }
 @media (max-width: 1380px) { .brand-long { display: none; } }
 @media (max-width: 1220px) { .tools .lbl { display: none; } }
-@media (max-width: 960px) { .nav a span { display: none; } }
+@media (max-width: 1100px) { .nav a span { display: none; } }
 @media (max-width: 580px) { .brand-name { display: none; } }
 /* Quick return (ui/returnto.ts): the way back after a jump into another section, beside the nav. data-fit (returnto.ts fit):
    the full label while the nav still fits beside it, else the short one ("Ch 07 · 3"), else the arrow alone; the full one in
@@ -632,6 +632,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   position: absolute; left: 12px; bottom: 10px; z-index: 2; pointer-events: none;
   font-size: 12px; color: var(--muted);
 }
+/* the mouse wording gets a pill too: a net label drawn under it was struck through (C-7) */
+.hint-badge:not(.touch) { padding: 2px 10px; border-radius: 99px; background: color-mix(in srgb, var(--surface) 85%, transparent); }
 /* Touch wording (ui/dom.ts hintBadge): short, on one line (wrapped on a phone it hid the circuit's lower pins),
    a pill a tap hides. */
 .hint-badge.touch {
@@ -1772,6 +1774,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bm-table th button { padding: 8px 8px; }
 .bm-table td { padding: 6px 8px; }
 .bm-table .hw-name .bm-fam { margin-right: 8px; }
+/* chevron, dot and name side by side, so a name that wraps stays beside them (G-4) */
+.bm-namecell { display: flex; align-items: center; justify-content: flex-start; min-width: 0; width: 100%; text-align: left; }
 .bm-table .hw-name a { color: var(--accent); }
 .bm-table th:nth-child(2), .bm-table td:nth-child(2) { text-align: right; }
 .bm-cell { display: inline-grid; justify-items: end; gap: 2px; min-width: 52px; }
@@ -2770,6 +2774,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bk-dlg h3 { margin: 0 0 6px; font-size: 17px; }
 .bk-dlg h4 { margin: 12px 0 4px; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .bk-dlg p { margin: 6px 0; color: var(--text-2); }
+.bk-note { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 90; max-width: calc(100vw - 32px); padding: 8px 14px; border-radius: 10px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg); font-size: 13px; }
 .bk-sub { font-size: 12.5px; color: var(--muted); }
 .bk-list { margin: 0; padding-left: 1.2em; color: var(--text-2); }
 .bk-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }

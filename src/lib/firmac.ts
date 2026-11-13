@@ -8,6 +8,7 @@ import { stats } from '../sim/stats';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { constWord } from './alu';
 import { Builder } from './builder';
+import { laid } from './layered';
 import { busMux2, incrementer, rca } from './combinational';
 import { define, splitter } from './define';
 import { cut, placed, roundUp } from './fft';
@@ -154,13 +155,12 @@ export function firRing(N: number, w: number): ComponentDef {
     for (let j = 1; j < N; j++) b.wire(j === N - 1 ? 'r0.q' : `r${j + 1}.q`, `r${j}.d`);
     b.name('r0.q', 'wrap', true);
     b.wire('r0.q', 'head');
-    const R = b.right;
     return define({
       id: `firring${N}_${w}`, name: `${N}-word sample ring`, category: 'memory',
       summary: `${N} registers of ${w} bits that turn one place a clock: the head shows x[n], x[n−1], … one tap after another, and takes the new sample in the last cycle.`,
       ports: [bus('x', w, 'in'), bit('last', 'in'), clockPort(), bus('head', w, 'out')],
       symbol: { kind: 'box', label: 'SAMPLES', w: 8 },
-      netlist: () => ({ pins: { x: [0, 6], last: [0, 14], clk: [0, 22], head: [R + 12, 6] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { aspect: 1.6, avoid: true, room: true, gap: 16 }), // the ring in bands, not a strip 301 × 22
     });
   });
 }

@@ -34,11 +34,13 @@
 .lp-chip.practised { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .lp-chip.rusty { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
 .lp-chip.learning { border-style: dashed; border-color: var(--accent); color: var(--text-2); }
+.lp-legend .lp-chip { display: inline-block; width: 22px; height: 14px; min-height: 0; padding: 0; vertical-align: -3px; }
 .lp-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .lp-rowact { display: flex; gap: 6px; }
 .lp-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; color: var(--muted); }
 .lp-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .lp-test { border: 1px solid var(--border); background: var(--bg); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.lp-test:focus { outline: none; }
 
 .lp-next, .lp-cap, .lp-check { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow); }
 .lp-next { border-color: var(--accent); }

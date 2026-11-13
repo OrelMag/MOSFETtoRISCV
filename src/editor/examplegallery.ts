@@ -3,7 +3,7 @@
 // (editor/examplethumb.ts → examples/<id>.svg; a missing file leaves the placeholder), a search box over name and blurb, arrow keys
 // between the cards. A card loads the example as a new chip, as the menu did.
 import '../styles/examplegallery.css';
-import { h, icon, rememberFocus, undoKey } from '../ui/dom';
+import { coarsePointer, h, icon, rememberFocus, undoKey } from '../ui/dom';
 import type { Editor } from './editor';
 import { filterExamples } from './examplefilter';
 import { addExample, EXAMPLES, type Example } from './examples';
@@ -80,6 +80,11 @@ export function openExamplesGallery(ed: Editor): void {
   function onKey(e: KeyboardEvent): void {
     e.stopPropagation(); // the editor's shortcuts stay out of the dialog
     if (e.key === 'Escape') { e.preventDefault(); return close(); }
+    if (e.key === 'Enter' && document.activeElement === search) { // one match left: Enter opens it
+      const one = cards().filter((c) => !c.hidden && !c.closest('[hidden]'));
+      if (one.length === 1) { e.preventDefault(); one[0].click(); }
+      return;
+    }
     if (!/^Arrow(Up|Down|Left|Right)$/.test(e.key)) return;
     const list = cards().filter((c) => !c.hidden && !c.closest('[hidden]'));
     if (!list.length) return;
@@ -97,5 +102,5 @@ export function openExamplesGallery(ed: Editor): void {
   closeGallery = close;
   ed.claimMenu(close);
   ed.el.append(ov);
-  search.focus();
+  if (!coarsePointer()) search.focus(); // a phone's keyboard would cover the list at once
 }

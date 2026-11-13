@@ -634,21 +634,28 @@ export const RAT_CELL = ratCell(TAG);
  * Allocated by dispatch slot 0 or 1 (D, done when the value is known at decode, V then), else written by result bus
  * 0 or 1 (done, V), else held.
  */
+/** The reorder-buffer entry's bundled input `sh`, lowest field first. */
+const SHARED_NAMES = ['dd0', 'dd1', 'dn0', 'dn1', 'dv0', 'dv1', 'bv0', 'bv1'] as const;
+const SHARED = (D: number, V: number) => [D, D, 1, 1, V, V, V, V];
+
 export function robCell(D: number, V: number): ComponentDef {
   return memo(`robc${D}_${V}`, () => {
     const b = new Builder(16, 18);
-    b.pins('q', 'a0', 'a1', 'dd0', 'dd1', 'dn0', 'dn1', 'dv0', 'dv1', 'b0', 'b1', 'bv0', 'bv1');
+    b.pins('q', 'a0', 'a1', 'b0', 'b1', 'sh');
     const qs = b.op(splitter([1, D, V]), ['q'], undefined, 'qs');
+    // the inputs every entry reads, bundled: dispatch fields and values of both slots, both result buses' values
+    const sh = b.op(splitter(SHARED(D, V)), ['sh'], undefined, 'shs');
+    const [dd0, dd1, dn0, dn1, dv0, dv1, bv0, bv1] = SHARED_NAMES.map((n, i) => b.name(`${sh}.o${i}`, n, true));
     const one = b.op1(TIE1, [], undefined, 'one');
     b.next();
-    const vb = b.op1(busMux2(V), [b.op1(busMux2(V), [`${qs}.o2`, 'bv1', 'b1'], undefined, 'vb1'), 'bv0', 'b0'], undefined, 'vb0');
+    const vb = b.op1(busMux2(V), [b.op1(busMux2(V), [`${qs}.o2`, bv1, 'b1'], undefined, 'vb1'), bv0, 'b0'], undefined, 'vb0');
     const db = b.op1(busMux2(1), [`${qs}.o0`, one, b.op1(OR, ['b0', 'b1'], undefined, 'bus')], undefined, 'db');
     b.next();
-    const v1 = b.op1(busMux2(V), [vb, 'dv1', 'a1'], undefined, 'va1'), d1 = b.op1(busMux2(1), [db, 'dn1', 'a1'], undefined, 'da1');
-    const D1 = b.op1(busMux2(D), [`${qs}.o1`, 'dd1', 'a1'], undefined, 'Da1');
+    const v1 = b.op1(busMux2(V), [vb, dv1, 'a1'], undefined, 'va1'), d1 = b.op1(busMux2(1), [db, dn1, 'a1'], undefined, 'da1');
+    const D1 = b.op1(busMux2(D), [`${qs}.o1`, dd1, 'a1'], undefined, 'Da1');
     b.next();
-    const v0 = b.op1(busMux2(V), [v1, 'dv0', 'a0'], undefined, 'va0'), d0 = b.op1(busMux2(1), [d1, 'dn0', 'a0'], undefined, 'da0');
-    const D0 = b.op1(busMux2(D), [D1, 'dd0', 'a0'], undefined, 'Da0');
+    const v0 = b.op1(busMux2(V), [v1, dv0, 'a0'], undefined, 'va0'), d0 = b.op1(busMux2(1), [d1, dn0, 'a0'], undefined, 'da0');
+    const D0 = b.op1(busMux2(D), [D1, dd0, 'a0'], undefined, 'Da0');
     b.next();
     b.wire(b.op1(merger([1, D, V]), [d0, D0, v0], undefined, 'next'), 'y');
     const R = b.right;
@@ -656,10 +663,9 @@ export function robCell(D: number, V: number): ComponentDef {
     return define({
       id: `robc${D}_${V}`, name: 'Reorder-buffer entry (next)', category: 'cpu',
       summary: 'What a reorder-buffer entry holds next cycle: a dispatched instruction (its fields, and its value at once when decode knows it), else a result from a bus (done), else what it holds.',
-      ports: [bus('q', W, 'in'), bit('a0', 'in'), bit('a1', 'in'), bus('dd0', D, 'in'), bus('dd1', D, 'in'), bit('dn0', 'in'), bit('dn1', 'in'), bus('dv0', V, 'in'), bus('dv1', V, 'in'),
-        bit('b0', 'in'), bit('b1', 'in'), bus('bv0', V, 'in'), bus('bv1', V, 'in'), bus('y', W, 'out')],
+      ports: [bus('q', W, 'in'), bit('a0', 'in'), bit('a1', 'in'), bit('b0', 'in'), bit('b1', 'in'), bus('sh', SHARED(D, V).reduce((a, w) => a + w, 0), 'in'), bus('y', W, 'out')],
       symbol: { kind: 'box', label: 'ROB ENTRY' },
-      netlist: () => ({ pins: { q: [0, 2], a0: [0, 4], a1: [0, 6], dd0: [0, 8], dd1: [0, 10], dn0: [0, 12], dn1: [0, 14], dv0: [0, 16], dv1: [0, 18], b0: [0, 20], b1: [0, 22], bv0: [0, 24], bv1: [0, 26], y: [R, 2] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { q: [0, 2], a0: [0, 4], a1: [0, 6], b0: [0, 8], b1: [0, 10], sh: [0, 12], y: [R, 2] }, instances: b.instances, nets: b.nets() }),
     });
   });
 }
@@ -710,9 +716,10 @@ export function reorderBuffer(D: number, V: number, N = 16): ComponentDef {
     b.op(DEC, ['btag1', 'bw1'], 'bus 1', 'wb1');
     b.next();
     const qs: string[] = [];
+    b.op1(merger(SHARED(D, V)), [...SHARED_NAMES], undefined, 'shared');
     for (let e = 0; e < N; e++) {
       b.name(`al0.y${e}`, `a0_${e}`, true); b.name(`al1.y${e}`, `a1_${e}`, true); b.name(`wb0.y${e}`, `b0_${e}`, true); b.name(`wb1.y${e}`, `b1_${e}`, true);
-      const nx = b.op1(C, [`r${e}.q`, `al0.y${e}`, `al1.y${e}`, 'dd0', 'dd1', 'dn0', 'dn1', 'dv0', 'dv1', `wb0.y${e}`, `wb1.y${e}`, 'bv0', 'bv1'], undefined, `nx${e}`);
+      const nx = b.op1(C, [`r${e}.q`, `al0.y${e}`, `al1.y${e}`, `wb0.y${e}`, `wb1.y${e}`, 'shared.out'], undefined, `nx${e}`);
       b.op(R, [nx, one, 'clk'], `entry ${e}`, `r${e}`);
       qs.push(`r${e}.q`);
       if (e % 4 === 3) b.next();
@@ -763,9 +770,42 @@ export function reorderBuffer(D: number, V: number, N = 16): ComponentDef {
       summary: 'The instructions in flight, in program order: dispatch appends up to two at the tail, a result bus marks its entry done with the value, and commit retires up to two done entries from the head, so the register file only ever sees results in order. A value waits here until then: P6 style, the entry\'s number is the instruction\'s tag.',
       ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : Wd[n] ? bus(n, Wd[n], 'in') : bit(n, 'in'))), ...outs.map(([n, w]) => (w > 1 ? bus(n, w, 'out') : bit(n, 'out')))],
       symbol: { kind: 'box', label: 'REORDER BUFFER' },
-      netlist: () => { const R0 = b.right; return { pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries(outs.map(([n], i) => [n, [R0, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }; },
+      netlist: () => robDrawing(b, ins, outs.map(([n]) => n), N),
     });
   });
+}
+
+/**
+ * The reorder buffer's drawing: the Builder's columns, with room before each column of entries for a trunk. The inputs
+ * every entry reads (the dispatch fields and the result buses' values) are bundled at the bottom left, run along the
+ * bottom and rise beside each column into its entries, instead of eight pointers on every entry.
+ */
+function robDrawing(b: Builder, ins: string[], outs: string[], N: number) {
+  const TR = 6;
+  const xs = [...new Set(Array.from({ length: N }, (_, e) => b.instances.find((i) => i.name === `nx${e}`)!.at![0]))].sort((p, q) => p - q);
+  const shift = (x: number) => TR * xs.filter((c) => c <= x).length;
+  const instances: InstanceDef[] = b.instances.filter((i) => i.name !== 'shared').map((i) => ({ ...i, at: [i.at![0] + shift(i.at![0]), i.at![1]] as At }));
+  const yb = Math.max(...instances.map((i) => i.at![1] + symbolGeom(i.def).h)) + 6;
+  const M = b.instances.find((i) => i.name === 'shared')!, mg = symbolGeom(M.def);
+  const mAt: At = [16, yb], yLine = yb + mg.ports.out.pos[1];
+  instances.push({ ...M, at: mAt });
+  const at = new Map(instances.map((i) => [i.name, i.at!]));
+  const right = b.right + TR * xs.length;
+  const pins: Record<string, At> = {};
+  ins.filter((n) => !(SHARED_NAMES as readonly string[]).includes(n)).forEach((n, i) => (pins[n] = [0, 2 + 2 * i]));
+  SHARED_NAMES.forEach((n, k) => (pins[n] = [0, yb + mg.ports[`i${k}`].pos[1]]));
+  outs.forEach((n, i) => (pins[n] = [right, 2 + 2 * i]));
+  const cg = symbolGeom(instances.find((i) => i.name === 'nx0')!.def);
+  const nets = b.nets().map((nt): NetDef => {
+    if (nt.ends[0] !== 'shared.out') return nt;
+    const via: Record<string, At[]> = {};
+    for (const t of nt.ends.slice(1)) {
+      const p = at.get(t.slice(0, t.indexOf('.')))!, xT = p[0] - TR + 2;
+      via[t] = [[xT, yLine], [xT, p[1] + cg.ports.sh.pos[1]]];
+    }
+    return { name: 'shared', ends: nt.ends, via };
+  });
+  return { pins, instances, nets };
 }
 
 // ---- the store queue and the data memory -------------------------------------------------------------------------------
