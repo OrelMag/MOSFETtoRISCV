@@ -144,6 +144,7 @@ a touch screen, press and hold.
 ### Run a circuit
 
 - A circuit without a clock simply follows its inputs: change an input and the outputs follow.
+- **I/O** in the toolbar shows or hides the bar of the chip's pins above the run bar: click an input there to change it.
 - A chip with a **Clock** pin runs on the run bar: **Run** starts it (or **Ctrl Enter**), **Step** (or **.**) does one
   clock cycle, the speed box sets cycles per second, **Reset** powers it on again.
 - **Cycle** runs one whole clock cycle at a time (fast); **Gate delay** steps one gate delay at a time, so you can watch
@@ -371,8 +372,8 @@ Both are optional, and every one has an answer you can look at.
 
    ![The Puzzles list](img/sandbox/34-puzzles-drawer.png)
 
-2. Click **Start** beside one, for example **Echo**, choose the CPU that will run it (a ready-wired 4-bit, RV16 or RV32I
-   computer) and click **Start**.
+2. Click **Start** beside one, for example **Echo**, and choose the computer that will run it (a ready-wired 4-bit, RV16
+   or RV32I computer).
 3. The puzzle opens as a chip with its computer, and a strip under the canvas: the task, how the program reads input and
    writes output, the tests, **Check**, **Show answer**, **Do it for me**, **Start over…**, and a chart of cycles against NAND gates with
    the reference CPUs on it.
