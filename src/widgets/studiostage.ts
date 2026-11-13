@@ -33,6 +33,8 @@ export interface StudioStageOptions {
   /** Fit home to a sphere of this radius round the framed box's centre instead of the box's corners (a round model: a
    *  radiation pattern, a ring), which would otherwise leave it small. */
   homeRadius?: number;
+  /** homeRadius on a canvas narrow enough for badges (a phone): further out, so no main part's anchor sits under a badge at the edge. */
+  homeRadiusNarrow?: number;
   /** The canvas's aspect (w / h) when the model's own would mislead: a model built only once on the page (empty at
    *  first), or one whose home view is a set camera (fit: false). */
   aspect?: number;
@@ -172,10 +174,11 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   const homeView = (): OrbitView => {
     if (o.fit === false || homeGiven || !st) return o.home;
     const box = homeBox();
-    if (o.homeRadius) {
+    const radius = (isNarrow() && o.homeRadiusNarrow) || o.homeRadius;
+    if (radius) {
       const c: Vec3 = [(box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2];
       const half = Math.atan(Math.tan(st.camera.fov / 2) * Math.min(1, contentAspect())) * 0.94;
-      return { yaw: o.home.yaw, pitch: o.home.pitch, target: c, dist: o.homeRadius / Math.sin(half) };
+      return { yaw: o.home.yaw, pitch: o.home.pitch, target: c, dist: radius / Math.sin(half) };
     }
     const f = fitView(box, o.home.yaw, o.home.pitch, st.camera.fov, contentAspect(), 0.06);
     return { yaw: o.home.yaw, pitch: o.home.pitch, target: f.target, dist: f.dist };

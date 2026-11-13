@@ -150,7 +150,14 @@ function statics(d: Detail): Statics {
   const chosenPoly = transform(ring(RINGS.poly), at(HOLES[CHOSEN]));
   const xMax = levelEnd(0);
   const sw = new Mesh();
-  for (const z of [-SLIT_Z, SLIT_Z]) sw.box(-BLOCK_X - 6, xMax + 4, E, STACK_TOP, z - SLIT_W / 2 + E, z + SLIT_W / 2 - E);
+  // the slits cut through the stack as it stands: full height over the array, then down the staircase a tread at a time (a slit
+  // at full height over the treads stood as a wall behind them, its top edge a stray line in the home view)
+  const top = LEVELS.length - 1;
+  for (const z of [-SLIT_Z, SLIT_Z]) {
+    const z0 = z - SLIT_W / 2 + E, z1 = z + SLIT_W / 2 - E;
+    sw.box(-BLOCK_X - 6, levelEnd(top), E, STACK_TOP, z0, z1);
+    for (let i = top - 1; i >= 0; i--) sw.box(levelEnd(i + 1) + E, levelEnd(i) + (i === 0 ? 4 : 0), E, levelY(i)[1], z0, z1);
+  }
   const sub = new Mesh();
   sub.box(-BLOCK_X - 10, xMax + 8, SUB_Y0, 0, -SLIT_Z - 8, SLIT_Z + 8);
   // the staircase's contacts: one per level, from its tread to the metal over the stack
