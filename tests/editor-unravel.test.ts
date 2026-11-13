@@ -239,3 +239,19 @@ describe('connectivity never changes', () => {
     expect(names.length).toBeGreaterThan(0);
   }, 400_000);
 });
+
+describe('collapse keeps a short wire', () => {
+  const short = chip('u_s', 'S', {
+    pins: [pin('a', 'in', [0, 2]), pin('y', 'out', [6, 2])],
+    parts: [],
+    wires: [wire('w1', 'pin:a', 'pin:y')],
+  });
+  const defOf: DefOf = (p) => { const r = partDef(p.ref, () => undefined); return 'error' in r ? undefined : r; };
+  it('refuses to turn a wire under SHORT_WIRE units into two pointers that would touch, and a batch keeps it', () => {
+    expect(collapseWire(short, 'w1', 'a', defOf).reason).toMatch(/too short for pointers/);
+    const all = collapseWires(short, ['w1'], defOf);
+    expect(all.reason).toBeUndefined();
+    expect(all.kept).toBe(1);
+    expect(all.doc).toBe(short);
+  });
+});

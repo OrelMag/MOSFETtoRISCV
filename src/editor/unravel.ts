@@ -604,6 +604,18 @@ function freeId(prefix: string, taken: Set<string>): string {
   return `${prefix}${i}`;
 }
 
+/** A wire this short is kept: its two pointers, each a few units out from its pin, would touch and cut each other's names. */
+export const SHORT_WIRE = 8;
+/** The drawn length of a wire and its branches, in grid units. */
+export function treeLength(doc: ChipDoc, ids: readonly string[], poly: (w: WireDoc) => ReturnType<typeof polyline>): number {
+  let n = 0;
+  for (const id of ids) {
+    const w = doc.wires.find((x) => x.id === id), p = w && poly(w);
+    if (p) for (let i = 1; i < p.length; i++) n += Math.abs(p[i][0] - p[i - 1][0]) + Math.abs(p[i][1] - p[i - 1][1]);
+  }
+  return n;
+}
+
 export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefOf,
   /** A wire's drawn path (collapseWires caches them across one batch: nothing moves, so each wire is drawn once). */
   poly: (w: WireDoc) => ReturnType<typeof polyline> = (w) => polyline(doc, w, defOf)): Edited & { labels?: string[]; wires?: string[] } {
@@ -618,6 +630,7 @@ export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefO
   if (!own.size && doc.labels.some((l) => l.name === nm)) return { doc, reason: `“${nm}” is already a pointer of another net` };
   const real = ends.filter((e) => !('label' in e));
   if (!real.length) return { doc, reason: 'nothing on this wire to point from' };
+  if (real.length === 2 && treeLength(doc, tree, poly) < SHORT_WIRE) return { doc, reason: `this wire is too short for pointers (under ${SHORT_WIRE} units): they would touch, so it stays a wire` };
 
   const gone = new Set(tree);
   const wires = doc.wires.filter((w) => !gone.has(w.id));
@@ -669,20 +682,24 @@ export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefO
 }
 
 /** Collapses each drawn tree among `ids` under its suggested name. */
-export function collapseWires(doc: ChipDoc, ids: string[], defOf: DefOf): Edited & { labels: string[] } {
+export function collapseWires(doc: ChipDoc, ids: string[], defOf: DefOf): Edited & { labels: string[]; kept: number } {
   let out = doc;
   const why: string[] = [];
   const labels: string[] = [];
   const done = new Set<string>();
+  let kept = 0;
   // the wires a collapse keeps are the same objects with the same ends, and no part moves: draw each once
   const drawn = new WeakMap<WireDoc, ReturnType<typeof polyline>>();
   const poly = (w: WireDoc) => { if (!drawn.has(w)) drawn.set(w, polyline(out, w, defOf)); return drawn.get(w)!; };
   for (const id of ids) {
     if (done.has(id) || !out.wires.some((w) => w.id === id)) continue;
     for (const t of wireTree(out, id)) done.add(t);
+    const tree = wireTree(out, id), real = treeEnds(out, tree).filter((e) => !('label' in e));
+    // a short wire between two ends stays a wire: collapsing everything is not a reason to make pointers that touch
+    if (real.length === 2 && treeLength(out, tree, poly) < SHORT_WIRE) { kept++; continue; }
     const r = collapseWire(out, id, suggestName(out, id, defOf), defOf, poly);
     if (r.reason) why.push(r.reason);
     else { out = r.doc; labels.push(...r.labels!); }
   }
-  return why.length ? { doc: out, reason: why.join('; '), labels } : { doc: out, labels };
+  return why.length ? { doc: out, reason: why.join('; '), labels, kept } : { doc: out, labels, kept };
 }
