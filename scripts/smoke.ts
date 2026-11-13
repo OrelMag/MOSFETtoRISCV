@@ -57,8 +57,8 @@ const DRIVE_MS = 2 * routeTimeout;
 const throttle = Number(opt('throttle') ?? 1);
 // After the load and two frames: long enough for a 2 Hz automatic clock (settings.autoClock) to tick once.
 const dwell = Number(opt('dwell') ?? 600);
-// `--zoom-open on | off`: View options ▸ Open blocks as you zoom for every route that does not set it itself (the lens's "off
-// restores today" check, DESIGN.md: the same routes with it on and off).
+// `--zoom-open on | off`: View options ▸ Open blocks as you zoom for every route that does not set it itself (on by default
+// since 2026-11-13; `off` is the lens's "off restores today" check, DESIGN.md: the same routes with it on and off).
 const zoomOpen = opt('zoom-open');
 
 // ---- routes ----------------------------------------------------------------------------------
@@ -1167,8 +1167,7 @@ const pulsed = (...runs: [n: number, drive: string][]) => `(async () => {
 /**
  * Open blocks as you zoom on a touch screen (DESIGN.md item 6, Revision 3): pinches spreading over `part` (two touch
  * pointers) open its inside in its outline once past its opening zoom, as the wheel does; the stage bar keeps its height;
- * a tap on an inner part under 40 px steps into `part` (#/…/<part>). `off`: the setting left at its default (null), and a
- * pinch only zooms.
+ * a tap on an inner part under 40 px steps into `part` (#/…/<part>). `off`: the setting turned off, and a pinch only zooms.
  */
 const lensPinchDrive = (mode: 'open' | 'off', part: string) => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1213,7 +1212,7 @@ const lensPinchDrive = (mode: 'open' | 'off', part: string) => `(async () => {
   // the first finger of a pinch is not a press and hold: no menu once the hold's time has passed
   await wait(500);
   if (document.querySelector('.ctx-menu')) bad.push('a pinch opened the press-and-hold menu');
-  if ('${mode}' === 'off') return lenses() ? [...bad, 'an inside opened on a touch screen with the setting at its default'] : bad;
+  if ('${mode}' === 'off') return lenses() ? [...bad, 'an inside opened on a touch screen with the setting off'] : bad;
   // the inside crumb must not restack the stage bar and take the canvas's height away (it did at 360 px)
   if (canvas.getBoundingClientRect().height < canvasH - 1) bad.push('the canvas shrank from ' + Math.round(canvasH) + ' to ' + Math.round(canvas.getBoundingClientRect().height) + ' px');
   const el = mine();
@@ -1619,7 +1618,7 @@ function routes(): Route[] {
   // View options ▸ Opened blocks without colour: the opened alu on the board's colour, closed boxes keep theirs; the dark board
   // and the light canvas; off, the opened alu keeps its hue
   const plainOn = (theme: 'light' | 'dark', board: boolean, lensPlain: boolean) =>
-    ({ [SETTINGS_KEY]: JSON.stringify({ theme, board, lensPlain, autoClock: false, zoomOpen: true, coachDone: { stage: true, sandbox: true } }) });
+    ({ [SETTINGS_KEY]: JSON.stringify({ theme, board, lensPlain, lensV: 1, autoClock: false, zoomOpen: true, coachDone: { stage: true, sandbox: true } }) });
   add('#/c/cpu/0', plainOn('dark', true, true), ' (lens plain, alu, dark board)', undefined, lensPlainDrive('alu', true));
   add('#/c/cpu/0', plainOn('light', false, true), ' (lens plain, alu, light canvas)', undefined, lensPlainDrive('alu', true));
   add('#/c/cpu/0', plainOn('light', true, false), ' (lens plain off, alu)', undefined, lensPlainDrive('alu', false));
@@ -1632,12 +1631,13 @@ function routes(): Route[] {
     add(comp, { ...lensOff, [SANDBOX_KEY]: ex.json }, ' (look inside, zoom lens off)', undefined, lensInsideDrive('cpu', 'alu', false));
   }
   // a touch screen (DESIGN.md item 6): pinches onto the control unit open its inside like the wheel and a tap on a small inner
-  // part steps in, at both phone widths in both themes; at its default (null) nothing opens
+  // part steps in, at both phone widths in both themes; at its default (on since 2026-11-13) it opens, turned off nothing does
   for (const vp of TOUCH_VIEWPORTS) for (const theme of ['light', 'dark'] as const) add('#/c/cpu/0', lensOn(theme), ` (zoom lens, ${vp.name}, ${theme})`, vp, lensPinchDrive('open', 'ctl'));
   // the fingers on an open inside: a closing pinch, then one spreading to the hand-off, nothing moving under them
   // alu's inside fills its box; pc's is a narrow column in a wider box (fingers on its margin step in all the same)
   for (const vp of TOUCH_VIEWPORTS) for (const part of ['alu', 'pc']) add('#/c/cpu/0', lensOn(vp === TOUCH_VIEWPORTS[0] ? 'light' : 'dark'), ` (zoom lens, fingers on an inside, ${part}, ${vp.name})`, vp, lensTouchDrive(part));
-  add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens at its default, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('off', 'ctl'));
+  add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens at its default, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('open', 'ctl'));
+  add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, zoomOpen: false, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens off, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('off', 'ctl'));
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
   // The layout lock: locked by default on a touch screen, unlocked with a mouse; an arrangement of an older drawing set aside.
   add('#/workbench/xor', light, ` (layout lock, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], layoutDrive('touch'));

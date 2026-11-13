@@ -67,10 +67,12 @@ interface State {
   minimap: boolean;
   /** A drag moves parts on the stage; null: off on a touch screen. */
   moveParts: boolean | null;
-  /** Zooming into a block opens its inside over it (view/lens.ts); null: the device default (off while it is new; never on a touch screen yet). */
+  /** Zooming into a block opens its inside over it (view/lens.ts); null: on. */
   zoomOpen: boolean | null;
-  /** View options ▸ Opened blocks without colour: a block the lens shows open (view/lens.ts inside-on) drops its module colour (lens.css). */
-  lensPlain: boolean;
+  /** An opened block drops its module colour (lens.css); null: on. */
+  lensPlain: boolean | null;
+  /** 1: lensPlain false is a choice (load reads an older false as unset). */
+  lensV: number;
   /** Coach-mark tours finished or skipped (ui/coachmarks.ts): "stage", "sandbox". */
   coachDone: Record<string, boolean>;
   /** Stop animations whatever the system says (the system's own preference is always honoured: ui/motion.ts). */
@@ -112,7 +114,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, workingGates: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, moveParts: null, zoomOpen: null, lensPlain: false, reduceMotion: false, wireScale: 'normal', grid: 'dots', portNames: true, partNames: true, modelNames: true, busValues: true, tapRanges: true, zoomNames: 'normal', hideSmall: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, overlay: 'slack', visited: {}, solved: {}, openActs: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, workingGates: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, moveParts: null, zoomOpen: null, lensPlain: null, lensV: 1, reduceMotion: false, wireScale: 'normal', grid: 'dots', portNames: true, partNames: true, modelNames: true, busValues: true, tapRanges: true, zoomNames: 'normal', hideSmall: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, overlay: 'slack', visited: {}, solved: {}, openActs: {} };
 
 /**
  * The stored fields that have the right shape, the rest left out (so they take their defaults): a damaged or hand-edited
@@ -139,7 +141,7 @@ function coerce(raw: unknown): Partial<State> {
       if (vs) out[k] = Object.fromEntries(Object.entries(vs).map(([c, s]) => [c, s.filter((i): i is number => Number.isInteger(i) && (i as number) >= 0)]));
     } else if (k === 'solved' || k === 'coachDone' || k === 'openActs') { const b = rec(v, bool); if (b) out[k] = b; }
     else if (d === null) { if (v === null || typeof v == 'boolean') out[k] = v; }
-    else if (typeof d == 'number') { if (typeof v == 'number' && Number.isFinite(v) && (k === 'looks' || v > 0)) out[k] = v; }
+    else if (typeof d == 'number') { if (typeof v == 'number' && Number.isFinite(v) && (k === 'looks' || k === 'lensV' || v > 0)) out[k] = v; }
     else if (typeof v == typeof d) out[k] = v;
   }
   if (Number.isInteger(r.moved) && (r.moved as number) >= 0) out.moved = r.moved;
@@ -155,13 +157,14 @@ function load(): State {
       let parsed: unknown;
       // Text that is not JSON is kept aside before the next save writes the defaults over it (as the sandbox keeps its own).
       try { parsed = JSON.parse(raw); } catch { localStorage.setItem(KEY + ':unreadable', raw); throw new Error('unreadable settings'); }
-      const st: State = { ...defaults, looks: 0, ...coerce(parsed) };
+      const st: State = { ...defaults, looks: 0, lensV: 0, ...coerce(parsed) };
       // Settings saved before the vivid look and cartoon parts became the default get them once; turned off since, they stay off.
       if (st.looks < 1) {
         if (!st.vivid && !st.netColors) st.vividNets = true;
         if (!st.vivid) st.netColors = true;
         st.vivid = true; st.cartoon = true; st.looks = 1;
       }
+      if (st.lensV < 1) { if (st.lensPlain === false) st.lensPlain = null; st.lensV = 1; }
       return moveProgress(st);
     }
   } catch { /* private mode, blocked storage, ... */ }
@@ -169,7 +172,7 @@ function load(): State {
 }
 
 /** What the View options menu holds, and so what its reset puts back: never progress, the theme or the panes. */
-/** A touch screen (the coarse pointer): the lens is not built for it yet (view/lens.ts). */
+/** A touch screen (the coarse pointer). */
 export const coarsePointer = (): boolean => typeof matchMedia == 'function' && matchMedia('(pointer: coarse)').matches;
 
 const VIEW_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'workingGates', 'vividNets', 'glossary', 'simpleWires', 'autoClock', 'loadDelay', 'singleKeys', 'minimap', 'moveParts', 'zoomOpen', 'lensPlain', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'modelNames', 'busValues', 'tapRanges', 'zoomNames', 'hideSmall', 'textSize', 'narrowText'] as const;
@@ -228,10 +231,8 @@ export const settings = {
   get loadDelay() { return state.loadDelay; },
   get minimap() { return state.minimap; },
   get moveParts(): boolean { return state.moveParts ?? !(typeof matchMedia == 'function' && matchMedia('(pointer: coarse)').matches); },
-  /** Open blocks as you zoom: off by default while it is new. Null stays off on a touch screen when phase 3 turns it on with a mouse (DESIGN.md item 6). */
-  get zoomOpen(): boolean { return state.zoomOpen ?? false; },
-  /** Strictly true: the saved value is merged without per-key checks (load), so anything else reads as off. */
-  get lensPlain(): boolean { return state.lensPlain === true; },
+  get zoomOpen(): boolean { return state.zoomOpen ?? true; },
+  get lensPlain(): boolean { return state.lensPlain !== false; },
   get reduceMotion() { return state.reduceMotion; },
   get wireScale() { return state.wireScale; },
   get grid() { return state.grid; },
@@ -388,6 +389,6 @@ export function applyTheme(): void {
   if (state.vivid && state.cartoon && state.workingGates) root.setAttribute('data-gates', 'cmos');
   else root.removeAttribute('data-gates');
   // lens.css: only a box carrying inside-on reacts, so with the lens off this matches nothing
-  if (state.lensPlain === true) root.setAttribute('data-lens-fill', 'plain');
+  if (state.lensPlain !== false) root.setAttribute('data-lens-fill', 'plain');
   else root.removeAttribute('data-lens-fill');
 }
