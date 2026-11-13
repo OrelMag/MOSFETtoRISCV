@@ -81,7 +81,7 @@ describe('view options', () => {
     // the fixed-size names set an inline display (view/legible.ts)
     expect(app).toMatch(/data-hide~='parts'\] svg\.schematic \.lg-name \{ display: none !important; \}/);
     expect(app).toMatch(/\.tap-label:not\(\.net-hover, \.net-sel, \.fld\)/);
-    const paper = readFileSync(new URL('../src/ui/pages/printfig.ts', import.meta.url), 'utf8');
+    const paper = readFileSync(new URL('../src/ui/paper.ts', import.meta.url), 'utf8');
     expect(paper).toContain("['data-hide', null]");
     expect(paper).toContain("['data-wires', null]");
   });
