@@ -57,6 +57,8 @@ export interface StudioStage {
   hint: HTMLElement;
   /** Rebuild the model (a state changed). */
   refresh(): void;
+  /** Ease the camera to a view and make it home (a host's own view buttons; with fit: false). */
+  goTo(view: OrbitView): void;
   /** `casts`: the set casts shadows (the shadow's fit then takes it in). */
   instances(key: string, geo: Geo, mat: Material, data: Float32Array, casts?: boolean): void;
   /** Parts moved by the physics this frame. */
@@ -358,7 +360,25 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     };
     tween = requestAnimationFrame(step);
   };
-  const endTour = () => { beat = -1; cap.replaceChildren(); next.textContent = 'Tour ›'; prev.disabled = true; st?.setFocus(null); hiddenNow = defHidden; st?.setHidden(defHidden); o.onBeat?.(-1); };
+  const goTo = (dest: OrbitView) => {
+    if (!st) { o.home = dest; return; }
+    const c = st.camera, from = { target: [...c.target] as Vec3, yaw: c.yaw, pitch: c.pitch, dist: c.dist };
+    cancelAnimationFrame(tween);
+    const dur = reducedMotion() ? 0 : 800, t0 = performance.now();
+    const dy = ((((dest.yaw - from.yaw) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+    const lim = c.limits;
+    lim.maxDist = Math.max(lim.maxDist, dest.dist * 1.5); lim.minDist = Math.min(lim.minDist, dest.dist * 0.5); lim.minPitch = Math.min(lim.minPitch, dest.pitch);
+    const step = (now: number) => {
+      const f = dur ? ease(Math.min(1, (now - t0) / dur)) : 1;
+      c.target = from.target.map((v, j) => v + (dest.target[j] - v) * f) as Vec3;
+      c.yaw = from.yaw + dy * f; c.pitch = from.pitch + (dest.pitch - from.pitch) * f; c.dist = from.dist * Math.pow(dest.dist / from.dist, f);
+      st?.invalidate();
+      if (f < 1) tween = requestAnimationFrame(step);
+      else { tween = 0; o.home = dest; st?.camera.rehome(dest); }
+    };
+    tween = requestAnimationFrame(step);
+  };
+  const endTour = () => { beat = -1; cap.replaceChildren(); next.textContent = 'Tour ›'; prev.disabled = true; st?.setFocus(null); hiddenNow = defHidden; st?.setHidden(defHidden); o.onBeat?.(-1); if (mode === 'flat') drawFlat(); };
   next.addEventListener('click', () => { if (beat === (model.beats ?? []).length - 1) endTour(); else goBeat(beat + 1); });
   prev.addEventListener('click', () => goBeat(beat - 1));
   prev.disabled = true;
@@ -372,6 +392,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const it of m.items) {
       if (it.mat.beam) continue;
+      // a hidden group or name (a beat's hide, the frame boxes a model fits by) is not drawn, as on the GPU and in pick
+      if (hiddenNow && ((it.group && hiddenNow.has(it.group)) || (it.name && hiddenNow.has(it.name)))) continue;
       itemMatrix(it, k.explode, M, curMoves);
       const P = it.geo.positions, I = it.geo.indices, glass = (it.mat.transmit ?? 0) > 0.3, cut = (it.cut ?? 'section') !== 'none' && cuts.length > 0;
       const base = resolve(it.mat.base), em = it.mat.emit ? resolve(it.mat.emit).map((v) => v * Math.min(1, it.mat.glow ?? 0)) : [0, 0, 0];
@@ -453,7 +475,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   }).catch(() => { if (!dead) setMode('flat'); });
 
   return {
-    el, slot, chips, hint, refresh,
+    el, slot, chips, hint, refresh, goTo,
     instances(key, geo, mat, data, casts) { st?.setInstances(key, geo, mat, data, undefined, casts); },
     move(m) { curMoves = m; if (mode === 'flat') drawFlat(); else st?.move(m); },
     studio: () => st,

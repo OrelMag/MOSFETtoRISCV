@@ -1,6 +1,8 @@
-// The naval Enigma M4 in 3D (loaded on demand, modelhost.ts). Its wheels, pawls, lamps, plugs and current are the cipher's
-// state (crypto/enigma.ts); the machine opens up as an operator would open it. Press a key on the drawn keyboard or, with
-// the machine focused, on your own.
+// The naval Enigma M4 in 3D on the studio renderer (loaded on demand, modelhost.ts). Its wheels, pawls, lamps, plugs and
+// current are the cipher's state (crypto/enigma.ts); the machine opens up as an operator would open it. Each part is drawn
+// in what it is made of, and after each press the current runs as light along the trace's own contacts, from the key to the
+// lamp (enigma3dstudio.ts); the readout lights each stage's letter as the light reaches it. Press a key on the drawn
+// keyboard or, with the machine focused, on your own.
 
 import '../styles/enigma3d.css';
 import { h } from '../ui/dom';
@@ -9,11 +11,12 @@ import type { Widget } from '../view/stage';
 import { chr, DEFAULT_SETTINGS, Enigma, GREEK, idx, KEY_ROWS, plugMap, REFLECTORS, ROTORS, socketOf, U264, UKWD_SAMPLE, ukwdWiring, type EnigmaSettings, type GreekName, type Moved, type ReflectorName, type RotorName, type Trace } from '../crypto/enigma';
 import type { OrbitView } from '../gl/camera';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
+import type { Model3 } from '../gl/kit/scene';
+import { studioStage } from './studiostage';
 import type { EnigmaPalette, EnigmaPose } from './enigma3dparts';
 import { enigmaAnchors, enigmaParts } from './enigma3dmachine';
-import { movedWords } from './enigma3dextras';
+import { currentRuns, movedWords } from './enigma3dextras';
+import { beamItems, beamPath, flatItems, glassItems, partSets, stageLengths, type EnigmaSet } from './enigma3dstudio';
 
 type Openness = Pick<EnigmaPose, 'lid' | 'cover' | 'flap' | 'lamps' | 'out'>;
 interface View { id: string; label: string; pose: Openness; camera: OrbitView; /** a closer camera on a narrow stage */ phone?: OrbitView; ghost?: boolean; inside?: boolean; bare?: boolean; box?: boolean; printer?: boolean }
@@ -32,6 +35,17 @@ const VIEWS: View[] = [
 ];
 
 const STROKE_MS = 170, HOLD_MS = 330, OPEN_RATE = 1.6;
+/** The light's speed along the wires, mm a second: the whole way, key to lamp, in about a second and a half. */
+const BEAM_MM_S = 1100;
+/** The tour: what each beat shows, by view (the beat's camera is that view's). */
+const TOUR: { view: string; title: string; text: string; camera?: OrbitView }[] = [
+  { view: 'use', title: 'A key closes a circuit', text: 'Press a key and two things happen: first the pawls step the wheels, then the key’s switch closes at the bottom of its travel and current flows from the battery. Press one now.' },
+  { view: 'plugs', title: 'Through the plugboard', text: 'The current leaves the key for its socket on the plugboard. A plugged pair swaps two letters before the wheels and again after; an empty socket’s switch passes the letter straight through.' },
+  // closer than the view's own camera: the wheels, where the light turns, fill the frame
+  { view: 'path', camera: { target: [-5, 120, -110], yaw: 0.25, pitch: 1.0, dist: 380 }, title: 'Through the wheels and back', text: 'In through the entry wheel, then right to left through the three wheels and the Greek wheel, each a fixed tangle of 26 wires, to the thin reflector, which sends it back by another way. Orange going in, blue coming back; the letters under the machine light stage by stage as the light passes. Press keys and watch the way change, because the wheels moved first.' },
+  { view: 'wheels', title: 'The wheels step first', text: 'Every press moves the right wheel one place before the current flows, so the same key never takes the same way twice running. A notch lets the middle and left wheels step too, and the middle wheel steps twice in a row once a cycle (Show a double step).' },
+  { view: 'use', camera: { target: [10, 85, -10], yaw: 0.2, pitch: 0.95, dist: 520 }, title: 'Out to a lamp', text: 'The current comes back through the plugboard to a lamp: never the key’s own letter, since the reflector cannot send a contact back to itself. That one rule was the codebreakers’ way in.' },
+];
 
 const groups = (s: string) => s.replace(/(.{4})(?=.)/g, '$1 ');
 /** Below this stage width a view takes its phone camera (modelstage.ts's NARROW). */
@@ -56,13 +70,16 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
   let autoplay = 0;
 
   const panel = h('div', { class: 'panel en' });
-  const stage = modelStage(panel, {
-    look: LOOKS.machine,
+  let ready = false, partSetsNow: EnigmaSet[] = [], beam: ReturnType<typeof beamPath> | null = null, beamLen = 0, marks: number[] = [];
+  const stage = studioStage({
+    home: opts.camera ?? view.camera,
+    fit: false,
+    scaleBar: (len) => (len >= 10 ? `${len / 10} cm` : `${len} mm`),
+    onBeat: (i) => { if (i < 0) return; const v = VIEWS.find((x) => x.id === TOUR[i].view)!; showView(v, false); if (v.ghost && !trace) press('A'); },
+    build: (detail) => model(detail),
     aria: 'The German navy’s four-wheel Enigma M4 in 3D: wooden case, keyboard, lamps, plugboard and rotor stack. Type a letter while it has focus to press that key',
-    camera: opts.camera ?? view.camera,
     limits: { minDist: 90, maxDist: 2600 },
-    note: 'Proportions measured from photographs; sizes of the switches, box and printer estimated from theirs. The wires’ courses are drawn, their connections are the machine’s (out in orange, back in blue).',
-    draw: () => paint(),
+    note: 'Proportions measured from photographs; sizes of the switches, box and printer estimated from theirs. Each part is drawn in what it is made of (oak, crackle-black panel, zinc, steel, brass, bakelite); the wood has no grain. The wires’ courses are drawn, their connections are the machine’s: the current runs as light along the trace’s own contacts, out in orange, back in blue.',
   });
 
   const palette = (): EnigmaPalette => ({
@@ -75,7 +92,19 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
   const pose = (): EnigmaPose => ({
     settings, pos: shown, ...open, ghost: !!view.ghost, inside: !!view.inside, bare: !!view.bare, box: !!view.box, printer: !!view.printer, tape: lamps, key, lit, stroke, pawls: machine.pawls(), trace: view.ghost ? trace : null, lite: stage.isFlat(),
   });
-  function paint(): void { const p = pose(); stage.paint(enigmaParts(p, palette()), enigmaAnchors(p)); }
+  /** The model: the parts by material (instance sets), the glass, the light so far; or every part as an item, flat. */
+  function model(detail: 'full' | 'flat'): Model3 {
+    if (!ready || !panel.isConnected) return { items: [] }; // the theme's colours resolve only once on the page
+    const p = { ...pose(), trace: null }, parts = enigmaParts(p, palette()), anchors = enigmaAnchors(p);
+    if (detail === 'flat') return { items: flatItems(enigmaParts({ ...p, trace: view.ghost ? trace : null }, palette())), anchors };
+    const s = partSets(parts, palette());
+    partSetsNow = s.sets;
+    for (const x of partSetsNow) stage.instances(x.key, x.geo, x.mat, x.data, true);
+    const light = beam && trace && p.out < 0.02 ? beamItems(beam, beamLen, '--en-forward', '--en-back') : [];
+    return { items: [...glassItems(parts), ...light], anchors, floor: 0, look: { exposure: 1.1 },
+      beats: TOUR.map((b) => ({ title: b.title, text: b.text, view: b.camera ?? cameraOf(VIEWS.find((v) => v.id === b.view)!) })) };
+  }
+  function paint(): void { stage.refresh(); }
 
   // ------------------------------------------------------------ the readout
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), pathRow = h('div', { class: 'en-path' }), tape = h('p', { class: 'en-tape' });
@@ -96,6 +125,10 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
     if (trace) {
       const stages = [trace.input, chr(trace.entry)].map((c) => h('span', { class: 'f' }, c)).concat(trace.out.map((c) => h('span', { class: 'f' }, chr(c))), [h('span', null, 'UKW')], [h('span', { class: 'b' }, chr(trace.back))], trace.ret.map((c) => h('span', { class: 'b' }, chr(c))), [h('span', { class: 'b' }, trace.output)]);
+      // how far along the light must be to have reached each: the key, the entry wheel, four wheels, the reflector (twice:
+      // its name and the contact it returns on), four wheels back, the lamp
+      const at = [0, marks[0], ...marks.slice(1, 5), marks[5], marks[5], ...marks.slice(6, 10), beam ? beam.at[beam.at.length - 1] : 0];
+      stages.forEach((s, i) => s.classList.toggle('on', !!beam && beamLen >= (at[i] ?? Infinity) - 1e-6));
       pathRow.replaceChildren(h('span', null, 'Contacts:'), ...stages);
     } else pathRow.replaceChildren(h('span', null, 'Press a key to see the current’s contacts, wheel by wheel.'));
     tape.replaceChildren(h('span', null, 'In: '), h('b', null, groups(typed.slice(-48)) || '–'), h('br'), h('span', null, 'Lamp: '), h('b', null, groups(lamps.slice(-48)) || '–'));
@@ -107,7 +140,7 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
   }
 
   // ------------------------------------------------------------ pressing a key
-  const moving = () => strokeDir !== 0 || openDelta() > 1e-3 || shown.some((v, i) => v !== machine.pos[i]) || hold > 0 || autoplay > 0;
+  const moving = () => (!!beam && beamLen < beam.at[beam.at.length - 1]) || strokeDir !== 0 || openDelta() > 1e-3 || shown.some((v, i) => v !== machine.pos[i]) || hold > 0 || autoplay > 0;
   const target = () => view.pose;
   const openDelta = () => { const t = target(); return (Object.keys(t) as (keyof Openness)[]).reduce((n, k) => Math.max(n, Math.abs(t[k] - open[k])), 0); };
 
@@ -117,6 +150,7 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
     machine.step();
     moved = movedWords(before, machine.pos);
     trace = machine.trace(ch);
+    beam = beamPath(currentRuns(trace, settings.plugs)); marks = stageLengths(trace, beam); beamLen = reducedMotion() ? beam.at[beam.at.length - 1] : 0;
     key = ch; lit = trace.output;
     typed += ch; lamps += trace.output;
     if (reducedMotion()) { stroke = 1; strokeDir = 0; shown = [...machine.pos]; hold = HOLD_MS; }
@@ -127,6 +161,7 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
 
   const loop = frameLoop((_now, dt) => {
     const ms = dt * 1000;
+    if (beam) beamLen = Math.min(beam.at[beam.at.length - 1], beamLen + dt * BEAM_MM_S);
     if (strokeDir > 0) {
       stroke = Math.min(1, stroke + ms / STROKE_MS);
       if (stroke >= 1) { strokeDir = 0; hold = HOLD_MS; }
@@ -188,21 +223,21 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
   const narrow = () => { const w = stage.el.clientWidth; return w > 0 && w < NARROW_PX; };
   const cameraOf = (v: View) => (narrow() && v.phone) || v.camera;
   let wasNarrow = false;
-  const ro = new ResizeObserver(() => { const n = narrow(); if (n !== wasNarrow && !opts.camera) { wasNarrow = n; stage.setView(cameraOf(view)); } });
+  const ro = new ResizeObserver(() => { const n = narrow(); if (n !== wasNarrow && !opts.camera) { wasNarrow = n; stage.goTo(cameraOf(view)); } });
   ro.observe(stage.el);
   const viewBtns = VIEWS.map((v) => {
     const b = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': v === view ? 'true' : 'false' }, v.label) as HTMLButtonElement;
     b.addEventListener('click', () => showView(v));
     return b;
   });
-  function showView(v: View): void {
+  function showView(v: View, camera = true): void {
     view = v;
     viewBtns.forEach((o, i) => o.setAttribute('aria-pressed', VIEWS[i] === v ? 'true' : 'false'));
     // on a phone the bar scrolls sideways: bring the chosen view's button into it
     const b = viewBtns[VIEWS.indexOf(v)], bar = b.parentElement!;
     if (bar.scrollWidth > bar.clientWidth) { const d = b.getBoundingClientRect().left - bar.getBoundingClientRect().left; if (d < 0 || d + b.offsetWidth > bar.clientWidth) bar.scrollLeft += d - 8; }
     if (reducedMotion()) open = { ...v.pose };
-    stage.setView(cameraOf(v));
+    if (camera) stage.goTo(cameraOf(v));
     readout(); paint(); loop.kick();
   }
 
@@ -230,7 +265,7 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
   for (const i of [ringIn, startIn, plugIn, dIn]) i.addEventListener('change', () => apply());
 
   function restart(s: EnigmaSettings, keepFeed = false): void {
-    settings = s; machine = new Enigma(s); shown = [...machine.pos]; trace = null; moved = ''; key = null; lit = null; typed = ''; lamps = ''; stroke = 0; strokeDir = 0; hold = 0;
+    settings = s; machine = new Enigma(s); shown = [...machine.pos]; trace = null; beam = null; beamLen = 0; moved = ''; key = null; lit = null; typed = ''; lamps = ''; stroke = 0; strokeDir = 0; hold = 0;
     if (!keepFeed) { feed = ''; fed = 0; autoplay = 0; }
     sets.reflector.value = s.reflector; sets.greek.value = s.greek; sets.w0.value = s.rotors[0]; sets.w1.value = s.rotors[1]; sets.w2.value = s.rotors[2];
     ringIn.value = s.rings; startIn.value = s.start; plugIn.value = s.plugs; dIn.value = s.dPairs ?? UKWD_SAMPLE;
@@ -274,8 +309,8 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
     h('p', { class: 'm3-sub' }, 'Case lid back, plug flap closed, as an operator had it. The wheels, pawls, plugs and lamps are the cipher itself: the U-boat traffic of 1942, Hartwig Looks’s message among it, deciphers on this machine letter for letter. Type on the keys below, or click the machine (or Tab to it) and type on your own keyboard.'),
     h('div', { class: 'r3' },
       h('div', { class: 'r3-main' },
-        h('div', { class: 'en-views' }, ...viewBtns, stage.resetBtn),
-        stage.el, stage.hint, keypad, pathRow, tape),
+        h('div', { class: 'en-views' }, ...viewBtns),
+        stage.el, keypad, pathRow, tape),
       h('div', { class: 'r3-side' },
         h('h4', null, 'This machine ', h('span', { class: 'r3-badge' }, 'model')), kv,
         h('h4', null, 'The day’s key'),
@@ -290,7 +325,11 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
         h('div', { class: 'r3-btns' }, u264, next, play),
         h('div', { class: 'r3-btns', style: 'margin-top:6px' }, reset, nudge))));
   dRow.forEach((e) => { e.hidden = settings.reflector !== 'D'; });
+  ready = true;
   readout();
   paint();
+  // built before it is on the page: draw again once it is (the colours come from the page's style)
+  const onPage = () => { if (panel.isConnected) paint(); else requestAnimationFrame(onPage); };
+  requestAnimationFrame(onPage);
   return { el: panel, destroy() { ro.disconnect(); loop.stop(); stage.destroy(); } };
 }

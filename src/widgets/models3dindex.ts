@@ -124,7 +124,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'enigma', title: 'The Enigma M4', category: 'machines', chapter: 'secret', step: 0,
     summary: 'The naval Enigma opened as an operator would: wheels, pawls, plugs and lamps are the cipher\'s state. Type on it.',
-    files: ['enigma3d', 'enigma3dview', 'enigma3dparts', 'enigma3dmachine', 'enigma3dextras'], factory: 'enigma3d', codex: ['enigma'],
+    files: ['enigma3d', 'enigma3dview', 'enigma3dstudio', 'enigma3dparts', 'enigma3dmachine', 'enigma3dextras'], factory: 'enigma3d', codex: ['enigma'],
     open: () => import('./enigma3d').then((m) => m.enigma3d()),
   },
   {
