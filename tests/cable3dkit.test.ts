@@ -7,7 +7,7 @@ import { boundsOfNamed } from '../src/gl/kit/scene';
 import { COAX_PRESETS, LAY_A_MM, loopCount, unevenLoops } from '../src/phys/cable';
 import { LEN, type CableState } from '../src/widgets/cable3dparts';
 import {
-  BEADS_PER_LOOP, CAT5E, CMM, COAX_LAYERS, FRAME_GROUPS, PAIR_LAYERS, TRUE_Z, UPM, cableModel, coaxRadii, fieldArrows, lenses, loopsNow, pushBeads, receiver, tighterThanLife,
+  ARROW_LEN, BEADS_PER_LOOP, CAT5E, CMM, COAX_LAYERS, FRAME_GROUPS, PAIR_LAYERS, TRUE_Z, UPM, cableModel, coaxRadii, fieldArrows, lenses, loopsNow, pushBeads, receiver, tighterThanLife,
   type CableLayer, type CableLook,
 } from '../src/widgets/cable3dkit';
 
@@ -73,7 +73,7 @@ describe('the field in time follows phys/cable.ts', () => {
   it('the field’s arrows are as long as B now and turn over with it', () => {
     const up = fieldArrows(PAIR, Math.PI / 2, rgb), down = fieldArrows(PAIR, -Math.PI / 2, rgb);
     expect(up.shafts).toHaveLength(6);
-    expect(up.shafts[0].scale![1]).toBeCloseTo(15, 9);
+    expect(up.shafts[0].scale![1]).toBeCloseTo(ARROW_LEN, 9);
     expect(up.heads[0].pos[1]).toBeGreaterThan(0);
     expect(down.heads[0].pos[1]).toBeLessThan(0);
   });

@@ -19,7 +19,7 @@ import type { Beat, Item, Model3, StudioAnchor } from '../gl/kit/scene';
 import type { Instance, RGB } from '../gl/instances';
 import { quatAxisAngle, type Quat, type Vec3 } from '../gl/math';
 import { DIELECTRICS, LAY_A_MM, LAY_B_MM, loopEdges, loopFractions, neighbourHalfTwists, type CoaxPreset } from '../phys/cable';
-import { A, LEN, NEIGHBOUR_Z, helix, presetOf, type CableState } from './cable3dparts';
+import { A, H as H_DRAWN, LEN, NEIGHBOUR_Z, helix, presetOf, type CableState } from './cable3dparts';
 
 // ---------------------------------------------------------------- sourced figures
 
@@ -67,7 +67,7 @@ export function loopsNow(st: Pick<CableState, 'twists' | 'uneven'>, phase: numbe
 
 // ---------------------------------------------------------------- the look
 
-export type CableLayer = 'field' | 'electric' | 'true' | 'fields';
+export type CableLayer = 'field' | 'push' | 'electric' | 'true' | 'fields';
 export interface CableRgb { pos: RGB; neg: RGB; field: RGB; push: RGB; load: RGB; hot: RGB }
 export interface CableLook {
   detail: 'full' | 'flat';
@@ -91,11 +91,15 @@ const onX = (g: Geo): Geo => transform(g, matOf(Y_TO_X));
 
 /** Shapes the view instances: a lens one unit long (x 0..1) as wide as a loop, an arrow's shaft (one unit, centred) and head. */
 export const LENS = extrude(Array.from({ length: 33 }, (_, i): [number, number] => { const t = i / 32; return [t, A * Math.sin(Math.PI * t)]; }).concat(Array.from({ length: 31 }, (_, i): [number, number] => { const t = 1 - (i + 1) / 32; return [t, -A * Math.sin(Math.PI * t)]; })), 0.16);
-export const SHAFT = tube([[0, -0.5, 0], [0, 0.5, 0]], 0.3, { sides: 10 });
-export const HEAD = lathe([[0, 0], [0.85, 0], [0, 2]], { seg: 16, crease: 80 });
-/** A bead is a little wider than the insulation, so it shows riding along the wire. */
-export const BEAD = sphere(1.15, 12, 8);
-export const LOAD = roundedBox(1.5, 1.7, 1.5, 0.35, 2);
+export const SHAFT = tube([[0, -0.5, 0], [0, 0.5, 0]], 0.15, { sides: 8 });
+export const HEAD = lathe([[0, 0], [0.45, 0], [0, 1.1]], { seg: 12, crease: 80 });
+/** A bead rides on the wire's outer face (pushBeads puts it there), small: the wires stay the subject. */
+export const BEAD = sphere(0.3, 10, 6);
+/** The insulation's drawn radius (the copper's is 0.42). */
+export const INS_R = 1.05;
+/** The field arrows' length at the field's peak. */
+export const ARROW_LEN = 9;
+export const LOAD = roundedBox(2.4, 3, 2.4, 0.5, 2);
 
 const leg = (n: number, w: 1 | -1, uneven: number, dz: number, per: number): Vec3[] => {
   const e = loopEdges(n, uneven), pts: Vec3[] = [];
@@ -126,7 +130,7 @@ export function lenses(st: CableState, phase: number, rgb: CableRgb): Instance[]
 }
 /** The field's arrows through the loops' middles: as long as B now, pointing its way. */
 export function fieldArrows(st: CableState, phase: number, rgb: CableRgb): { shafts: Instance[]; heads: Instance[] } {
-  const n = Math.round(st.twists), e = loopEdges(n, st.uneven), b = Math.sin(phase), len = Math.max(0.05, 15 * Math.abs(b)), up = b >= 0;
+  const n = Math.round(st.twists), e = loopEdges(n, st.uneven), b = Math.sin(phase), len = Math.max(0.05, ARROW_LEN * Math.abs(b)), up = b >= 0;
   const shafts: Instance[] = [], heads: Instance[] = [];
   for (let k = 0; k < e.length - 1; k++) {
     const x = ((e[k] + e[k + 1]) / 2 - 0.5) * LEN;
@@ -142,7 +146,8 @@ export function pushBeads(st: CableState, phase: number, rgb: CableRgb): Instanc
   const n = Math.round(st.twists), e = loopEdges(n, st.uneven), { push, netPush } = loopsNow(st, phase), out: Instance[] = [];
   for (let k = 0; k < e.length - 1; k++) for (const w of [1, -1] as const) for (let j = 0; j < BEADS_PER_LOOP; j++) {
     const f = Math.max(0.03, Math.min(0.97, (j + 0.5) / BEADS_PER_LOOP + w * 0.12 * push[k]));
-    out.push({ pos: helix(n, w, e[k] + (e[k + 1] - e[k]) * f, st.uneven), color: rgb.push, emissive: rgb.push });
+    const p = helix(n, w, e[k] + (e[k + 1] - e[k]) * f, st.uneven), r = Math.hypot(p[1], p[2]) || 1;
+    out.push({ pos: [p[0], p[1] * (1 + INS_R / r), p[2] * (1 + INS_R / r)], color: rgb.push, emissive: rgb.push });
   }
   const path = bridge(n, st.uneven, 1);
   for (let j = 0; j < 3; j++) out.push({ pos: along(path, (j + 1) / 4 + 0.2 * Math.max(-1, Math.min(1, netPush))), color: rgb.push, emissive: rgb.push });
@@ -186,14 +191,14 @@ function pairModel(look: CableLook): Model3 {
   const wireInfo = { dim: `${CAT5E.insulated} mm across in a Cat5e pair (drawn far thicker)`, source: SRC.cat5e, note: 'its copper is 24 AWG, 0.511 mm across' };
   for (const w of [1, -1] as const) {
     const pts = leg(n, w, st.uneven, 0, per), key = `${n}|${st.uneven}|${w}|${per}`;
-    items.push({ geo: once(`ins${key}`, () => tube(pts, 0.8, { sides })), mat: ins(w === 1 ? '--m3-wire-a' : '--m3-wire-b', 'insulation (PE)'), name: w === 1 ? 'wire A (insulated copper)' : 'wire B (insulated copper)', group: 'pair', info: wireInfo });
-    items.push({ geo: once(`cu${key}`, () => tube(pts, 0.32, { sides })), mat: copper, name: 'copper conductor', group: 'pair', info: { dim: `${CAT5E.conductor} mm in a Cat5e pair (drawn far thicker)`, source: SRC.awg } });
+    items.push({ geo: once(`ins${key}`, () => tube(pts, INS_R, { sides })), mat: ins(w === 1 ? '--cb-leg-a' : '--cb-leg-b', 'insulation (PE)'), name: w === 1 ? 'wire A (insulated copper)' : 'wire B (insulated copper)', group: 'pair', info: wireInfo });
+    items.push({ geo: once(`cu${key}`, () => tube(pts, 0.42, { sides })), mat: copper, name: 'copper conductor', group: 'pair', info: { dim: `${CAT5E.conductor} mm in a Cat5e pair (drawn far thicker)`, source: SRC.awg } });
   }
   // the bridges: bare copper out of each leg, through the sender and the receiver
   for (const u of [0, 1] as const) {
     const p = bridge(n, st.uneven, u);
     items.push({ geo: once(`br${n}|${st.uneven}|${u}`, () => tube(p, 0.32, { sides, bend: 0.5 })), mat: copper, name: u ? 'the receiver' : 'the sender', group: u ? 'receiver' : 'sender' });
-    if (!u) items.push({ geo: once('sendbox', () => roundedBox(1.6, 1.8, 1.6, 0.3, 2)), mat: M.make({ base: '--m3-jacket', metal: 0.2, rough: 0.5, label: 'the sender' }), at: [p[1][0], 0, 0], name: 'the sender', group: 'sender', info: { note: 'drives the signal between the legs: differential' } });
+    if (!u) items.push({ geo: once('sendbox', () => roundedBox(2.6, 3.2, 2.6, 0.5, 2)), mat: M.make({ base: '--m3-jacket', metal: 0.2, rough: 0.5, label: 'the sender' }), at: [p[1][0], 0, 0], name: 'the sender', group: 'sender', info: { note: 'drives the signal between the legs: differential' } });
   }
   // the flat view has no instances: the lenses and the field drawn as parts at a still
   if (!full) {
@@ -228,7 +233,7 @@ function pairModel(look: CableLook): Model3 {
     const r = (CAT5E.insulated / 2) * UPM, rc = (CAT5E.conductor / 2) * UPM, lay = LAY_A_MM * UPM;
     for (const w of [1, -1] as const) {
       const pts: Vec3[] = Array.from({ length: (full ? 96 : 24) + 1 }, (_, i) => { const x = -LEN / 2 + (LEN * i) / (full ? 96 : 24), a = (2 * Math.PI * (x + LEN / 2)) / lay + (w === 1 ? 0 : Math.PI); return [x, r * Math.cos(a), TRUE_Z + r * Math.sin(a)]; });
-      items.push({ geo: once(`tr${w}|${full}`, () => tube(pts, r * 0.985, { sides: full ? 20 : 8 })), mat: ins(w === 1 ? '--m3-wire-a' : '--m3-wire-b', 'insulation'), name: 'the same pair, true proportion', group: 'true', info: { dim: `${CAT5E.insulated} mm wires touching, a turn every ${LAY_A_MM.toFixed(1)} mm`, source: `${SRC.cat5e}; ${SRC.lay}` } });
+      items.push({ geo: once(`tr${w}|${full}`, () => tube(pts, r * 0.985, { sides: full ? 20 : 8 })), mat: ins(w === 1 ? '--cb-leg-a' : '--cb-leg-b', 'insulation'), name: 'the same pair, true proportion', group: 'true', info: { dim: `${CAT5E.insulated} mm wires touching, a turn every ${LAY_A_MM.toFixed(1)} mm`, source: `${SRC.cat5e}; ${SRC.lay}` } });
       items.push({ geo: once(`trc${w}|${full}`, () => tube(pts, rc, { sides: full ? 14 : 6 })), mat: copper, name: 'copper conductor', group: 'true', info: { dim: `${CAT5E.conductor} mm`, source: SRC.awg } });
     }
     // a ruler in millimetres at this scale, under the true pair
@@ -238,7 +243,7 @@ function pairModel(look: CableLook): Model3 {
   }
   // the frames the views fit to (the stage hides them)
   const r = (CAT5E.insulated / 2) * UPM;
-  frameBox(items, 'homebox', -LEN / 2 - 4.2, LEN / 2 + 4.2, -8, 8, -A - 1, A + 1);
+  frameBox(items, 'homebox', -LEN / 2 - 5, LEN / 2 + 5, -H_DRAWN - 2, H_DRAWN + 2, -A - 1.2, A + 1.2);
   frameBox(items, 'loopbox', -LEN / 2 - 1, -LEN / 2 + (2 * LEN) / (n + 1) + 1, -8, 8, -A - 1, A + 1);
   frameBox(items, 'sidebox', -LEN / 2 - 4, LEN / 2 + 4, -3, 3, -A - 1, 12);
   frameBox(items, 'truebox', -LEN / 2 - 4, LEN / 2 + 4, -r - 3, 8, TRUE_Z - r - 1, A + 1);
@@ -268,8 +273,8 @@ function pairAnchors(look: CableLook): StudioAnchor[] {
   return a;
 }
 
-export const PAIR_HOME = { target: [0, 0, 0] as Vec3, yaw: -0.12, pitch: 0.8, dist: 90 };
-export const PAIR_LAYERS: readonly (readonly CableLayer[])[] = [['field'], ['field'], ['field'], ['electric'], ['true'], []];
+export const PAIR_HOME = { target: [0, 0, 0] as Vec3, yaw: -0.95, pitch: 0.5, dist: 90 };
+export const PAIR_LAYERS: readonly (readonly CableLayer[])[] = [['field'], ['field'], ['field', 'push'], ['electric'], ['true'], []];
 
 function pairBeats(look: CableLook): Beat[] {
   const n = Math.round(look.st.twists), L = n + 1;

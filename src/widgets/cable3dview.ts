@@ -73,7 +73,7 @@ export function cableView(): Widget {
     stage.instances('shaft', SHAFT, mats.field, pair && shown.has('field') ? packInstances(keep(f.shafts)) : NONE);
     stage.instances('head', HEAD, mats.field, pair && shown.has('field') ? packInstances(keep(f.heads)) : NONE);
     // cut open, the beads would crowd the cut face: the cut is for looking at the copper
-    stage.instances('push', BEAD, mats.push, pair && stage.knobs().cut === 0 ? packInstances(pushBeads(st, phase, c)) : NONE);
+    stage.instances('push', BEAD, mats.push, pair && shown.has('push') && stage.knobs().cut === 0 ? packInstances(pushBeads(st, phase, c)) : NONE);
     stage.instances('load', LOAD, mats.load, pair ? packInstances(keep(receiver(st, phase, c))) : NONE);
   }
   const moving = () => !st.coax && !paused && !reducedMotion();
@@ -151,7 +151,8 @@ export function cableView(): Widget {
 
   // layers: each mode its own; a beat lends its own and gives them back
   const CHIPS: [CableLayer, string, string, boolean][] = [
-    ['field', 'Magnetic field', 'The field through the loops, rising and falling', false], ['electric', 'Electric field', 'An electric field from the side, at the crossings', false],
+    ['field', 'Magnetic field', 'The field through the loops, rising and falling', false], ['push', 'Charge pushed', 'The charge each loop pushes round itself, as beads on the wires', false],
+    ['electric', 'Electric field', 'An electric field from the side, at the crossings', false],
     ['true', 'True proportion', 'The same pair at its real shape, with a millimetre ruler', false], ['fields', 'Fields', 'The field between the core and the braid', true],
   ];
   const chipBtns = CHIPS.map(([key, label, title]) => {

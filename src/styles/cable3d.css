@@ -30,3 +30,7 @@
   --cb-tick: light-dark(#1f2430, #11141b);
   --cb-pvc: light-dark(#30343c, #454b57);
 }
+.m3d {
+  --cb-leg-a: light-dark(#1f5fbf, #4f8fe8);
+  --cb-leg-b: light-dark(#d9e3f2, #e6edf8);
+}
