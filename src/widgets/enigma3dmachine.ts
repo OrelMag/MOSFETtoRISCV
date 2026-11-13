@@ -6,7 +6,8 @@ import type { Anchor, Part } from '../gl/parts';
 import { boxParts, BOX_AT, currentParts, insideParts, printerParts, PRN_BASE } from './enigma3dextras';
 import { AX_Y, AX_Z, caseParts, coverParts, ETW_FACE, FACE_Z, keyboardParts, lampParts, lidParts, PANEL_Y, pawlParts, plugboardParts, RIM_R, RIM_X, stackLift, stackParts, stackX, type EnigmaPalette, type EnigmaPose } from './enigma3dparts';
 
-export function enigmaParts(p: EnigmaPose, P: EnigmaPalette): Part[] {
+/** `lid: false` leaves the open lid out (the flat drawing, whose painter's order cannot sort its thin panels). */
+export function enigmaParts(p: EnigmaPose, P: EnigmaPalette, o: { lid?: boolean } = {}): Part[] {
   const out: Part[] = [];
   caseParts(out, p, P);
   keyboardParts(out, p, P);
@@ -16,7 +17,7 @@ export function enigmaParts(p: EnigmaPose, P: EnigmaPalette): Part[] {
   coverParts(out, p, P);
   stackParts(out, p, P);
   pawlParts(out, p, P);
-  if (!p.bare && !p.printer) lidParts(out, p, P);
+  if (!p.bare && !p.printer && o.lid !== false) lidParts(out, p, P);
   if (p.printer) printerParts(out, p, P);
   if (p.box) boxParts(out, p, P);
   if (p.trace && p.out < 0.02 && p.inside) currentParts(out, p.trace, p, P);

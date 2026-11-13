@@ -33,6 +33,9 @@ export interface StudioStageOptions {
   /** Fit home to a sphere of this radius round the framed box's centre instead of the box's corners (a round model: a
    *  radiation pattern, a ring), which would otherwise leave it small. */
   homeRadius?: number;
+  /** The canvas's aspect (w / h) when the model's own would mislead: a model built only once on the page (empty at
+   *  first), or one whose home view is a set camera (fit: false). */
+  aspect?: number;
   /** Groups or names hidden outside the tour and in beats that do not say (a beat's `hide: []` shows them). */
   hidden?: string[];
   /** A scale bar under the canvas following the zoom: the label for a length in model units (1-2-5 steps). */
@@ -134,7 +137,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   let aspect = 4 / 3, gutNow = 0, shownSize = '';
   const shape = () => {
     const box = homeBox();
-    aspect = Math.max(ASPECT_MIN, Math.min(ASPECT_MAX, aspectOf(box, o.home.yaw, o.home.pitch) * 1.15));
+    aspect = o.aspect ?? Math.max(ASPECT_MIN, Math.min(ASPECT_MAX, aspectOf(box, o.home.yaw, o.home.pitch) * 1.15));
     layout();
   };
   const isNarrow = () => el.clientWidth - 2 * gutterW < MIN_CANVAS || rows.length === 0;

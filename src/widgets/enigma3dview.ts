@@ -74,6 +74,9 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
   const stage = studioStage({
     home: opts.camera ?? view.camera,
     fit: false,
+    // the open lid stands tall behind the body: a canvas a little taller than wide at home (the model is empty until the
+    // page holds it, so its own bounds cannot set this)
+    aspect: 1.15,
     scaleBar: (len) => (len >= 10 ? `${len / 10} cm` : `${len} mm`),
     onBeat: (i) => { if (i < 0) return; const v = VIEWS.find((x) => x.id === TOUR[i].view)!; showView(v, false); if (v.ghost && !trace) press('A'); },
     build: (detail) => model(detail),
@@ -96,7 +99,7 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
   function model(detail: 'full' | 'flat'): Model3 {
     if (!ready || !panel.isConnected) return { items: [] }; // the theme's colours resolve only once on the page
     const p = { ...pose(), trace: null }, parts = enigmaParts(p, palette()), anchors = enigmaAnchors(p);
-    if (detail === 'flat') return { items: flatItems(enigmaParts({ ...p, trace: view.ghost ? trace : null }, palette())), anchors };
+    if (detail === 'flat') return { items: flatItems(enigmaParts({ ...p, trace: view.ghost ? trace : null }, palette(), { lid: p.lid < 0.5 })), anchors };
     const s = partSets(parts, palette());
     partSetsNow = s.sets;
     for (const x of partSetsNow) stage.instances(x.key, x.geo, x.mat, x.data, true);
