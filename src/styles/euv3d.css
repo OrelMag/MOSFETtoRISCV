@@ -1,0 +1,20 @@
+/* EUV lithography (widgets/euv3dview.ts): materials, scoped under .m3d (model3d.css holds the shared ones). */
+.m3d, .euv3 {
+  --euv-ml: light-dark(#8d86b8, #9e97cc);
+  --euv-vessel: light-dark(#b8c0cc, #6d7685);
+  --euv-light: light-dark(#7a3fe0, #b48cff);
+  --euv-laser: light-dark(#d4382c, #ff6b5c);
+  --euv-pre: light-dark(#e08a00, #ffb347);
+  --euv-plasma: light-dark(#c9a8ff, #e2d0ff);
+  --euv-mask: light-dark(#d9d6cc, #a9a69d);
+  --euv-abs: light-dark(#4a4f63, #5c6278);
+  --euv-tin: light-dark(#c9ccd2, #dfe2e8);
+  --euv-bad: light-dark(#d23b3b, #ff6b6b);
+}
+.euv3 .r3 { grid-template-columns: minmax(0, 1fr); }
+.euv3 .r3-side .r3-kv { max-width: 680px; }
+.euv-seg { flex: none; margin-bottom: 8px; }
+.euv-seg button { min-height: 30px; }
+.m3d .euv-seg .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+@media (pointer: coarse) { .euv-seg button { min-height: 40px; } }
+@media (max-width: 520px) { .euv3 .r3-kv { grid-template-columns: minmax(0, 1fr); } .euv3 .r3-kv .v { margin-bottom: 6px; } }

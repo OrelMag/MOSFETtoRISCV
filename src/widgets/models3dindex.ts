@@ -74,6 +74,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./masks3d').then((m) => m.masks3d()),
   },
   {
+    id: 'euv', title: 'EUV lithography', category: 'devices', chapter: 'silicon', step: 10,
+    summary: 'Tin droplets struck twice by a laser at the focus of a curved mirror, and the ten mirrors that carry the 13.5 nm light to the wafer.',
+    files: ['euv3d', 'euv3dview', 'euv3dkit'], factory: 'euv3d',
+    open: () => import('./euv3d').then((m) => m.euv3d()),
+  },
+  {
     id: 'finfet', title: 'Planar, fin and nanosheet', category: 'devices', chapter: 'silicon', step: 6,
     summary: 'Three transistors cut across the gate: one side gated, three (Intel 22 nm fins), four (IBM 2 nm sheets), and what each leaks.',
     files: ['finfet3d', 'finfet3dview', 'finfet3dkit'], factory: 'finfet3d', codex: ['cmos'],
