@@ -22,7 +22,7 @@ Five minutes, from the home page to having taken a gate apart and answered its q
    ![The home page: the title and buttons on the left, the list of chapters by section on the right](img/journey/01-home.png)
 
 2. Under **Transistors to gates**, click **04 Gates from NAND**. The chapter opens at its first step. The first time,
-   two cards point out the controls ("1 OF 2 · Open any box …"): read them, or click **Skip**.
+   two cards point out the controls ("1 OF 2 · Open any box …"): read them, or click **Skip the tour**.
 
    ![The section Transistors to gates with its five chapters, 04 Gates from NAND among them](img/journey/02-home-chapter-list.png)
 
