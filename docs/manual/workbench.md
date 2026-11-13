@@ -195,7 +195,7 @@ You can open any box on the screen and keep going down to transistors.
   which draws an opened box on the plain background so its inside reads clearly. Both are in View options, on the
   top bar.
 
-![Zooming in: the two full adders open in place](img/workbench/10-zoom-opens-block.png)
+![Zoomed in on fa1: its nine NAND gates show inside the box, live](img/workbench/10-zoom-opens-block.png)
 
 On a touch screen, pinch with two fingers to zoom and open, and drag with one to move the view.
 
