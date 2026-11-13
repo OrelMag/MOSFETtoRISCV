@@ -247,7 +247,9 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     for (const side of ['l', 'r'] as const) {
       const col = seen.filter((q) => (q.r.a.gutter ?? (q.x < W / 2 ? 'l' : 'r')) === side).sort((a, b) => a.y - b.y);
       // the right column stops above the corner buttons, the left above the scale bar
-      const ys = spread(col.map((q) => q.y), narrow ? 24 : 22, 12, side === 'r' ? H - 56 : o.scaleBar ? H - 40 : H - 12);
+      // on a phone the left badges start below the status chips (top left, over the canvas)
+      const top = narrow && side === 'l' && chips.childElementCount ? Math.max(12, chips.offsetTop + chips.offsetHeight + 18) : 12;
+      const ys = spread(col.map((q) => q.y), narrow ? 24 : 22, top, side === 'r' ? H - 56 : o.scaleBar ? H - (narrow ? 58 : 40) : H - 12);
       col.forEach((q, i) => {
         const y = ys[i];
         let gx: number, elbow: number;
@@ -275,14 +277,20 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     leaders.replaceChildren(...lines);
   };
 
-  /** The scale bar: the 1-2-5 length nearest 90 px at the camera's target. */
+  /** The scale bar: the 1-2-5 length nearest 90 px at the camera's target, short enough to end before the corner tools
+   *  (on a phone a long one ran under them). */
   const placeScale = () => {
     if (!st || !o.scaleBar) return;
     const u = st.camera.unitsPerPx(canvas.clientHeight || 1), want = 90 * u, p = 10 ** Math.floor(Math.log10(want));
-    const len = [1, 2, 5, 10].map((m) => m * p).reduce((a, b) => (Math.abs(Math.log(b / want)) < Math.abs(Math.log(a / want)) ? b : a));
+    const room = Math.max(24, (canvas.clientWidth || 300) - 2 * gutNow - 20 - toolsW());
+    const fits = [0.1, 0.2, 0.5, 1, 2, 5, 10].map((m) => m * p).filter((l) => l / u <= room);
+    const len = (fits.length ? fits : [0.1 * p]).reduce((a, b) => (Math.abs(Math.log(b / want)) < Math.abs(Math.log(a / want)) ? b : a));
     (scaleBar.firstChild as HTMLElement).style.width = `${(len / u).toFixed(1)}px`;
     scaleLbl.textContent = o.scaleBar(len);
   };
+
+  /** The corner tools' width (they sit bottom right, over the canvas). */
+  const toolsW = () => { const t = view.querySelector<HTMLElement>('.r3-tools, .m3-tools'); return t ? t.getBoundingClientRect().width + 10 : 140; };
 
   // ---------------------------------------------------------------- the card
 
@@ -467,6 +475,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     canvas.style.display = m === 'flat' ? 'none' : '';
     flat.style.display = m === 'flat' ? '' : 'none';
     leaders.style.display = badges.style.display = m === 'flat' ? 'none' : '';
+    // the flat drawing is fitted, not to scale: no bar (it showed as a stray square)
+    scaleBar.style.display = m === 'flat' || !o.scaleBar ? 'none' : '';
     // the gutters keep their columns (hidden, not removed), so the view stays in the middle one
     gutL.style.visibility = gutR.style.visibility = m === 'flat' ? 'hidden' : '';
     frame.setFlat(m === 'flat');
