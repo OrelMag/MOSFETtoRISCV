@@ -131,7 +131,7 @@ a touch screen, press and hold.
 
 ![The right-click menu of a NAND gate](img/sandbox/16-part-menu.png)
 
-### Pins and buses
+### Use pins and buses
 
 - **Input** and **Output** are 1-bit pins. **Input bus** and **Output bus** carry several bits: pick the width on the
   part (the **8-bit ▾** tag) before placing it, or in its properties afterwards.
@@ -205,7 +205,7 @@ Each of these keeps its own editor beside the canvas: the drawing is made from i
 so. **Detach as drawn chip** turns it into an ordinary drawn chip; **Hide table** (**Hide machine**, **Hide text**)
 folds the editor away.
 
-#### A truth-table chip
+#### Make a truth-table chip
 
 1. **New chip ▾** › **Truth table**. It starts with inputs **a**, **b**, **c** and output **y** (a majority function).
 2. Click a cell in the **y** column to cycle it 0 → 1 → – (don't care), or type 0, 1 or - in it. The **Karnaugh map**,
@@ -215,7 +215,7 @@ folds the editor away.
 
 ![A truth-table chip: the table, its Karnaugh map, the minimized equation and the drawn circuit](img/sandbox/45-truth-table.png)
 
-#### A state-machine chip
+#### Make a state-machine chip
 
 1. **New chip ▾** › **State machine**. It starts with three states, input **x** and output **y**; the chip also gets
    **rst** and **clk**.
@@ -226,7 +226,7 @@ folds the editor away.
 
 ![A state-machine chip: the diagram, the encodings and the circuit built from them](img/sandbox/46-state-machine.png)
 
-#### A Verilog chip
+#### Make a Verilog chip
 
 1. **New chip ▾** › **Verilog chip**. A small module opens in the text pane on the left.
 2. Edit the text. It is synthesized a moment after you stop typing (or click **Synthesize**), and the drawing on the
@@ -235,7 +235,7 @@ folds the editor away.
 
 ![A Verilog chip: the module text and the circuit drawn from it](img/sandbox/47-verilog.png)
 
-### The parts list
+### Find a part in the parts list
 
 The groups are **Basics**, **My chips** (once you package one), **Inputs & outputs** (pins, buttons, clocks, switches,
 keys, keyboard, and under **Special I/O** the puzzle ports, card reader, counters, random source and timer), **Sources**,
@@ -244,7 +244,7 @@ tri-state parts), **Relays and tubes**, **Constants**, **Displays** (with the co
 cores**, **Communication** and **Library** (every gate, adder, register and larger block of the site). Type in **Search…**
 to find a part by name. Tick **Purist** to see only NAND and what you have built from it.
 
-### Memory: ROM and RAM
+### Program a ROM and use RAM
 
 - In **Memory**, **ROM (words)** is a lookup table written as hex words; **Program ROM (RV32)** holds a RISC-V program;
   **RAM** is read-write memory. Their size and contents are in the properties.
@@ -256,7 +256,7 @@ to find a part by name. Tick **Purist** to see only NAND and what you have built
 
 ![The program editor with the instruction builder open](img/sandbox/25-instruction-builder.png)
 
-### Displays, keys, console, screen and switches
+### Show results and take input: displays, keys, console, screen and switches
 
 - **Displays** has **LED**, **LED bank**, **7-segment**, **Hex digit**, **Value**, **Buzzer**, **Halt** (stops
   **Run** when its input is 1), **Console** (prints a character at each clock edge) and **Screen** (a pixel screen you
@@ -291,7 +291,7 @@ console**), the **CPU** drawer opens on the right on a wide window (on a narrow 
    circuit and says **matches golden model** while the two agree, or names the first difference.
 4. **Edit…** opens the program editor; **Custom…** lets you add your own instructions to the core.
 
-### The Memory and Screens drawers
+### Watch memories and screens in the drawers
 
 The tabs at the top of the drawer area switch between **CPU**, **Memory** (the contents of every RAM and register file in
 the chip, live: pick one at the top) and **Screens**. Each opens by itself on a wide window when the chip has something
@@ -325,11 +325,11 @@ The timing panel draws chosen wires over time, gate delay by gate delay, like a 
 
 ![The Tests pane](img/sandbox/18-tests.png)
 
-### Challenges and puzzles
+### Take on a challenge or a puzzle
 
 Both are optional, and every one has an answer you can look at.
 
-#### A challenge: build a chip, check it
+#### Build a chip for a challenge and check it
 
 1. **Play ▾** › **Challenges**. The list opens on the right, grouped by topic, each group with its rule (for example
    **NAND only**) and your count of solved ones.
@@ -350,7 +350,7 @@ Both are optional, and every one has an answer you can look at.
 
    ![A passing Check, with the score against par](img/sandbox/33-check-passes.png)
 
-#### A puzzle: write a program
+#### Write a program for a puzzle
 
 1. **Play ▾** › **Puzzles**. Each puzzle turns streams of input words into output words (**Echo**, **Countdown**,
    **Multiply**, **Sort**, …).
@@ -370,7 +370,7 @@ Both are optional, and every one has an answer you can look at.
 
    ![The puzzle checked: every test ticked, cycles, NANDs and program words](img/sandbox/37-puzzle-checked.png)
 
-### Sections and comments
+### Label your circuit with sections and comments
 
 - Select some parts and press **G** (or the section button in the toolbar) to put a titled frame around them. Drag the
   frame's border or title to move it with what is inside; double-click the title to rename it. **Delete** removes only
@@ -378,12 +378,12 @@ Both are optional, and every one has an answer you can look at.
 - Press **T** to place a comment: free text on the canvas, saved with the chip, never part of the circuit. Double-click
   it to edit.
 
-### The minimap
+### Find your way with the minimap
 
 Press **M** to show or hide the minimap at the bottom right of the canvas. It hides itself while the whole chip is in
 view. Drag its frame to pan, or click to jump.
 
-### Projects and folders
+### Organise chips in projects and folders
 
 - **Project: Main project** above the parts list switches between projects: separate sets of chips. Its menu has **New
   project**, **Duplicate**, **Rename…**, **Export this project**, **Import a file as a new project** and **Delete this
@@ -392,7 +392,7 @@ view. Drag its frame to pan, or click to jump.
 
 ![The project menu](img/sandbox/15-project-menu.png)
 
-### Export, import, share
+### Save, share and export your chips
 
 **File ▾** has:
 
@@ -435,7 +435,7 @@ ready for Gowin EDA, or for Yosys and nextpnr.
 
 ![The Export Verilog for FPGA dialog](img/sandbox/51-fpga-export.png)
 
-#### Your own instruction sets
+#### Write your own instruction set
 
 What it is: an instruction set written as a table (each instruction's name, operands and bit pattern), so a ROM can be
 programmed in your own assembly language for a CPU you built.
@@ -447,7 +447,7 @@ programmed in your own assembly language for a CPU you built.
    operand's bits); **Design** paints the patterns on a bit grid; the **Check** tab shows whether the table has
    problems (a tick when it has none).
 
-#### Your own instructions for the RISC-V core
+#### Add your own instructions to the RISC-V core
 
 What it is: up to three new instructions added to the single-cycle RISC-V core, each defined by the control signals it
 sets; the core, the assembler and the reference model all learn them.
@@ -461,7 +461,7 @@ sets; the core, the assembler and the reference model all learn them.
 
 ![Custom instructions: lwx, its signals, the data path it uses and the generated reference model](img/sandbox/52-custom-instructions.png)
 
-#### The memory map
+#### Rearrange the memory map
 
 What it is: where each memory and device answers on a bus, as a map you can rearrange; the decoder is rebuilt from it.
 It needs a chip with a bus: open **Examples** › **System on a bus** first.
