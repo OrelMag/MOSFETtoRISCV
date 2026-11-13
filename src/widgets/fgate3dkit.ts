@@ -178,7 +178,7 @@ export function fgModel(p: FgPose, detail: 'full' | 'flat' = 'full'): Model3 {
   };
 }
 
-export const FG_HOME = { yaw: 0.35, pitch: 0.38, target: [0, 6, 0] as Vec3, dist: 120 };
+export const FG_HOME = { yaw: 0.7, pitch: 0.4, target: [0, 6, 0] as Vec3, dist: 120 };
 /** Home frames the cells, not the wiring above them. */
 export const FG_HOME_FRAME = ['cg', 'fg'];
 /** The canvas's shape: the string is long, but the cells, not the string's length, are the subject. */
