@@ -29,3 +29,6 @@
 /* studio stage (widgets/quartz3dview.ts): the canvas takes the full column, the readout below it */
 .qz3 .r3 { grid-template-columns: minmax(0, 1fr); }
 .qz3 .r3-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 24px; align-items: start; }
+/* the stage's cutaway and explode act only in the Crystal view (the cut takes the lid off): hidden in the others */
+.qz3:not([data-view="crystal"]) .r3-sl:has(input[aria-label="Cutaway"]), .qz3:not([data-view="crystal"]) .r3-sl:has(input[aria-label="Exploded view"]) { display: none; }
+.qz3 .r3-sl:has(input[aria-label="Exploded view"]) { display: none; }

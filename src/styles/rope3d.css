@@ -11,6 +11,16 @@
   --rp-diode: light-dark(#3b3c42, #55575f);
   --rp-lamp-off: light-dark(#5b5f6b, #3b3f4b);
   --rp-sel: light-dark(#d9a21b, #ffc83a);
+  --rp-dim: light-dark(#a99c8c, #5d5348);       /* a sense wire of the strand not passed to the amplifiers */
 }
 .rp-seg { display: flex; gap: 4px; flex-wrap: wrap; margin: 2px 0 10px; }
 .rp-seg .btn[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* studio stage (widgets/rope3dview.ts): the canvas takes the full column, the controls under it */
+.rp3 .r3 { grid-template-columns: minmax(0, 1fr); }
+.rp-views { display: inline-flex; gap: 4px; }
+.rp-views .btn[aria-pressed="true"], .rp-seg .btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.rp-pick { align-items: center; gap: 8px; }
+.rp-pick .rp-seg { margin: 0; }
+.rp-lab { color: var(--muted); font-size: 13px; }
+/* the cut opens the cores; nothing explodes, and the module has no cut */
+.rp3 .r3-sl:has(input[aria-label="Exploded view"]), .rp3[data-view="module"] .r3-sl:has(input[aria-label="Cutaway"]) { display: none; }

@@ -61,8 +61,8 @@ const translate = (g: Geo, x: number, y: number, z: number): Geo => { const m = 
 
 // ---------------------------------------------------------------- materials
 
-const ceramic = M.make({ base: '--qz-ceramic', metal: 0, rough: 0.6, label: 'alumina ceramic' });
-const quartzMat = M.make({ base: '--qz-quartz', metal: 0, rough: 0.08, coat: 0.6, transmit: 0.3, tint: [0.88, 0.94, 1.0], label: 'crystal quartz (Z-cut wafer)' });
+const ceramic = M.make({ base: [0.16, 0.15, 0.15], metal: 0, rough: 0.5, coat: 0.2, label: 'dark alumina ceramic' });
+const quartzMat = { ...M.quartz, transmit: 0.9, tint: [0.9, 0.95, 1.0] as [number, number, number], label: 'crystal quartz (Z-cut wafer)' };
 const glue = M.make({ base: '--qz-glue', metal: 0.4, rough: 0.5, label: 'silver-filled conductive glue' });
 const lidMat = M.make({ base: [0.7, 0.68, 0.64], metal: 1, rough: 0.3, label: 'Kovar lid, nickel-plated' });
 const mask = M.make({ base: [0.07, 0.19, 0.11], metal: 0, rough: 0.45, coat: 0.4, label: 'FR-4 under green solder mask' });
@@ -73,7 +73,11 @@ const capBody = M.make({ base: '--qz-body', metal: 0, rough: 0.6, label: 'cerami
 const resBody = M.make({ base: [0.1, 0.1, 0.11], metal: 0, rough: 0.5, label: 'thick-film resistor' });
 const ledOff = M.make({ base: '--qz-led-off', metal: 0, rough: 0.2, coat: 0.6, label: 'LED, off' });
 const ringMat = M.make({ base: [0.2, 0.22, 0.26], metal: 0.2, rough: 0.5, label: 'the phase ring (a diagram, not a part)' });
-const film = (polarity: number, k: number): Material => M.glow(M.make({ base: [1.0, 0.77, 0.34], metal: 1, rough: 0.25, label: 'gold electrode film' }), polarity >= 0 ? '--qz-plus' : '--qz-minus', 0.35 * k);
+/** A gold film: gold, tinted toward the polarity colour by the swing (green +, red −), with a faint glow of it. */
+const film = (polarity: number, k: number): Material => {
+  const tint: [number, number, number] = polarity >= 0 ? [0.55, 1.0, 0.45] : [1.0, 0.45, 0.35], g: [number, number, number] = [1.0, 0.77, 0.34], mix = 0.45 * k;
+  return M.glow(M.make({ base: g.map((v, i) => v * (1 - mix) + v * tint[i] * mix) as [number, number, number], metal: 1, rough: 0.22, label: polarity >= 0 ? 'gold electrode film, +' : 'gold electrode film, −' }), polarity >= 0 ? '--qz-plus' : '--qz-minus', 0.3 * k);
+};
 
 // ---------------------------------------------------------------- the fork
 
@@ -109,7 +113,7 @@ function tine(key: string, sgn: number, d: number): Tine {
   return t;
 }
 
-interface Static { pkg: Geo; walls: Geo; pads: Geo; under: Geo; glue: Geo; base: Geo; traces: Geo; lid: Geo }
+interface Static { pkg: Geo; walls: Geo; pads: Geo; under: Geo; glue: Geo; base: Geo; traces: Geo; lid: Geo; seal: Geo }
 const statics = new Map<Detail, Static>();
 function crystalStatic(d: Detail): Static {
   const hit = statics.get(d);
@@ -123,7 +127,8 @@ function crystalStatic(d: Detail): Static {
     glue: merge([-2.5, 2.5].map((z) => { const g = sphere(1, d === 'full' ? 20 : 8, d === 'full' ? 10 : 5), m = new Float32Array(16); m[0] = 0.9; m[5] = 0.55; m[10] = 1.4; m[15] = 1; m[12] = BX0 + 1.15; m[13] = 2.6; m[14] = z; return transform(g, m); }), 'glue'),
     base: B(BX0, f.x0 + 0.02, f.y0, Y1, -ZO, ZO, 0.05),
     traces: merge([B(BX0 + 0.3, f.x0, Y1, Y1 + FILM, -2.9, -1.1, 0.02), B(BX0 + 0.3, f.x0, Y1, Y1 + FILM, 1.1, 2.9, 0.02)], 'traces'),
-    lid: B(-16, 16, 8, 8.6, -7.5, 7.5, 0.2),
+    lid: B(-16, 16, 8.15, 8.6, -7.5, 7.5, 0.2),
+    seal: merge([B(-16, 16, 8, 8.15, -7.5, -6, 0.02), B(-16, 16, 8, 8.15, 6, 7.5, 0.02), B(-16, -14.5, 8, 8.15, -6, 6, 0.02), B(14.5, 16, 8, 8.15, -6, 6, 0.02)], 'seal ring'),
   };
   statics.set(d, s);
   return s;
@@ -136,20 +141,22 @@ function crystalItems(key: string, disp: number, detail: Detail, dx = 0, dz = 0,
   const items: Item[] = [
     { geo: S.pkg, mat: ceramic, name: 'ceramic package', ...grp, info: { dim: '3.2 × 1.5 × 0.8 mm', source: SRC.fc135, note: 'a cavity in alumina, sealed in vacuum: air would damp the fork to a Q of a few thousand' } },
     { geo: S.walls, mat: ceramic, name: 'ceramic package', ...grp },
-    { geo: S.under, mat: tin, name: 'underside pads', ...grp, info: { note: 'the two terminals the board is soldered to, joined to the inner pads through the ceramic' } },
+    { geo: S.seal, mat: M.gold, name: 'seal ring', ...grp, cut: 'none', info: { note: 'gold-plated Kovar ring on the walls: the lid is seam-welded to it' } },
+    { geo: S.under, mat: M.gold, name: 'underside pads', ...grp, info: { note: 'the two terminals the board is soldered to, joined to the inner pads through the ceramic' } },
     { geo: S.pads, mat: M.gold, name: 'gold pads', ...grp },
     { geo: S.glue, mat: glue, name: 'conductive glue', ...grp, info: { note: 'holds the fork by its base and connects its two electrodes to the pads: the tines hang free' } },
     { geo: S.base, mat: quartzMat, name: 'quartz base', group: 'fork', at: o, info: { dim: `${(fork.base / 10).toFixed(2)} × ${(2 * ZO / 10).toFixed(2)} × ${WAFER_T} mm`, source: SRC.patent, note: 'one piece with the tines, etched from a quartz wafer' } },
     { geo: S.traces, mat: M.gold, name: 'electrode traces', group: 'fork', at: o },
   ];
-  if (lid) items.push({ geo: S.lid, mat: lidMat, name: 'lid', group: 'package', at: o, info: { note: 'seam-welded on in vacuum; the cut takes it off' } });
+  if (lid) items.push({ geo: S.lid, mat: lidMat, name: 'lid', group: 'package', at: o, cut: 'section', info: { note: 'seam-welded on in vacuum; the cut takes it off' } });
   for (const sgn of [1, -1]) {
     const t = tine(`${key}${sgn}|${detail}`, sgn, disp), pol = sgn * v;
     items.push({ geo: t.quartz, mat: quartzMat, name: 'tine', group: 'fork', at: o, info: { dim: `${TINE_L.toFixed(2)} × ${TINE_W} × ${WAFER_T} mm`, source: SRC.beam, note: 'bending in its first mode, the two tines in antiphase so the base stays still and loses no energy into the mount' } });
     items.push({ geo: t.groove, mat: film(pol, mag), name: 'gold electrode in the groove', group: 'fork', at: o, info: { source: SRC.patent, note: 'the groove brings the electrode closer to the opposite face, so the field crosses more of the quartz: a stronger drive for the same voltage' } });
     items.push({ geo: t.side, mat: film(-pol, mag), name: 'gold electrode on the side', group: 'fork', at: o, info: { note: 'the opposite polarity to the groove: the field runs across the tine, one half stretches, the other shrinks, and it bends' } });
   }
-  return items;
+  // the cut takes the lid alone: the walls and the fork are left whole
+  return items.map((i) => (i.name === 'lid' ? i : { ...i, cut: 'none' as const }));
 }
 
 // ---------------------------------------------------------------- the board, 1 unit = 1 mm
@@ -283,7 +290,7 @@ function atItems(st: QuartzState, detail: Detail): Item[] {
 
 const up: Vec3 = [0, 1, 0];
 export const QZ_HOME: Record<QuartzView, OrbitView> = {
-  crystal: { target: [-1.2, 3, 0.3], yaw: 0.3, pitch: 0.92, dist: 38 },
+  crystal: { target: [-1.6, 3, 0.4], yaw: 0.22, pitch: 1.05, dist: 37 },
   loop: { target: [1, 0, -3.5], yaw: 0.12, pitch: 1.05, dist: 50 },
   drift: { target: [0, 0, 1], yaw: 0.1, pitch: 1.1, dist: 96 },
   at: { target: [0, -12, 0], yaw: 0.35, pitch: 0.42, dist: 150 },

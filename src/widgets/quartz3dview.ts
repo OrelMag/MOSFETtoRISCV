@@ -41,7 +41,7 @@ export function quartzView(): Widget {
   // Two crystals (view 'drift'): A is the one the other views show. Tolerances in ppm at 25 °C, B's own temperature, the clock they are scaled to,
   // and the phase B has gained on A in cycles (the ring), advanced SLIP_S of screen time per slip cycle.
   let tolA = TOL_PPM, tolB = -TOL_PPM, tempB = 25, fast = false, slip = 0, wide = true;
-  const panel = h('div', { class: 'panel qz3' });
+  const panel = h('div', { class: 'panel qz3', 'data-view': 'crystal' });
   const rate = (): number => (view === 'crystal' || view === 'at' ? SHOWN_HZ : 2 ** rateExp);
   // The swing follows the cycle count's fraction; under reduced motion it jumps between its two extremes, one per cycle.
   const disp = (): number => (reducedMotion() ? (Math.floor(n) % 2 === 0 ? 1 : -1) : Math.cos(2 * Math.PI * n));
@@ -151,6 +151,7 @@ export function quartzView(): Widget {
   ];
   function setView(v: View): void {
     view = v;
+    panel.dataset.view = v;
     repaint();
     stage.goTo(QZ_HOME[v]);
   }
