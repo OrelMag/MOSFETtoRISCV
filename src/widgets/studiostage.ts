@@ -130,7 +130,9 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   let beat = -1, tween = 0, pinned: Item | null = null, hoverRaf = 0, hiddenNow: ReadonlySet<string> | null = null;
   const defHidden: ReadonlySet<string> | null = o.hidden?.length ? new Set(o.hidden) : null;
   hiddenNow = defHidden;
-  const homeBox = () => (o.homeFrame ? boundsOfNamed(model, o.homeFrame) : boundsOf(model));
+  // home frames what home shows: parts hidden outside the tour (o.hidden) do not widen it
+  const shownModel = (): Model3 => (defHidden ? { ...model, items: model.items.filter((it) => !((it.group && defHidden.has(it.group)) || (it.name && defHidden.has(it.name)))) } : model);
+  const homeBox = () => (o.homeFrame ? boundsOfNamed(model, o.homeFrame) : boundsOf(shownModel()));
   const frame = modelFrame({ stage: view, name: o.aria, renderer: () => (mode === 'gl' ? (st as unknown as Renderer) : null), root: () => el.closest<HTMLElement>('.m3d, .widget') ?? el });
 
   // ---------------------------------------------------------------- framing
