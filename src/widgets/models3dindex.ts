@@ -226,7 +226,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'sensordie', title: 'A sensor die, rolling and global', category: 'devices', chapter: 'sensors', step: 5,
     summary: 'The IMX183 array to scale with row drivers, column ADCs and readout, capturing a propeller with a rolling or a global shutter.',
-    files: ['sensordie3d', 'sensordie3dview', 'sensordie3dparts'], factory: 'sensorDie3d',
+    files: ['sensordie3d', 'sensordie3dview', 'sensordie3dkit', 'sensordie3dgeom'], factory: 'sensorDie3d',
     open: () => import('./sensordie3d').then((m) => m.sensorDie3d()),
   },
   {

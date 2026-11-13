@@ -10,3 +10,7 @@
   --sd-reset: light-dark(#0e9f6e, #34d399);
 }
 .sd-sl output { width: 64px; }
+/* studio stage (widgets/sensordie3dview.ts): the canvas the full column, the readout below; nothing to cut or explode */
+.sd3 .r3 { grid-template-columns: minmax(0, 1fr); }
+.sd3 .r3-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 24px; align-items: start; }
+.sd3 .r3-sl:has(input[aria-label="Cutaway"]), .sd3 .r3-sl:has(input[aria-label="Exploded view"]) { display: none; }

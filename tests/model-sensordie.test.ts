@@ -4,8 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { IMX183, rollingSkew, rowTime } from '../src/phys/imagesensor';
 import {
   AW, AH, CELL, COLS, FRAME, OB_W, RAMP_SHARE, ROWS, T_ROW, pointers, rowZ, captureEnd, captureFrame, cellLight, cellRow, cellValue, covered, defaultScene,
-  dieParts, dieState, readTime, type DiePalette, type Scene, type Shutter,
-} from '../src/widgets/sensordie3dparts';
+  dieState, readTime, type Scene, type Shutter,
+} from '../src/widgets/sensordie3dgeom';
+import { DIE, dieInstances, dieModel } from '../src/widgets/sensordie3dkit';
+
+const TOK: Record<string, [number, number, number]> = { '--sd-dark': [0, 0, 0], '--sd-lit': [1, 1, 1], '--sd-idle': [0.2, 0.2, 0.3], '--sd-expose': [0.6, 0.5, 0.9], '--m3-charge': [0.2, 0.8, 0.5], '--m3-si': [0.4, 0.45, 0.6], '--m3-metal': [0.6, 0.6, 0.7] };
+const rgb = (t: string): [number, number, number] => TOK[t] ?? [0.5, 0.5, 0.5];
 
 describe('the slow-motion tick reads cached samples', () => {
   it('cellLight equals cellValue exactly, cell by cell, at every stage of a capture, and after switching scenes', () => {
@@ -77,10 +81,8 @@ describe('the sensor die', () => {
   });
 
   it('a column’s counter stops where the ramp passes its pixel’s level', () => {
-    const P: DiePalette = { die: [0, 0, 0.1], pad: [0, 0, 0.2], logic: [0, 0, 0.3], dark: [0, 0, 0], lit: [1, 1, 1], idle: [0, 0, 0.4], expose: [0, 0, 0.5], read: [0.9, 0.1, 0.1], img: [0, 0, 0.6, 0.5], metal: [0, 0, 0.7], reset: [0.1, 0.9, 0.4] };
     const scene = defaultScene('bar'), texp = 20e-6, r0 = readTime(10, 'global', texp);
-    const counters = (ramp: number) => dieParts({ scene, shutter: 'global', texp, now: r0 + ramp * CELL * T_ROW }, P)
-      .filter((p) => p.color === P.read && p.kind === 'box' && p.scale![1] > 0.05 && p.pos[1] > 1);
+    const counters = (ramp: number) => dieInstances({ scene, shutter: 'global', texp, now: r0 + ramp * CELL * T_ROW }).counters.filter((p) => p.scale![1] > 0.05);
     const early = counters(0.2), late = counters(0.95);
     // Bright columns count on; the bar's dark columns stop at once: late, most counters are taller than early.
     expect(late.length).toBeGreaterThanOrEqual(COLS - 8);
@@ -103,19 +105,22 @@ describe('the sensor die', () => {
       expect(pointers('global', texp, t).reset).toBeNull();
     }
     expect(pointers('rolling', texp, 0.001).read).toBeNull(); // nothing to read before the first exposure ends
-    const P: DiePalette = { die: [0, 0, 0.1], pad: [0, 0, 0.2], logic: [0, 0, 0.3], dark: [0, 0, 0], lit: [1, 1, 1], idle: [0, 0, 0.4], expose: [0, 0, 0.5], read: [0.9, 0.1, 0.1], img: [0, 0, 0.6, 0.5], metal: [0, 0, 0.7], reset: [0.1, 0.9, 0.4] };
-    const parts = dieParts({ scene: defaultScene('prop'), shutter: 'rolling', texp, now: 0.02 }, P);
-    const bars = parts.filter((p) => p.color === P.reset && p.scale![0] > AW);
+    const m = dieModel({ scene: defaultScene('prop'), shutter: 'rolling', texp, now: 0.02 }, rgb);
+    const bars = m.items.filter((i) => i.name === 'reset pointer');
     expect(bars).toHaveLength(1);
-    expect(bars[0].pos[2]).toBeCloseTo(rowZ(0.02 / T_ROW), 9);
+    expect(bars[0].geo.max[0] - bars[0].geo.min[0]).toBeGreaterThan(AW);
+    expect(bars[0].at![2]).toBeCloseTo(rowZ(0.02 / T_ROW), 9);
+    expect(m.items.filter((i) => i.name === 'read pointer')[0].at![2]).toBeCloseTo(rowZ((0.02 - texp) / T_ROW), 9);
   });
 
   it('optical black: a pixel under metal on every row and a strip along the top, outside the active array', () => {
-    const P: DiePalette = { die: [0, 0, 0.1], pad: [0, 0, 0.2], logic: [0, 0, 0.3], dark: [0, 0, 0], lit: [1, 1, 1], idle: [0, 0, 0.4], expose: [0, 0, 0.5], read: [0.9, 0.1, 0.1], img: [0, 0, 0.6, 0.5], metal: [0.2, 0.2, 0.25], reset: [0.1, 0.9, 0.4] };
-    const parts = dieParts({ scene: defaultScene('prop'), shutter: 'rolling', texp: 5e-3, now: 0 }, P);
-    const metal = parts.filter((p) => p.color === P.metal && p.kind === 'box');
-    expect(metal.filter((p) => p.pos[0] < -AW / 2)).toHaveLength(ROWS); // left: one a row
-    expect(metal.filter((p) => p.pos[2] < -AH / 2 && p.scale![0] > AW)).toHaveLength(1); // top: a strip
+    const m = dieModel({ scene: defaultScene('prop'), shutter: 'rolling', texp: 5e-3, now: 0 }, rgb), ob = m.items.filter((i) => i.name === 'optical black');
+    const cells = m.items.find((i) => i.name === 'pixel array')!.geo, per = cells.positions.length / (ROWS * COLS);
+    expect(ob).toHaveLength(2);
+    expect(ob[0].geo.positions.length / per).toBe(ROWS); // left: one a row
+    expect(ob[0].geo.max[0]).toBeLessThan(-AW / 2);
+    expect(ob[1].geo.max[2]).toBeLessThan(-AH / 2); // top: a strip
+    expect(ob[1].geo.max[0] - ob[1].geo.min[0]).toBeGreaterThan(AW);
     expect(OB_W).toBeGreaterThan(0);
   });
 
@@ -125,5 +130,21 @@ describe('the sensor die', () => {
     expect(at(0.5 * RAMP_SHARE).ramp).toBeCloseTo(0.5, 9);
     expect(at(RAMP_SHARE + 0.5 * (1 - RAMP_SHARE)).shift).toBeCloseTo(0.5, 9);
     expect(at(RAMP_SHARE + 0.5 * (1 - RAMP_SHARE)).ramp).toBe(1);
+  });
+
+  it('the studio die: every cell painted with what it holds, the array to scale inside the die, a tour', () => {
+    const scene = defaultScene('bar'), texp = 5e-3, end = captureEnd('rolling', texp) + CELL * T_ROW;
+    const m = dieModel({ scene, shutter: 'rolling', texp, now: end }, rgb), cells = m.items.find((i) => i.name === 'pixel array')!.geo;
+    expect(cells.max[0] - cells.min[0]).toBeCloseTo(AW, 0);
+    expect(cells.max[2] - cells.min[2]).toBeCloseTo(AH, 0);
+    expect(DIE.x0).toBeLessThan(cells.min[0]); expect(DIE.x1).toBeGreaterThan(cells.max[0]);
+    const per = cells.positions.length / (ROWS * COLS), col = (k: number) => cells.colors![k * per]; // per: floats a cell
+    for (const [r, c] of [[0, 0], [10, 30], [ROWS - 1, COLS - 1]]) expect(col(r * COLS + c)).toBeCloseTo(cellLight(scene, c, r, 'rolling', texp), 5); // dark 0 → lit 1
+    // before anything starts every cell is idle
+    const idle = dieModel({ scene, shutter: 'rolling', texp, now: -1 }, rgb).items.find((i) => i.name === 'pixel array')!.geo;
+    expect(idle.colors![0]).toBeCloseTo(0.2, 6);
+    expect((m.beats ?? []).length).toBeGreaterThanOrEqual(3);
+    expect((m.anchors ?? []).length).toBeGreaterThanOrEqual(5);
+    expect(dieInstances({ scene, shutter: 'rolling', texp, now: 0.01 }).image.length).toBeGreaterThan(0);
   });
 });
