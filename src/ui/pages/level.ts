@@ -234,9 +234,16 @@ export class LevelPage implements Page {
       h('a', { class: 'btn sm ghost', href: `#/sandbox/${levelChipId(n)}`, title: 'The same chip in the full sandbox editor', 'aria-label': 'Open in Sandbox' }, h('span', { class: 'lbl' }, 'Open in Sandbox'), icon('open', 13)),
       st !== 'solved' ? (st === 'skipped'
         ? h('button', { class: 'btn sm ghost', title: 'Back to unfinished', onclick: () => p.unskip(n.id) }, 'Un-skip')
-        : h('button', { class: 'btn sm ghost', title: 'Count this level as done: its part unlocks (the reference solution stands in for yours)', onclick: () => p.skip(n.id) }, 'Skip')) : null,
+        : h('button', { class: 'btn sm ghost', title: 'Count this level as done: its part unlocks (the reference solution stands in for yours)', onclick: () => this.skipLevel(n) }, 'Skip')) : null,
       next ? h('a', { class: `btn sm${st === 'solved' ? ' primary' : ''}`, href: levelRoute(next), title: next.title, 'aria-label': `Next: ${next.title}` }, h('span', null, 'Next', h('span', { class: 'lbl' }, `: ${next.title}`)), icon('chevR', 13)) : null,
     ].filter((x): x is HTMLElement => !!x));
+  }
+
+  /** Skip sits next to Open in Sandbox: it takes no confirmation, so it says what it did and offers the way back. */
+  private skipLevel(n: CampaignNode): void {
+    const p = progress();
+    p.skip(n.id);
+    this.editor?.toast(`Skipped: ${n.title} counts as done and what follows opens`, 'info', { label: 'Undo', run: () => p.unskip(n.id) });
   }
 
   /** The par per graded metric, as the level bar and the phone's goal line print it. */
