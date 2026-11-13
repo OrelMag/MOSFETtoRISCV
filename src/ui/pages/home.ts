@@ -98,6 +98,7 @@ export function homePage(): Page {
     h('div', { class: 'footer' },
       'Inspired by Turing Complete, Sebastian Lague\'s Digital Logic Sim, nand2tetris, and Harris & Harris. ',
       h('a', { href: 'https://github.com/OrelMag/MOSFETtoRISCV' }, 'Source on GitHub'), ' · ',
+      h('a', { href: 'https://github.com/OrelMag/MOSFETtoRISCV/releases/download/v2.0.0/From-Switch-to-CPU-manual.pdf', title: 'The instruction manual: a quick start and reference for every section, with screenshots (PDF, 18 MB)' }, 'Manual (PDF)'), ' · ',
       reportLink(undefined, 'Report a problem'), ' · ',
       h('a', { href: '#/', title: 'One backup file: chapters, campaign, puzzles and every sandbox project', onclick: (e: Event) => { e.preventDefault(); void import('../backupui').then((m) => m.exportBackup()); } }, 'Export all progress'), ' · ',
       h('a', { href: '#/', title: 'Merge a backup file into what you have; nothing is lost', onclick: (e: Event) => { e.preventDefault(); void import('../backupui').then((m) => m.importBackup()); } }, 'Import progress…'), ' · ',

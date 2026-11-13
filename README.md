@@ -37,7 +37,7 @@ Four ways in, as the top bar names them: **[Chapters](https://switchtocpu.com/#/
 ## Manual
 
 New to the site? The **[instruction manual](docs/manual/README.md)** has a quick start with screenshots for each of the
-four sections, then where every control is and how to do each task:
+four sections, then where every control is and how to do each task (also as [one PDF](https://github.com/OrelMag/MOSFETtoRISCV/releases/download/v2.0.0/From-Switch-to-CPU-manual.pdf), 18 MB):
 
 - [The journey](docs/manual/journey.md#quick-start): read a step, set an input, open a gate down to its transistors, answer its question.
 - [The campaign](docs/manual/campaign.md#quick-start): open the map and pass your first build level.
