@@ -127,6 +127,8 @@ export const PILLAR_Y0 = E, PILLAR_Y1 = STACK_TOP + 1;
 /** Bit lines on top (drawn: their height over the stack and their width are typical). */
 export const BL_Y = [STACK_TOP + 6, STACK_TOP + 9] as const;
 export const SUB_Y0 = -14;
+/** A word-line contact's radius: as thick as a tread allows (a hair-thin rod shimmers at home), 0.3 units of tread left each side. */
+export const CONTACT_R = TREAD / 2 - 0.3;
 
 function statics(d: Detail): Statics {
   const hit = memo.get(d);
@@ -152,7 +154,7 @@ function statics(d: Detail): Statics {
   const sub = new Mesh();
   sub.box(-BLOCK_X - 10, xMax + 8, SUB_Y0, 0, -SLIT_Z - 8, SLIT_Z + 8);
   // the staircase's contacts: one per level, from its tread to the metal over the stack
-  const contacts = merge(LEVELS.map((_, i) => transform(tubeY(0, 1.3, levelY(i)[1] + E, BL_Y[0] - E, small), tr([levelEnd(i) - TREAD / 2, 0, 0]))), 'contacts');
+  const contacts = merge(LEVELS.map((_, i) => transform(tubeY(0, CONTACT_R, levelY(i)[1] + E, BL_Y[0] - E, small), tr([levelEnd(i) - TREAD / 2, 0, 0]))), 'contacts');
   // bit lines across the word lines, one over each column of holes, and a plug down to each pillar
   const bl = new Mesh();
   for (const x of [...new Set(HOLES.map((h) => h[0]))]) bl.box(x - 1.5, x + 1.5, BL_Y[0], BL_Y[1], -SLIT_Z - 8, SLIT_Z + 8);
@@ -254,7 +256,7 @@ export function nandModel(s: NandState, detail: Detail = 'full'): Model3 {
     { text: 'word lines', p: [-BLOCK_X, levelY(20)[1], -10], side: 'l', n: side, on: 'wl' },
     { text: 'ground select', p: [-BLOCK_X, levelY(0)[1], -10], side: 'l', n: side, on: 'select' },
     { text: 'channel hole', p: [hx, STACK_TOP * 0.62, hz], side: 'r', n: front, on: 'pillar' },
-    { text: 'staircase', p: [levelEnd(12) - TREAD / 2, levelY(12)[1], 0], side: 'r', n: up, on: 'stair' },
+    { text: 'staircase', p: [levelEnd(12) - TREAD / 2, levelY(12)[1], 0], side: 'r', n: up, on: 'wl' },
     { text: 'slit', p: [BLOCK_X - 10, STACK_TOP, -SLIT_Z], side: 'r', n: up, on: 'slit', minor: true },
   ];
   const cuts = s.cut === 'ring' ? { planes: [{ n: [0, 1, 0] as Vec3, d: wlMid(s.bank.sel) }], open: [BL_Y[1] + 20] } : { planes: [{ n: [0, 0, 1] as Vec3, d: CUT_Z }], open: [SLIT_Z + 20] };
