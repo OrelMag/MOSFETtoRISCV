@@ -323,7 +323,7 @@ export function williamsModel(s: WilliamsState, detail: 'full' | 'flat' = 'full'
   return { items, anchors, beats, cuts: { planes: [{ n: [0, 0, 1], d: 0 }], open: [BOX.half + 40] }, floor: SHELF_Y - CH.h / 2 - 2, look: { exposure: 1.1, keyDir: [-0.45, 0.75, -0.5] } };
 }
 
-export const WILLIAMS_HOME = { yaw: 0.95, pitch: 0.24, target: [40, -50, 0] as Vec3, dist: 1250 };
+export const WILLIAMS_HOME = { yaw: 0.6, pitch: 0.22, target: [40, -50, 0] as Vec3, dist: 1250 };
 
 /** The Baby's other two store tubes' patterns: one word on the accumulator, two on the control tube (any words). */
 export function staticFace(words: number[], tex: DataTex): DataTex {

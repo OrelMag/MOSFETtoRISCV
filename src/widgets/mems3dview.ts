@@ -100,11 +100,11 @@ export function micView(): Widget {
       ['C₁, C₂ (rest)', `${(c10 * 1e12).toFixed(3)} pF each (typical)`],
       ['C₁ − C₂ now', `${minus(((c1 - c2) * 1e15).toPrecision(3))} fF`],
       ['Membrane voltage', `${minus((membraneVolts(MEMBRANE, p) * 1e3).toPrecision(3))} mV (${sensitivityDbv(MEMBRANE).toFixed(0)} dBV/Pa, fitted)`],
-      ['Share of 1s, last 256 clocks', `${(ones * 100).toFixed(0)} %`],
+      ['Share of 1s, last 256 clocks', `${(ones * 100).toFixed(0)} % (DATA clocked at ${IM69.clock / 1e6} MHz)`],
       ['Output', `${(PCM_RATE / 1e3).toFixed(0)} kHz words: ÷ ${MIC_CHAIN.R} by an order-${MIC_CHAIN.N} CIC`],
     ];
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
-    chip.textContent = `${spl.toFixed(0)} dB SPL · DATA ${IM69.clock / 1e6} MHz · ${(ones * 100).toFixed(0)} % ones`;
+    chip.textContent = `${spl.toFixed(0)} dB SPL · ${(ones * 100).toFixed(0)} % ones`; // one line on a phone: the clock is in the readout
   }
   function paint(): void {
     paintBits(bitsTex, run.bits.slice(0, idx() + 1));
