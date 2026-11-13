@@ -65,6 +65,8 @@ export interface StudioAnchor extends Anchor {
   on?: string;
   /** Shown only in views from below (pins). */
   under?: boolean;
+  /** The studio stage puts a name in the gutter nearer its point (`side` is only modelStage's); this forces one. */
+  gutter?: 'l' | 'r';
 }
 
 export interface Model3 {

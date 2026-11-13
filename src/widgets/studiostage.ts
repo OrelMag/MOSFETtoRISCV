@@ -232,11 +232,11 @@ export function studioStage(o: StudioStageOptions): StudioStage {
       if (!ok) continue;
       seen.push({ r, x: p![0], y: p![1], away: dot3(r.a.n, sub3(eye, p3)) < 0 });
     }
-    // Each label on the side its anchor is nearer, stacked in the order of their heights. Wide: the names in the gutters
+    // Each label on the side its anchor is nearer (or its `gutter`), stacked in the order of their heights. Wide: the names in the gutters
     // over the canvas's side bands; narrow: numbered badges just inside its edges (the names are in the list below).
     const lines: SVGElement[] = [];
     for (const side of ['l', 'r'] as const) {
-      const col = seen.filter((q) => (q.x < W / 2) === (side === 'l')).sort((a, b) => a.y - b.y);
+      const col = seen.filter((q) => (q.r.a.gutter ?? (q.x < W / 2 ? 'l' : 'r')) === side).sort((a, b) => a.y - b.y);
       // the right column stops above the corner buttons, the left above the scale bar
       const ys = spread(col.map((q) => q.y), narrow ? 24 : 22, 12, side === 'r' ? H - 56 : o.scaleBar ? H - 40 : H - 12);
       col.forEach((q, i) => {
