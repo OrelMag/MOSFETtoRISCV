@@ -393,9 +393,10 @@ export function studioStage(o: StudioStageOptions): StudioStage {
 
   const drawFlat = () => {
     const m = o.build('flat'), pr = flatView(o.home.yaw, o.home.pitch), k = knobs(), cuts = cutsAt(m, k.cut), L = norm3([-0.5, 0.85, 0.45]);
-    const faces: { pts: [number, number][]; z: number; fill: string }[] = [], M = new Float32Array(16);
+    const faces: { pts: [number, number][]; z: number; fill: string; it: number }[] = [], M = new Float32Array(16), far: number[] = [];
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    for (const it of m.items) {
+    for (const [ii, it] of m.items.entries()) {
+      far[ii] = Infinity;
       if (it.mat.beam) continue;
       // a hidden group or name (a beat's hide, the frame boxes a model fits by) is not drawn, as on the GPU and in pick
       if (hiddenNow && ((it.group && hiddenNow.has(it.group)) || (it.name && hiddenNow.has(it.name)))) continue;
@@ -410,11 +411,15 @@ export function studioStage(o: StudioStageOptions): StudioStage {
         if ((q[1][0] - q[0][0]) * (q[2][1] - q[0][1]) - (q[2][0] - q[0][0]) * (q[1][1] - q[0][1]) <= 0 && !glass) continue;
         const lit = 0.45 + 0.55 * Math.max(0, dot3(n, L)), col = base.map((v, i) => Math.min(1, v * lit + em[i]));
         const fill = `rgb(${col.map((v) => Math.round(v * 255)).join(' ')} / ${glass ? 0.12 : 1})`;
-        faces.push({ pts: q.map((v) => [v[0], v[1]]), z: (q[0][2] + q[1][2] + q[2][2]) / 3, fill });
+        faces.push({ pts: q.map((v) => [v[0], v[1]]), z: (q[0][2] + q[1][2] + q[2][2]) / 3, fill, it: ii });
+        far[ii] = Math.min(far[ii], q[0][2], q[1][2], q[2][2]);
         for (const v of q) { x0 = Math.min(x0, v[0]); x1 = Math.max(x1, v[0]); y0 = Math.min(y0, v[1]); y1 = Math.max(y1, v[1]); }
       }
     }
-    faces.sort((a, b) => a.z - b.z);
+    // per triangle by default; a model of separate layers (stacked platters, thin overlays) asks for whole items back to
+    // front by their farthest point, then the triangles within each, which long thin triangles cannot interleave
+    if (m.flatOrder === 'items') faces.sort((a, b) => far[a.it] - far[b.it] || a.it - b.it || a.z - b.z);
+    else faces.sort((a, b) => a.z - b.z);
     const sc = Math.min((FW * 0.9) / (x1 - x0 || 1), (FH * 0.9) / (y1 - y0 || 1)), X = (x: number) => FW / 2 + (x - (x0 + x1) / 2) * sc, Y = (y: number) => FH / 2 - (y - (y0 + y1) / 2) * sc;
     const g = s('g');
     for (const f of faces) g.append(s('polygon', { points: f.pts.map(([x, y]) => `${X(x).toFixed(1)},${Y(y).toFixed(1)}`).join(' '), style: `fill:${f.fill};stroke:${f.fill}`, class: 'st-face' }));
