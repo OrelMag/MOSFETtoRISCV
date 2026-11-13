@@ -97,7 +97,7 @@ inside (see [Look inside a part](#look-inside-a-part)).
 3. Drag a part to move it. Drag on empty canvas to select several with a rubber band; **Shift** + click adds to the
    selection.
 4. **Delete** or **Backspace** deletes the selection. **R** turns it a quarter turn, **F** flips it left to right.
-5. Click the ☆ beside a part in the list to pin it to **Favorites** at the top of the list.
+5. Click the ☆ beside a part in the list (**Add to favorites**) to mark it as a favourite.
 
 ### Wire parts together
 
@@ -159,6 +159,19 @@ a touch screen, press and hold.
 3. **Why?** traces the selected wire's value back to what caused it. **Close** (or **Esc**) goes back.
 
 ![Looking inside a NAND: its four transistors, live](img/sandbox/17-look-inside.png)
+
+### Inspect a part: its cost, truth table and Verilog
+
+1. Select a part on the canvas (or nothing, for the chip itself).
+2. Click the inspector button in the toolbar (**Inspect the selected part, or this chip**). A drawer opens on the right
+   with three tabs:
+   - **Info**: what the part is, its cost in transistors and NAND gates, its worst-case delay, its pins and their
+     values, and **Open on workbench**;
+   - **Truth table**;
+   - **HDL**: the part as Verilog.
+3. Close it with its **×**.
+
+![The inspector open on a NAND gate: Info, Truth table and HDL tabs, its cost and pins](img/sandbox/60-inspector.png)
 
 ### Package a chip and edit its face
 
