@@ -14,7 +14,7 @@ import { quatAxisAngle, type Mat4, type Vec3 } from '../gl/math';
 import type { OrbitView } from '../gl/camera';
 import { UNIT_CYL } from '../gl/kit/fromparts';
 import {
-  ACTIVE, ELEC_Y, ELEC_Z, bandOf, MERC_R, mercuryAnchors, PITCH, pulseShape, SLOTS, SLOTS_PER_WORD, TUBE_R, TUBE_X0, TUBE_X1, UNIT_M, WINDOW_TOL, WORDS, xOfPos, type Tank,
+  ACTIVE, CUT_LENGTH_M, ELEC_Y, REPORT, SOUND_M_S, TANK_C, ELEC_Z, bandOf, MERC_R, mercuryAnchors, PITCH, pulseShape, SLOTS, SLOTS_PER_WORD, TUBE_R, TUBE_X0, TUBE_X1, UNIT_M, WINDOW_TOL, WORDS, xOfPos, type Tank,
 } from './mercury3dparts';
 
 const tr = (p: Vec3): Mat4 => { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; m[12] = p[0]; m[13] = p[1]; m[14] = p[2]; return m; };
@@ -127,7 +127,7 @@ export function mercuryModel(s: MercuryState, compact = false, flat?: { pulse: R
   const add = (geo: Geo, mat: Material, name: string, group: string, extra: Partial<Item> = {}) => items.push({ geo, mat, name, group, ...extra });
   const mm = (u: number) => `${(u * UNIT_M * 1000).toFixed(1)} mm`;
   add(S.shell, MATS.steel, 'steel tube', 'tank', { info: { dim: `1 in outside (${mm(TUBE_R * 2)}); the bore is drawn, not given`, source: 'Wilkes & Renwick, 1948 report, 3.1' } });
-  add(S.mercury, MATS.mercury, 'mercury', 'tank', { info: { note: 'sound crosses it at about 1442 m/s at 40 °C: a pulse every 2.9 mm, the whole tube 1.152 ms long in time' } });
+  add(S.mercury, MATS.mercury, 'mercury', 'tank', { info: { note: `sound crosses it at about ${Math.round(SOUND_M_S)} m/s at ${TANK_C} °C: a slot every ${(SOUND_M_S * REPORT.slotS * 1000).toFixed(1)} mm, the whole tube ${((CUT_LENGTH_M / SOUND_M_S) * 1000).toFixed(3)} ms long in time` } });
   add(S.crystals, MATS.quartz, 'quartz crystal', 'tank', { info: { note: 'turns a 13.5 MHz burst into ultrasound at the sending end, and back into a voltage at the receiving end' } });
   add(S.ends, MATS.brass, 'end block', 'tank', { cut: 'none' });
   add(S.backing, MATS.backing, 'backing', 'tank', { cut: 'none' });

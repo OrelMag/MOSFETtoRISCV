@@ -277,7 +277,7 @@ export const chAppendixAgc: Chapter = {
       body: `
         <p>Every gate of this appendix, from the three transistors of the first step to the registers, is one part: a chip holding two
         three-input NOR gates, sealed in a flatpack ${FLATPACK_IN} inches long with ten gold leads (MIT drawing 1006321). A logic
-        module is ${PACKAGES} of them welded to two boards, ${MODULE_GATES} gates, potted in epoxy; four of these modules, A8 to
+        module is ${PACKAGES} of them welded to two boards, ${MODULE_GATES} gates, the wiring between the boards cast in epoxy; four of these modules, A8 to
         A11, are the arithmetic unit and the central registers, four bits each (K. Shirriff's study of the computer).</p>
         <p>The count works the same way at every scale. The four-bit adder of “The end-around carry” is ${ADDER_GATES} NOR gates, so
         ${ADDER_PACKAGES} flatpacks; the four-bit register of “Registers of NOR gates” is ${REG_GATES} gates, ${REG_PACKAGES} flatpacks. With one

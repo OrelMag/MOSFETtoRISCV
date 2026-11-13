@@ -219,7 +219,7 @@ export function agcModel(p: AgcPose, detail: Detail = 'full'): Model3 {
   items.push({ geo: box(DIE.l, 0.2, DIE.w, 0.02), mat: dieMat, at: dieTiny, name: 'die: two NOR gates', group: 'package', cut: 'none', info: { dim: `about ${DIE.l} × ${DIE.w} mm (drawn)`, source: SRC.shirriff, note: 'six transistors and eight resistors; ten bond wires to the leads' } });
   if (detail === 'full') {
     const wires = leadCentres().map((c) => tube([[dieTiny[0] + Math.sign(c.x) * Math.min(Math.abs(c.x), DIE.l / 2 - 0.1), dieTiny[1] + 0.1, dieTiny[2] + Math.sign(c.z) * (DIE.w / 2 - 0.1)], [dieTiny[0] + c.x * 0.8, dieTiny[1] + 0.35, dieTiny[2] + Math.sign(c.z) * (FP.w / 2 - 1.0)], [dieTiny[0] + c.x, baseTop + 0.03, dieTiny[2] + Math.sign(c.z) * (FP.w / 2 - 0.35)]], 0.025, { sides: 4, bend: 0.2 }));
-    items.push({ geo: merge(wires, 'bond wires'), mat: M.gold, name: 'bond wires', group: 'package', cut: 'none', info: { source: SRC.shirriff, note: 'ten, one per lead; drawn thicker than the real 25 µm wire' } });
+    items.push({ geo: merge(wires, 'bond wires'), mat: M.gold, name: 'bond wires', group: 'package', cut: 'none', info: { source: SRC.shirriff, note: 'ten, one per lead; drawn 50 µm across, twice the real 25 µm wire' } });
   }
   // the die, enlarged
   const ins = p.ins, y = norOut(...ins), on = conducting(ins);

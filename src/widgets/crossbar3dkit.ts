@@ -135,7 +135,7 @@ export const CV = 6, CL = 5;
 export function xbModel(m: Motion, detail: 'full' | 'flat' = 'full'): Model3 {
   const S = statics(detail), items: Item[] = [], sides = detail === 'flat' ? 3 : 6;
   const outline = `${OUTLINE.l} × ${OUTLINE.h} × ${OUTLINE.d} mm outline (typical: a 200-point unit's size; no Western Electric drawing was found)`;
-  items.push({ geo: S.frame, mat: MATS.frame, name: 'frame', group: 'frame', info: { dim: outline, note: 'one switch: 200 crosspoints on 30 magnets' } });
+  items.push({ geo: S.frame, mat: MATS.frame, name: 'frame', group: 'frame', info: { dim: outline, note: `one switch: ${LEVELS * VERTICALS} crosspoints on ${2 * BARS + VERTICALS} magnets` } });
   for (let b = 0; b < BARS; b++) {
     const ang = (m.tilt[b] * TILT_DEG * Math.PI) / 180;
     items.push({ geo: S.selectBar, mat: MATS.bar, at: [0, barY(b), Z.bar], rot: quatAxisAngle([1, 0, 0], -ang), name: 'select bar', group: 'select', explode: [0, 0, 70],
