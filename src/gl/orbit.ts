@@ -1,5 +1,5 @@
-// Orbit controls on a canvas. Drag to orbit; right-, middle- or shift-drag to pan; wheel or pinch to zoom toward the
-// pointer (two fingers also pan); while focused, arrows orbit, shift + arrows pan, + / − zoom, Home resets, Esc lets go;
+// Orbit controls on a canvas. Drag to orbit; right-, middle- or shift-drag to pan; wheel (once engaged, below) or pinch to
+// zoom toward the pointer (two fingers also pan); while focused, arrows orbit, shift + arrows pan, + / − zoom, Home resets, Esc lets go;
 // double-click resets. Every change calls onChange (the renderer then draws one frame).
 // The wheel and one-finger vertical swipes belong to the page until the canvas is engaged (focused: a click, a tap, Tab),
 // so scrolling past a model never zooms it (kit/wheel.ts); Ctrl / ⌘ + wheel, a trackpad pinch and full screen always
@@ -22,7 +22,8 @@ export function attachOrbit(canvas: HTMLCanvasElement, cam: OrbitCamera, onChang
     const [a, b] = [...pts.values()];
     return { d: Math.hypot(a[0] - b[0], a[1] - b[1]), m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] as [number, number] };
   };
-  const fullscreen = () => { const f = document.fullscreenElement; return !!f && f.contains(canvas); };
+  // the Fullscreen API's or modelframe.ts's overlay (no API, an iPhone): .m3-full on the root either way
+  const fullscreen = () => { const f = document.fullscreenElement; return (!!f && f.contains(canvas)) || !!canvas.closest('.m3-full'); };
   const focused = () => document.activeElement === canvas;
   const touch = () => { canvas.style.touchAction = touchActionOf(focused(), fullscreen()); };
   touch();

@@ -72,6 +72,3 @@
 /* The scale bar (studioStage scaleBar): a length that follows the zoom, bottom left over the canvas. */
 .st-scale { position: absolute; left: calc(var(--st-gw, 0px) + 10px); bottom: 10px; z-index: 3; pointer-events: none; display: flex; flex-direction: column; gap: 3px; font: 600 11px/1 var(--mono, ui-monospace, monospace); color: var(--text); text-shadow: 0 0 3px var(--surface), 0 0 3px var(--surface); }
 .st-scale i { display: block; height: 6px; border: 2px solid currentColor; border-top: 0; box-sizing: border-box; }
-/* the wheel hint (once a page): the wheel scrolled the page past an unclicked model */
-.st-whint { position: absolute; left: 50%; bottom: 14px; transform: translate(-50%, 6px); z-index: 4; max-width: calc(100% - 24px); padding: 6px 12px; border-radius: 8px; background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: 0 2px 10px rgb(0 0 0 / 0.15); font: 500 13px/1.35 var(--font-ui); text-align: center; pointer-events: none; opacity: 0; transition: opacity 0.2s, transform 0.2s; }
-.st-whint.on { opacity: 1; transform: translate(-50%, 0); }

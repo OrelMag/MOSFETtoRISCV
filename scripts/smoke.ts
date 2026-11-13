@@ -680,7 +680,7 @@ const WHEEL_DRIVE = `(async () => {
   let t = turn();
   if (t.prevented || t.moved) bad.push('the wheel over an unfocused canvas zoomed instead of scrolling the page');
   await wait(100);
-  if (!document.querySelector('.st-whint.on')) bad.push('no hint after a wheel the page took');
+  if (!document.querySelector('.r3-whint.on')) bad.push('no hint after a wheel the page took');
   canvas.focus();
   if (canvas.style.touchAction !== 'none') bad.push('touch-action over a focused canvas is ' + canvas.style.touchAction + ', not none');
   t = turn();

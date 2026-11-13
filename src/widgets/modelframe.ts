@@ -11,6 +11,7 @@ import type { Renderer } from '../gl/renderer';
 import { h, icon } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import { saveFile } from '../view/image';
+import { WHEEL_HINT } from '../gl/kit/wheel';
 
 export interface ModelFrameOptions {
   /** The stage (`.r3-stage`): the tools go in its corner. */
@@ -33,12 +34,16 @@ export interface ModelFrame {
   destroy(): void;
 }
 
+/** How to zoom, the one wording (gl/orbit.ts, gl/kit/wheel.ts: the wheel is the page's until the model is clicked). */
+export const ZOOM_HOW = 'click the model, then scroll to zoom (or Ctrl + scroll, or pinch)';
 /** The gestures, under every model (the keys are in the ? sheet: ui/keys.ts, group model). */
-export const ORBIT_HINT = 'Drag to orbit, right-drag or shift-drag to pan (two fingers on a touch screen), wheel or pinch to zoom toward the pointer, double-click to reset. The corner buttons turn it, save an image and go full screen.';
+export const ORBIT_HINT = `Drag to orbit, right-drag or shift-drag to pan (two fingers on a touch screen); ${ZOOM_HOW}; double-click to reset. The corner buttons turn it, save an image and go full screen.`;
 /** The same for a screen reader, keys included (the canvas's aria-label after the model's name). */
-export const ORBIT_ARIA = 'drag to orbit, right-drag or shift-drag to pan, wheel or pinch to zoom; arrow keys turn, shift and arrows pan, plus and minus zoom, Home resets';
+export const ORBIT_ARIA = 'drag to orbit, right-drag or shift-drag to pan; once focused, scroll to zoom (Ctrl + scroll at any time); arrow keys turn, shift and arrows pan, plus and minus zoom, Home resets, Escape lets the page scroll again';
 
 const SPIN = 0.35; // radians per second while turning by itself
+/** The wheel hint shows once a page load, over whichever model was scrolled past first. */
+let wheelHinted = false;
 
 /** The element full screen takes: the model's panel inside its widget (never a panel of the page around it), else the
  *  widget (the machine hall's controls sit in it), else the stage. */
@@ -66,6 +71,15 @@ export function modelFrame(o: ModelFrameOptions): ModelFrame {
   spin.setAttribute('aria-pressed', 'false');
   const el = h('div', { class: 'r3-tools' }, spin, shot, full);
   o.stage.append(el);
+  // the wheel over a canvas nobody clicked scrolls the page (gl/orbit.ts fires orbit:wheelpass): say once how to zoom
+  const whint = h('div', { class: 'r3-whint', 'aria-hidden': 'true' }, WHEEL_HINT);
+  o.stage.append(whint);
+  o.stage.addEventListener('orbit:wheelpass', () => {
+    if (wheelHinted) return;
+    wheelHinted = true;
+    whint.classList.add('on');
+    setTimeout(() => whint.classList.remove('on'), 3200);
+  });
 
   // ---- full screen ----
   let root: HTMLElement | null = null, overlay = false;

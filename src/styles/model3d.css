@@ -61,3 +61,8 @@ html.m3-lock, html.m3-lock body { overflow: hidden; }
 }
 /* the machine hall: controls, stage and readouts in one column, no .r3 grid */
 .m3-full.hall3d .r3-stage.r3-stage { flex: none; height: 70dvh; min-height: 280px; }
+/* the wheel hint (once a page, modelframe.ts): the wheel scrolled the page past a model nobody had clicked (gl/kit/wheel.ts) */
+.r3-whint { position: absolute; left: 50%; bottom: 14px; transform: translate(-50%, 6px); z-index: 4; max-width: calc(100% - 24px); padding: 6px 12px; border-radius: 8px; background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: 0 2px 10px rgb(0 0 0 / 0.15); font: 500 13px/1.35 var(--font-ui); text-align: center; pointer-events: none; opacity: 0; transition: opacity 0.2s, transform 0.2s; }
+.r3-whint.on { opacity: 1; transform: translate(-50%, 0); }
+/* full screen (the API's or the overlay): every gesture is the model's */
+.m3-full canvas { touch-action: none !important; }

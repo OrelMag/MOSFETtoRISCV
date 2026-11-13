@@ -26,7 +26,7 @@ import { flatten, type FlatDesign } from '../sim/flatten';
 import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
-import { ORBIT_HINT, modelFrame } from './modelframe';
+import { ORBIT_ARIA, ORBIT_HINT, modelFrame } from './modelframe';
 import { cardView } from './carddraw';
 import { deckReader } from '../cards/reader';
 import { CARD_S, defaultFeed, type FeedMode, HallFeed, hallProgram, ledgerParts, programStore, READER_711, readerView } from '../lib/hallcards';
@@ -196,7 +196,7 @@ export function hallView(): Widget {
     h('div', { class: 'hall-rd-body' }, h('div', { class: 'hall-rd-card' }, cv.el), h('div', { class: 'hall-rd-side' }, rdStatus, rdStats, h('h5', null, 'Where the time went'), ledgerBar, ledgerKey, editBtn)));
 
   // ---- stage
-  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': 'The CPU as a hall of racks in 3D: drag to orbit, right-drag or shift-drag to pan, wheel or pinch to zoom, click a rack to name its block' }) as HTMLCanvasElement;
+  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': `The CPU as a hall of racks in 3D: click a rack to name its block; ${ORBIT_ARIA}` }) as HTMLCanvasElement;
   const flat = h('canvas', { class: 'hall-flat', tabindex: 0, 'aria-label': 'The CPU as a hall of racks, drawn flat: click a rack to name its block' }) as HTMLCanvasElement;
   flat.style.display = 'none';
   const labels = h('div', { class: 'r3-labels', 'aria-hidden': 'true' });
