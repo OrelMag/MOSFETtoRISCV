@@ -1168,5 +1168,6 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A program woven into wire", challenge: "quiz", stage: "widget" },
     { title: "Inside a rope module", stage: "widget" },
     { title: "Thirty-four instructions", challenge: "quiz", stage: "widget" },
+    { title: "A logic module", stage: "widget" },
   ] },
 ];

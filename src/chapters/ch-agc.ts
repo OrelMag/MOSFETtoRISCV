@@ -14,6 +14,11 @@ import { groupNum } from '../sim/numfmt';
 import { stats } from '../sim/stats';
 import { AGC_SUM_SOURCE, MCT_US, agcRunWidget } from '../widgets/agcrun';
 import { rope3d } from '../widgets/rope3d';
+import { agcModule3d } from '../widgets/agcmodule3d';
+import { ADDER_GATES, ADDER_PACKAGES, MODULE_GATES, PACKAGES, REG_GATES, REG_PACKAGES } from '../widgets/agcmodule3dgeom';
+
+/** The flatpack's length in inches (drawing 1006321's 0.275 in at most). */
+const FLATPACK_IN = '0.275';
 import { ropeWeaveWidget } from '../widgets/ropeweave';
 import { numOf } from './order';
 import type { Chapter } from './types';
@@ -266,6 +271,19 @@ export const chAppendixAgc: Chapter = {
         explain: 'CCS skips 0, 1, 2 or 3 for positive, +0, negative and −0, and loads |K| − 1, or +0 when that would be negative. The loop ends there: the instruction after the skip leaves it.',
         why: ['', 'A count of +0 diminishes to +0, not −1.', 'Three is for −0.', 'Going on is for a positive count.'],
       },
+    },
+    {
+      title: 'A logic module',
+      body: `
+        <p>Every gate of this appendix, from step 0's three transistors to the registers, is one part: a chip holding two
+        three-input NOR gates, sealed in a flatpack ${FLATPACK_IN} inches long with ten gold leads (MIT drawing 1006321). A logic
+        module is ${PACKAGES} of them welded to two boards, ${MODULE_GATES} gates, potted in epoxy; four of these modules, A8 to
+        A11, are the arithmetic unit and the central registers, four bits each (K. Shirriff's study of the computer).</p>
+        <p>The count works the same way at every scale. Step 2's four-bit adder is ${ADDER_GATES} NOR gates, so
+        ${ADDER_PACKAGES} flatpacks; step 4's four-bit register is ${REG_GATES} gates, ${REG_PACKAGES} flatpacks. With one
+        kind of part, the computer's cost is a single number: about 2800 packages of the same chip.</p>
+        <div class="try">Cut the module open and light the adder, then open a flatpack and its die and set a, b and c.</div>`,
+      widget: () => agcModule3d(),
     },
   ],
 };

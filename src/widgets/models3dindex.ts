@@ -260,6 +260,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./rope3d').then((m) => m.rope3d()),
   },
   {
+    id: 'agcmodule', title: 'AGC logic module', category: 'machines', chapter: 'appendix-agc', step: 8,
+    summary: 'The Apollo computer\'s one part: a dual NOR flatpack, 120 of them on two boards a module, the module in its tray, and one gate on the die down to its three transistors.',
+    files: ['agcmodule3d', 'agcmodule3dview', 'agcmodule3dkit', 'agcmodule3dgeom'], factory: 'agcModule3d', codex: ['agc', 'nor'],
+    open: () => import('./agcmodule3d').then((m) => m.agcModule3d()),
+  },
+  {
     id: 'babbage', title: 'Babbage\'s carry', category: 'machines', chapter: 'fastadd', step: 5,
     summary: 'A Difference Engine No. 2 column: a run of 9s carries one arm at a time, or all at once by the anticipating carriage.',
     files: ['babbage3d', 'babbage3dview', 'babbage3dkit', 'babbage3dparts'], factory: 'babbage3d', codex: ['ripple', 'cla', 'prefix'],

@@ -1,0 +1,7 @@
+/* AGC logic module (widgets/agcmodule3dview.ts): the canvas takes the full column, the controls under it */
+.agm3 .r3 { grid-template-columns: minmax(0, 1fr); }
+.agm-views { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.agm-views .btn[aria-pressed="true"], .agm-ins .btn[aria-pressed="true"], .agm-adder .btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+/* the inputs only on the die, the adder only on the module; the cut opens the module's potting, the explode lifts the flatpack's lid */
+.agm3:not([data-view="gate"]) .agm-ins, .agm3:not([data-view="module"]) .agm-adder { display: none; }
+.agm3:not([data-view="module"]) .r3-sl:has(input[aria-label="Cutaway"]), .agm3:not([data-view="package"]) .r3-sl:has(input[aria-label="Exploded view"]) { display: none; }
