@@ -105,7 +105,7 @@ inside (see [Look inside a part](#look-inside-a-part)).
    the target.
 2. To make corners, click on empty canvas while drawing; **Backspace** removes the last corner, **Esc** cancels.
 3. To branch, end a new wire on an existing wire, or hold **Ctrl** (or **Alt**) and drag from a wire.
-4. Drag a wire to reshape it; double-click a corner to take it out.
+4. Drag a wire to reshape it; double-click a corner to take it out (the wire is routed again without it).
 5. **Cut** (**K**) lets you drag a line across wires to cut them.
 
 ### Use pointers (named wires)
@@ -113,9 +113,7 @@ inside (see [Look inside a part](#look-inside-a-part)).
 A pointer is a wire by name: every pointer with the same name is the same wire, so you can connect distant places
 without drawing a long wire.
 
-1. Press **L** (or click **Pointer** in **Basics**) and place it on a port.
-2. Give it a name (**F2**), and place another pointer with the same name where the signal should arrive.
-3. Click a pointer's name flag to jump to the next pointer with that name.
+1. Press **L** (or click **Pointer** in **Basics**), then click on the canvas where it goes. A box asks for its name   (*Every pointer with this name is the same wire*): type it and press **Enter**.2. Place another pointer with the same name where the signal should arrive, and wire each one to its port.3. Click a pointer to select it: its properties list every pointer of that name (for example **2 named "net"**). Click   it again, or **Next**, to jump to the next one.
 
 ### Rename, undo and redo
 
