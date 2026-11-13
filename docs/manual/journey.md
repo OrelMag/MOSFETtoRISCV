@@ -75,7 +75,7 @@ That is the whole pattern of every chapter: read, try the circuit, open what you
   **Common mistake**) and the step's **QUESTION** or **CHALLENGE**. **Back** and **Next** sit at the bottom. Drag the
   thin handle between the text and the circuit to make the text wider or narrower.
 - **Middle, the stage**: the circuit. Above it, a bar with the name of the level you are in and the stage's tools (see
-  [The stage's tools](#the-stages-tools)). Below it, the run bar: **INPUTS** (one switch per input), **OUTPUTS**, then
+  [Change, reuse or share what is on the stage](#change-reuse-or-share-what-is-on-the-stage)). Below it, the run bar: **INPUTS** (one switch per input), **OUTPUTS**, then
   **Step back**, **Step** (one gate delay) and **Reset**, and on the right whether the circuit has settled.
 - **Right, the Inspector**: what the selected part is (nothing selected: the whole circuit). **Info** gives its
   transistor and NAND counts, its delay, its pins and values, **Open on workbench**, and folded sections **Power
@@ -200,8 +200,8 @@ Steps with a processor have a CPU panel on the right of the circuit.
    one, **Reset** starts the program again.
 3. The panel says after every cycle whether the hardware **matches golden model**, an independent simulator of the
    instruction set.
-4. Click a line of the program to light the hardware that instruction uses. Click the dot left of an address to set a
-   breakpoint.
+4. Click a line of the program to light the hardware that instruction uses. Click just left of an address (its
+   **Breakpoint** button) to stop a run when that instruction is reached.
 5. Under the circuit, the clock bar has **Pulse** (one clock cycle), **Pause the clock** / run, **Step back**, **Step**
    and **Reset**. A circuit with a clock starts running slowly by itself when the step opens; click **Pause** to stop
    it.
