@@ -26,9 +26,13 @@ export interface Cycle {
   flush: boolean;
   /** The fetch numbers of the wrong-path instructions this flush pulls off the line (those in F and D). */
   pulled: number[];
+  /** hazard.forwardA / forwardB: where E's ALU operands come from this cycle: 0 the register file, 1 W, 2 M. */
+  fwd: [number, number];
 }
 
 const OPC = { LOAD: 0x03, BRANCH: 0x63, JALR: 0x67, JAL: 0x6f };
+/** The major opcodes whose control row sets regWrite (R, I, load, jal, jalr, lui, auipc): stores and branches do not. */
+const WRITES = new Set([0x33, 0x13, 0x03, 0x6f, 0x67, 0x37, 0x17]);
 /** The raw register fields the comparators see (bits 19:15 and 24:20), whether or not the instruction reads them. */
 const rs1Of = (w: number) => (w >>> 15) & 31;
 const rs2Of = (w: number) => (w >>> 20) & 31;
@@ -65,7 +69,11 @@ export function pipeSchedule(words: number[], n: number, imemK = 6): Cycle[] {
     const stall = E.valid && (eWord & 0x7f) === OPC.LOAD && (rs1Of(dWord) === rdOf(eWord) || rs2Of(dWord) === rdOf(eWord));
     const r = E.valid ? resolve(E) : null;
     const flush = !!r?.taken;
-    out.push({ slots, stall, flush, pulled: flush ? [F.seq, ...(D.valid ? [D.seq] : [])] : [] });
+    // forwarding: the raw rs fields of E (zeros in a bubble) against the rd of M and W where they write a register
+    const W = slots[4], rdIf = (it: Item) => (it.valid && WRITES.has(rom(it.pc) & 0x7f) ? rdOf(rom(it.pc)) : -1);
+    const eRaw = E.valid ? eWord : 0, rM = rdIf(M), rW = rdIf(W);
+    const sel = (rs: number) => (rs !== 0 && rs === rM ? 2 : rs !== 0 && rs === rW ? 1 : 0);
+    out.push({ slots, stall, flush, pulled: flush ? [F.seq, ...(D.valid ? [D.seq] : [])] : [], fwd: [sel(rs1Of(eRaw)), sel(rs2Of(eRaw))] });
     if (flush) slots = [{ seq: seq++, pc: r!.target, valid: true }, bubble(seq++), bubble(seq++), E, M];
     else if (stall) slots = [F, D, bubble(seq++), E, M];
     else slots = [{ seq: seq++, pc: (F.pc + 4) >>> 0, valid: true }, F, D, E, M];

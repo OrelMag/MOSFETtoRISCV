@@ -10,10 +10,14 @@ import { assemble } from '../riscv/asm';
 import { disasm } from '../riscv/isa';
 import { pipeSchedule, type Cycle } from '../riscv/pipetrace';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
-import { STATIONS, assemblyAnchors, assemblyParts, kindOfWord, lampsOf, palletsAt, flushText, outcomeOf, type Outcome, type AssemblyPalette } from './assembly3dparts';
+import { packInstances } from '../gl/instances';
+import { M } from '../gl/kit/materials';
+import { STATIONS, kindOfWord, palletsAt, flushText, outcomeOf, type Outcome } from './assembly3dparts';
+import { BEAT_EVENTS, RIDER, armAngle, armMove, asmModel, clockOf, palletMove, riders, type AsmLook, type AsmRgb } from './assembly3dkit';
+import { studioStage, type StudioStage } from './studiostage';
 import { numOf } from '../chapters/order';
+
+const FALLBACK: AsmRgb = { alu: [0.4, 0.6, 0.88], load: [0.25, 0.8, 0.54], store: [0.65, 0.51, 0.86], ctl: [0.94, 0.69, 0.24], wrong: [1, 0.42, 0.47], bubble: [0.3, 0.31, 0.41], hold: [0.31, 0.83, 0.91], off: [0.34, 0.36, 0.45], fwd: [1, 0.82, 0.25] };
 
 export interface AssemblyProgram { id: string; name: string; source: string }
 
@@ -42,27 +46,49 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
   const word = (pc: number) => L.words[(pc >>> 2) & 63] ?? 0;
   // a fetch past the program reads the ROM's empty words: only wrong-path instructions ever do
   const text = (pc: number) => (word(pc) === 0 ? '(empty ROM word)' : disasm(word(pc), pc));
-  const ctx = { kindOf: (pc: number) => kindOfWord(word(pc)), mnemonicOf: (pc: number) => (word(pc) === 0 ? 'empty' : text(pc).split(' ')[0]) };
+  const ctx = {
+    kindOf: (pc: number) => kindOfWord(word(pc)), mnemonicOf: (pc: number) => (word(pc) === 0 ? 'empty' : text(pc).split(' ')[0]),
+    textOf: text, hexOf: (pc: number) => `${hex(pc)} · 0x${(word(pc) >>> 0).toString(16).padStart(8, '0')}`,
+  };
+  let stageRef: StudioStage | null = null;
+  const rgb = (): AsmRgb => {
+    const s = stageRef;
+    return s ? { alu: s.rgb('--as-alu'), load: s.rgb('--as-load'), store: s.rgb('--as-store'), ctl: s.rgb('--as-ctl'), wrong: s.rgb('--as-wrong'), bubble: s.rgb('--as-bubble'), hold: s.rgb('--as-hold'), off: s.rgb('--as-off'), fwd: s.rgb('--as-fwd') } : FALLBACK;
+  };
+  const look = (detail: AsmLook['detail']): AsmLook => ({ detail, plan: L.plan, t, u, ctx, rgb: rgb() });
 
   const panel = h('div', { class: 'panel' });
-  const stage = modelStage(panel, {
-    look: LOOKS.field,
-    aria: 'The five-stage pipeline as an assembly line in 3D: Fetch, Decode, Execute, Memory and Writeback stations on a belt, a pallet for every instruction in flight, an empty pallet for a bubble',
-    // the stage is as wide as the model needs: a phone's narrow one sits further back
-    camera: { target: [2, 8, 4], yaw: 0.35, pitch: 0.42, dist: typeof innerWidth === 'number' && innerWidth < 640 ? 190 : 178 },
-    limits: { minDist: 70, maxDist: 420 },
-    note: 'The stations are a drawing; the timing is the pipeline’s, item for item (details below).',
-    draw: () => paint(),
+  const stage = studioStage({
+    aria: 'The five-stage pipeline as an assembly line in 3D: Fetch, Decode, Execute, Memory and Writeback stations on a belt, a pallet for every instruction in flight, an empty pallet for a bubble, chutes that carry a forwarded value back to Execute',
+    home: { target: [0, 0, 0], yaw: 0.35, pitch: 0.42, dist: 200 },
+    homeFrame: ['homebox'],
+    // one shape for every clock (a rebuild would otherwise resize the canvas and refit home)
+    aspect: 1.5,
+    hidden: ['homebox', 'chutebox', 'stallbox', 'flushbox'],
+    limits: { minDist: 20, maxDist: 600 },
+    // each beat goes to the first clock of this program where its event happens
+    onBeat: (i) => { const e = BEAT_EVENTS[i]; const to = e ? clockOf(L.plan, e) : null; if (to !== null) { verdict = ''; running = false; acc = 0; t = to; u = 1; } key = ''; readout(); put(); },
+    note: 'The stations, belt, chutes and arm are a drawing; the timing is the pipeline’s, item for item, and so is every forward, stall and flush (details below).',
+    build: (detail) => asmModel(look(detail)),
   });
-  const palette = (): AssemblyPalette => ({
-    frame: stage.rgb('--m3-si'), belt: stage.rgb('--as-belt'), plate: stage.rgb('--as-plate'), bubble: stage.rgb('--as-bubble'),
-    alu: stage.rgb('--as-alu'), load: stage.rgb('--as-load'), store: stage.rgb('--as-store'), ctl: stage.rgb('--as-ctl'), wrong: stage.rgb('--as-wrong'),
-    off: stage.rgb('--as-off'), hold: stage.rgb('--as-hold'), flush: stage.rgb('--as-wrong'),
-  });
-  function paint(): void {
-    const p = palletsAt(L.plan, t, u, ctx);
-    stage.paint(assemblyParts(p, lampsOf(L.plan[t]), palette()), assemblyAnchors(p));
+  stageRef = stage;
+  const NONE = new Float32Array(0);
+  const riderMat = M.make({ base: [1, 1, 1], metal: 0, rough: 0.3, bloom: 1, label: 'the value forwarded' });
+  /** The model is rebuilt at a clock and when its slide ends (the set of pallets changes); the moves place them between. */
+  let key = '', built: number[] = [], flatAt = 0;
+  function put(): void {
+    const k = `${prog.id}|${t}|${u >= 1}`, now = performance.now();
+    if (stage.isFlat()) { if (k !== key || (u < 1 && now - flatAt > 150)) { key = k; flatAt = now; stage.refresh(); } return; }
+    const ps = palletsAt(L.plan, t, u, ctx);
+    if (k !== key) { key = k; built = ps.map((p) => p.seq); stage.refresh(); }
+    const at = new Map(ps.map((p) => [p.seq, p] as const)), moves = new Map<string, Float32Array>();
+    for (const s of built) { const p = at.get(s); moves.set(`pal${s}`, p ? palletMove(p) : palletMove({ seq: s, x: 0, y: -40, z: 0, size: 0, kind: 'bubble', wrong: false, text: '' })); }
+    moves.set('arm', armMove(armAngle(L.plan, t, u)));
+    stage.move(moves);
+    stage.instances('rider', RIDER, riderMat, u < 1 && !reducedMotion() ? packInstances(riders(L.plan[t], u, rgb())) : NONE);
+    stage.studio()?.invalidate();
   }
+  const paint = (): void => put();
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv as-stages' }), status = h('p', { class: 'as-status', 'aria-live': 'polite' });
   stage.chips.append(chip);
@@ -173,8 +199,8 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
     h('div', { class: 'r3' },
       h('div', { class: 'r3-main' },
         h('div', { class: 'r3-ctl' }, h('label', { class: 'as-prog' }, h('span', null, 'Program'), select),
-          h('div', { class: 'r3-btns' }, stepBtn, playBtn, backBtn, hazBtn, resetBtn, stage.resetBtn)),
-        stage.el, stage.hint, status,
+          h('div', { class: 'r3-btns' }, stepBtn, playBtn, backBtn, hazBtn, resetBtn)),
+        stage.el, status,
         h('div', { class: 'as-predict', role: 'group', 'aria-label': 'Predict the next clock' }, h('span', { class: 'as-q' }, 'Predict the next clock:'), ...predictBtns, score),
         h('label', { class: 'as-scrub' }, h('span', null, 'Clock'), scrub, scrubOut),
         h('div', { class: 'as-legend', 'aria-label': 'Colours' }, swatch('--as-alu', 'arithmetic'), swatch('--as-load', 'load'), swatch('--as-store', 'store'), swatch('--as-ctl', 'branch / jump'),
@@ -182,15 +208,15 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
         h('details', { class: 'deeper as-note' }, h('summary', null, 'What is drawn and what is modelled'),
           h('p', null, 'The timing is the five-stage pipeline’s own, item for item: which instruction, or bubble, is in each station every clock, and when the hazard unit stalls or flushes, are held by test to the gate-level CPU’s pipeline registers on these programs (tests/model-assembly.test.ts, including jal and jalr). The rules are those of lib/pipeline.ts’s hazard unit as chapter ' + numOf('pipeline') + ' describes them. What is simplified:'),
           h('ul', null,
-            h('li', null, 'The stations, belt and pallets are a drawing. The slide between two clocks is animation: in the circuit, everything changes at the clock edge.'),
+            h('li', null, 'The stations, belt, pallets, chutes and the flush arm are a drawing. The slide between two clocks is animation: in the circuit, everything changes at the clock edge, and a forwarded value does not travel: it is a mux choosing another wire.'),
             h('li', null, 'A laundromat’s machines each run at their own pace. Here one clock moves every station together, so the slowest stage sets the beat for all of them (the next step measures what that costs).'),
-            h('li', null, 'Only which instruction is where is kept, not values: whether a branch is taken comes from the golden model, and forwarding costs no cycle, so it is not drawn (it is why a dependent pair of arithmetic instructions never stalls; only a load followed by its user does).'),
+            h('li', null, 'Only which instruction is where is kept, not values: whether a branch is taken comes from the golden model. Forwarding costs no cycle; the chutes show where it happens, lit on the clocks the hazard unit’s forwardA or forwardB selects Memory or Writeback (held to the gates too). It is why a dependent pair of arithmetic instructions never stalls; only a load followed by its user does.'),
             h('li', null, 'All five stations are drawn the same size. They are not the same length of logic: Execute is nearly the whole path of the single-cycle CPU, and it sets the clock for every station (the next step measures it).'),
             h('li', null, 'Memory is ideal: no cache misses, and no multi-cycle instructions (this CPU has no multiply or divide).'),
             h('li', null, 'The hazard unit compares the load’s destination with the register fields of the instruction in Decode whether or not that instruction reads them, so it could stall where no register is used. None of these programs does; the test checks it.'),
             h('li', null, 'A branch whose target is the very next instruction would still flush in the circuit; the model cannot tell it from a branch not taken. None of these programs has one.')))),
       h('div', { class: 'r3-side' }, h('h4', null, 'This line ', h('span', { class: 'r3-badge' }, 'model')), kv)));
   readout();
-  paint();
-  return { el: panel, destroy() { loop.stop(); stage.destroy(); } };
+  const ready = setInterval(() => { if (stage.studio() || stage.isFlat()) { clearInterval(ready); key = ''; put(); } }, 100);
+  return { el: panel, destroy() { clearInterval(ready); loop.stop(); stage.destroy(); } };
 }
