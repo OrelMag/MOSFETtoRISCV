@@ -221,6 +221,18 @@ These are the buttons on the bar above the circuit, left to right after the leve
    figure for each circuit and 3D model, the questions with their answers at the end. It opens your browser's print
    dialog when the figures are ready.
 
+### Read a chapter on a phone
+
+On a narrow screen the text comes first and the circuit sits under it.
+
+1. Read the step. Underlined words light their part on the circuit when you tap them.
+2. Tap **Circuit** in the bar at the bottom (or **Show the circuit** under the chapter title) to scroll down to it.
+3. Double-tap a part to open it, drag to pan, pinch to zoom. Tap **×** on the hint to hide it.
+4. The layout is locked on a phone, so a drag always pans. The rarer tools are under **⋯** (**More tools**).
+5. The input switches and **Step back**, **Step**, **Reset** are under the circuit, as on a computer.
+
+![A step on a phone: the question, the bottom bar with Back, Circuit and Next, then the circuit with its inputs](img/journey/20-phone-circuit.png)
+
 ## Keys and gestures
 
 Press **?** on any page for its keys. On a chapter step:
