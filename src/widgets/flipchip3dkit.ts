@@ -12,6 +12,7 @@
 // 40 × 40 matrix (the centre 6 × 6 under the capacitors, the four corners) is illustrative: the drawing gives the count.
 
 import { merge, roundedBox, sphere, transform, tube, type Geo } from '../gl/kit/geo';
+import { groupDigits } from '../sim/numfmt';
 import { M, type Material } from '../gl/kit/materials';
 import type { Beat, Item, Model3, StudioAnchor } from '../gl/kit/scene';
 import type { Mat4, Vec3 } from '../gl/math';
@@ -186,7 +187,7 @@ export function fcModel(st: FcState = {}, detail: 'full' | 'flat' = 'full'): Mod
     info: { dim: l.kind === 'core' ? `${(l.y1 - l.y0).toFixed(2)} mm (the 1.45 mm substrate is derived; its split is illustrative)` : `${Math.round((l.y1 - l.y0) * 1000)} µm (illustrative)`,
       note: l.kind === 'core' ? 'the stiff middle; plated holes through it carry the signals down' : l.kind === 'plane' ? 'ground and power spread as whole planes: the current’s return path' : 'thin dielectric between copper layers, where the wiring fans the bumps’ 150 µm out to the balls’ 0.92 mm' } }));
   items.push({ geo: S.fillet, mat: MATS.underfill, name: 'underfill', group: 'underfill', info: { note: 'epoxy wicked under the die after reflow: it locks the bumps, so the die and substrate (which expand differently with heat) do not tear them' } });
-  items.push({ geo: S.bumps, mat: MATS.bump, name: 'solder bump', group: 'bumps', info: { dim: `${Math.round(BUMP.h * 1000)} µm tall, ${Math.round(BUMP.pitch * 1000)} µm pitch (typical C4)`, note: `an area array over the die’s whole face: about ${BUMPS.toLocaleString('en')} at this pitch (drawn only where the cut opens)` } });
+  items.push({ geo: S.bumps, mat: MATS.bump, name: 'solder bump', group: 'bumps', info: { dim: `${Math.round(BUMP.h * 1000)} µm tall, ${Math.round(BUMP.pitch * 1000)} µm pitch (typical C4)`, note: `an area array over the die’s whole face: about ${groupDigits(BUMPS)} at this pitch (drawn only where the cut opens)` } });
   items.push({ geo: bx(-DIE_X / 2, DIE_X / 2, BUMP_TOP, BUMP_TOP + 0.012, -DIE_Z / 2, DIE_Z / 2), mat: MATS.beol, name: 'interconnect', group: 'die', order: 1,
     info: { dim: 'about 10 µm (drawn 12)', note: 'the transistors and their wiring are on this face, looking down at the board' } });
   items.push({ geo: bx(-DIE_X / 2, DIE_X / 2, BUMP_TOP + 0.012, DIE_TOP, -DIE_Z / 2, DIE_Z / 2), mat: MATS.si, name: 'silicon die', group: 'die',
@@ -215,10 +216,10 @@ export function fcModel(st: FcState = {}, detail: 'full' | 'flat' = 'full'): Mod
   ];
   const v = (yaw: number, pitch: number, target: Vec3, dist: number) => ({ yaw, pitch, target, dist });
   const beats: Beat[] = [
-    { title: 'A package on its balls', text: `A 37.5 mm square on ${BALLS.toLocaleString('en')} solder balls at 0.92 mm pitch, under a copper lid: AMD’s Versal VFVC1596, to scale. Nothing on the outside shows the die or how it is wired.`, view: v(0.55, 0.4, [0, 1.5, 0], 70), frame: ['lid', 'substrate', 'balls'], explode: 0, cut: 0, hide: ['heat'] },
+    { title: 'A package on its balls', text: `A 37.5 mm square on ${groupDigits(BALLS)} solder balls at 0.92 mm pitch, under a copper lid: AMD’s Versal VFVC1596, to scale. Nothing on the outside shows the die or how it is wired.`, view: v(0.55, 0.4, [0, 1.5, 0], 70), frame: ['lid', 'substrate', 'balls'], explode: 0, cut: 0, hide: ['heat'] },
     { title: 'Under the lid', text: 'Lift the lid: the die lies on a substrate, its back under a thin thermal interface that the lid presses on. No bond wires anywhere: the die is upside down.', view: v(0.55, 0.62, [0, 3, 0], 60), frame: ['die', 'tim', 'substrate', 'lid'], explode: 1, cut: 0, hide: ['heat'] },
     { title: 'Cut open', text: 'A quarter cut through a ball column. From the top: lid, TIM, the die face down, its bumps in underfill, a substrate of copper planes in dielectric round a core, the balls, the board. Under the die’s middle, where balls are left out, decoupling capacitors.', view: v(0.78, 0.26, [CUT, 1.5, CUT], 30), frame: ['die', 'tim'], explode: 0, cut: 1, hide: ['heat'] },
-    { title: 'A bump beside a ball', text: `One bump is ${Math.round(BUMP.h * 1000)} µm tall at ${Math.round(BUMP.pitch * 1000)} µm pitch, under every part of the die’s face: about ${BUMPS.toLocaleString('en')} of them. The ball below is ${BALL_D} mm across. The SOIC’s bond wire, at 2.8 mm, is forty bumps long: the bump’s inductance is a few hundredths of a nanohenry against the wire’s 3 nH.`, view: v(1.4, 0.1, [CUT, 1.35, ballPos(29) - 0.3], 4.2), explode: 0, cut: 1, labels: false, hide: ['heat'] },
+    { title: 'A bump beside a ball', text: `One bump is ${Math.round(BUMP.h * 1000)} µm tall at ${Math.round(BUMP.pitch * 1000)} µm pitch, under every part of the die’s face: about ${groupDigits(BUMPS)} of them. The ball below is ${BALL_D} mm across. The SOIC’s bond wire, at 2.8 mm, is forty bumps long: the bump’s inductance is a few hundredths of a nanohenry against the wire’s 3 nH.`, view: v(1.4, 0.1, [CUT, 1.35, ballPos(29) - 0.3], 4.2), explode: 0, cut: 1, labels: false, hide: ['heat'] },
     { title: 'Heat goes up', text: 'Most of the power leaves through the die’s back, the TIM and the lid to a heat sink. Each layer adds t / (k·A); the polymer TIM, a twentieth of a millimetre, adds the most. Move the power and read the rise.', view: v(0.55, 0.35, [0, 2.5, 0], 55), frame: ['die', 'tim', 'lid'], explode: 0, cut: 1, hide: [] },
   ];
   return {
