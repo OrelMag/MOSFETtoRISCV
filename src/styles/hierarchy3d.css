@@ -1,5 +1,5 @@
 /* ---------- The memory hierarchy as distances (widgets/hierarchy3dview.ts): materials ---------- */
-.m3d {
+.m3d, .hy3d {
   --hy-ground: light-dark(#d9dde8, #2a2f40);
   --hy-road: light-dark(#8a90a3, #4a5068);
   --hy-tick: light-dark(#3b4254, #c9cfe0);

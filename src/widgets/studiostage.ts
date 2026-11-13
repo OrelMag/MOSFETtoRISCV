@@ -62,6 +62,8 @@ export interface StudioStage {
   refresh(): void;
   /** Ease the camera to a view and make it home (a host's own view buttons; with fit: false). */
   goTo(view: OrbitView): void;
+  /** Put the camera at a view now, without a tween and without making it home (a camera following a moving part). */
+  look(view: OrbitView): void;
   /** `casts`: the set casts shadows (the shadow's fit then takes it in). */
   instances(key: string, geo: Geo, mat: Material, data: Float32Array, casts?: boolean): void;
   /** Parts moved by the physics this frame. */
@@ -479,6 +481,14 @@ export function studioStage(o: StudioStageOptions): StudioStage {
 
   return {
     el, slot, chips, hint, refresh, goTo,
+    look(v: OrbitView) {
+      if (!st) { o.home = v; return; }
+      cancelAnimationFrame(tween); tween = 0;
+      const c = st.camera, lim = c.limits;
+      lim.maxDist = Math.max(lim.maxDist, v.dist * 1.5); lim.minDist = Math.min(lim.minDist, v.dist * 0.5);
+      c.target = [...v.target] as Vec3; c.yaw = v.yaw; c.pitch = v.pitch; c.dist = v.dist;
+      st.invalidate();
+    },
     instances(key, geo, mat, data, casts) { st?.setInstances(key, geo, mat, data, undefined, casts); },
     move(m) { curMoves = m; if (mode === 'flat') drawFlat(); else st?.move(m); },
     studio: () => st,
