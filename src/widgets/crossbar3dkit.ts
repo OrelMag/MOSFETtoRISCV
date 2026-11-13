@@ -163,7 +163,7 @@ export function xbModel(m: Motion, detail: 'full' | 'flat' = 'full'): Model3 {
     { text: 'select bar', p: [-OUTLINE.l / 2 + 60, barY(3), Z.bar], side: 'l', n: [0, 0, 1], on: 'select' },
     { text: 'hold magnets', p: holdMagnetAt(1), side: 'l', n: [0, 0, 1], on: 'magnets' },
     { text: 'holding bar', p: [vx(VERTICALS - 1) - 5.5, levelY(8), Z.hold[1]], side: 'r', n: [0, 0, 1], on: 'hold' },
-    { text: 'crosspoint (spring set)', p: [vx(VERTICALS - 1), levelY(3), 0], side: 'r', n: [0, 0, 1], on: 'springs' },
+    { text: 'spring set', p: [vx(VERTICALS - 1), levelY(3), 0], side: 'r', n: [0, 0, 1], on: 'springs' },
     { text: 'finger', p: tipOf(m, 2, CV), side: 'r', n: [0, 0, 1], on: 'select', minor: true },
   ];
   return { items, anchors, beats: BEATS, look: { exposure: 1.05, keyDir: [-0.4, 0.75, 0.55] } };
