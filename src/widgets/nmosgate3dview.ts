@@ -23,7 +23,7 @@ export function nmosGateView(): Widget {
     onBeat: (i) => { if (i < 0) return; [a, b] = BEAT_INPUTS[i]; if (ready) sync(); },
     build: () => nmosGateModel(a, b),
     aria: 'A two-input NMOS NOR gate in 3D: two pull-down transistors in parallel from the output to ground, a depletion load above them to VDD, in diffusion, polysilicon and aluminium',
-    note: `In micrometres, heights × ${V}. Original geometry, not traced from any chip: a textbook layout to Mead and Conway’s λ rules (Introduction to VLSI Systems, 1980) at λ = ${LAMBDA} µm, an 8 µm gate like the 6502’s 1975 process, so “6502-style”. The circuit is the appendix’s NMOS NOR (ld, n0, n1) and the output is its own rule. Layer thicknesses are typical of the time and illustrative; the glass between the poly and the aluminium is left out so the layers show.`,
+    note: `In micrometres, heights × ${V}. Original geometry, not traced from any chip: a textbook layout to Mead and Conway’s λ rules (Introduction to VLSI Systems, 1980) at λ = ${LAMBDA} µm, an 8 µm gate like the 6502’s 1975 process, so “6502-style”. The circuit is the appendix’s NMOS NOR (ld, n0, n1) and the output is its own rule. Layer thicknesses are typical of the time and illustrative; the glass between the poly and the aluminium is left out so the layers show. Green diffusion, red poly, blue metal and the yellow implant are the layout convention’s colours (Mead and Conway’s plates), not the materials’: aluminium is silver-grey, poly a dull grey-brown.`,
   });
   ready = true;
 
