@@ -152,6 +152,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./strowger3d').then((m) => m.strowger3d()),
   },
   {
+    id: 'crossbar', title: 'The crossbar switch', category: 'comms', chapter: 'exchange', step: 5,
+    summary: 'A Bell System Type B: 200 crosspoints on 30 magnets. Select bars swing fingers to a level, a holding bar traps one, the select lets go.',
+    files: ['crossbar3d', 'crossbar3dview', 'crossbar3dkit'], factory: 'crossbar3d', codex: ['relay'],
+    open: () => import('./crossbar3d').then((m) => m.crossbar3d()),
+  },
+  {
     id: 'speaker', title: 'Loudspeaker and microphone', category: 'dsp', chapter: 'speech', step: 0,
     summary: 'A Dayton RS180-8 cut open: the DAC\'s held samples move the cone; run backwards, the coil makes the microphone\'s millivolts.',
     files: ['speaker3d', 'speaker3dview', 'speaker3dparts', 'speaker3dkit'], factory: 'speaker3d',
