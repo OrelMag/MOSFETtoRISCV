@@ -1808,6 +1808,28 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .hw-tiles { grid-template-columns: 1fr; }
   .hw-inner { padding: 4px 16px 32px; }
 }
+/* A phone (hwstats.ts renderCards): the table becomes two-line cards in a list of its own, only those in view built. */
+.hw-card-wrap[hidden], .hw-table-wrap[hidden] { display: none; }
+.hw-card-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.hw-sort { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text-2); font-size: 13px; }
+.hw-sort label { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.hw-sort-sel { flex: 1; min-width: 0; min-height: 40px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: inherit; }
+.hw-sort-dir { min-height: 40px; white-space: nowrap; }
+.hw-cards { height: min(70vh, 640px); min-height: 320px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+.hw-card { position: relative; padding: 6px 12px 8px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.hw-l1 { display: flex; align-items: center; gap: 6px; min-height: 40px; }
+.hw-l1 .hw-dot { margin: 0 2px; }
+.hw-cname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hw-cname a { color: var(--text); font-weight: 500; text-decoration: none; display: inline-flex; align-items: center; min-height: 40px; }
+.hw-l1 > b { flex: none; font-weight: 600; font-size: 13px; }
+/* two lines held for every card, so they are all one height (the list builds only those in view, by index) */
+.hw-l2 { color: var(--muted); font-size: 12px; line-height: 16px; height: 32px; margin-left: 19px; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+.hw-card .hw-chev { width: 40px; height: 40px; line-height: 40px; text-align: center; flex: none; margin-right: -10px; font-size: 15px; }
+.hw-l2 code { font-family: var(--font-mono); font-size: 11px; margin-right: 6px; }
+.hw-card.hw-member { padding-left: 28px; background: var(--surface-2); }
+.hw-cbar { position: absolute; left: 31px; bottom: 3px; line-height: 0; }
+.hw-cbar .hw-bar { height: 3px; margin: 0; }
+.hw-card-wrap .hw-empty { margin: 0; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {

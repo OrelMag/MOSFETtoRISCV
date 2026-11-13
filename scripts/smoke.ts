@@ -829,6 +829,28 @@ const PLAYER_DRIVE = `(async () => {
   return bad;
 })()`;
 
+// Statistics on a phone (ui/pages/hwstats.ts renderCards): two-line cards of one height, built only in view, a sort select,
+// no sideways scroll, every control 40 px; the desktop table hidden.
+const STATS_PHONE_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (let i = 0; i < 60 && !document.querySelector('.hw-card'); i++) await wait(250);
+  const bad = [];
+  const cards = [...document.querySelectorAll('.hw-card')];
+  if (!cards.length) return ['no cards on a phone'];
+  if (document.querySelector('.hw-table-wrap:not([hidden])')) bad.push('the table shows on a phone');
+  if (cards.length > 60) bad.push(cards.length + ' cards built: the list should build only those in view');
+  const sel = document.querySelector('.hw-sort-sel');
+  if (!sel) bad.push('no Sort by select');
+  else { sel.value = 'period'; sel.dispatchEvent(new Event('change')); await wait(300); }
+  const list = document.querySelector('.hw-cards'); list.scrollTop = list.scrollHeight / 2; await wait(300);
+  const hs = new Set([...document.querySelectorAll('.hw-card')].map((c) => c.offsetHeight));
+  if (hs.size > 1) bad.push('cards of different heights: ' + [...hs].join(', '));
+  const small = [...document.querySelectorAll('.hw-card-wrap button, .hw-card-wrap select, .hw-card a')].filter((b) => b.getBoundingClientRect().height < 39.5);
+  if (small.length) bad.push(small.length + ' controls under 40 px');
+  if (document.querySelector('.hw-page').scrollWidth > innerWidth + 1) bad.push('the page scrolls sideways');
+  return bad;
+})()`;
+
 const PRINT_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
@@ -1421,6 +1443,7 @@ function routes(): Route[] {
   // The default of every workbench family (what the family picker opens first).
   for (const f of families) add(`#/workbench/${f.key(initialParams(f))}`, light);
   add('#/workbench/stats', light);
+  add('#/workbench/stats', light, ` (${phoneVp.name})`, phoneVp, STATS_PHONE_DRIVE);
   add('#/workbench/bench', light);
   add('#/workbench/lab', light);
   // A line opened: its model's panel, not a schematic (widgets/modelleaf.ts).
