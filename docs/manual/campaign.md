@@ -412,8 +412,8 @@ you finish or skip the level that teaches it. With **Unlock all**, every entry s
 1. Click **Codex** in the header.
 2. The left column lists the entries **By act** or **By kind**. Narrow them with **All**, **Components**, **Laws**,
    **Tools**, **Tricks** and **Concepts**, or type in the search box above.
-3. The front page has **Start reading**, a link to the analogy index, and **Next to discover**: what the next level
-   will add.
+3. The front page has **Start reading**, a link to the analogy index, the entries **Recently discovered** (once you
+   have some), **Next to discover** (what the next level will add) and your progress **By act**.
 4. Click an entry to read it. An entry has:
    - a summary, and the level that unlocks it;
    - **Read in**: the chapters that teach it;
