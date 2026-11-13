@@ -1,4 +1,4 @@
-// The memory hierarchy as distances, in 3D (loaded on demand, modelhost.ts). Latencies are widgets/hierarchy3ddata.ts's,
+// The memory hierarchy as distances, in 3D on the studio renderer (loaded on demand, modelhost.ts; drawn by hierarchy3dkit.ts). Latencies are widgets/hierarchy3ddata.ts's,
 // the table above's. The flight is a drawing's time: the courier takes a second or a few however long the access really
 // takes; the elapsed time it shows is the level's latency read off the log scale at the courier's distance.
 
@@ -9,12 +9,12 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import type { OrbitView } from '../gl/camera';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
+import { studioStage } from './studiostage';
+import { hierarchyModel, TOUR_LEVELS } from './hierarchy3dkit';
 import { CORE_GHZ, DEFAULT_HITS, LEVELS, amatCycles, amatShares, type HitRates } from './hierarchy3ddata';
 import {
-  asSeconds, elapsedNs, placeOf, cyclesOf, flightSeconds, fmtNs, followView, hierarchyAnchors, hierarchyParts, levelX, overview, SCALE,
-  type HPalette, type HPose, type Phase,
+  asSeconds, elapsedNs, placeOf, cyclesOf, flightSeconds, fmtNs, followView, levelX, overview, SCALE,
+  type HPose, type Phase,
 } from './hierarchy3dparts';
 
 const mix = (a: OrbitView, b: OrbitView, t: number): OrbitView => ({
@@ -24,40 +24,32 @@ const mix = (a: OrbitView, b: OrbitView, t: number): OrbitView => ({
 const ease = (t: number) => t * t * (3 - 2 * t);
 
 export function hierarchyView(): Widget {
-  let x = 0, phase: Phase = 'idle', target: number | null = null, cam = 0, camGoal = 0, arrived = false;
+  let x = 0, phase: Phase = 'idle', target: number | null = null, cam = 0, camGoal = 0, arrived = false, touring = false, shownKey = '';
   const narrow = () => panel.clientWidth > 0 && panel.clientWidth < 560;
 
   const panel = h('div', { class: 'panel hy3d' });
-  const stage = modelStage(panel, {
-    look: LOOKS.field,
+  const stage = studioStage({
+    home: overview(false),
+    fit: false,
+    // the road is long and low
+    aspect: 2,
+    limits: { minDist: 25, maxDist: 500, maxPan: 200 },
+    // a tour beat sends the courier; the beat's camera is the stage's, so the follow camera stands aside while it plays
+    onBeat: (i) => { touring = i >= 0; const k = i >= 0 ? TOUR_LEVELS[i] : null; if (k === null || k === undefined) toOverview(touring); else go(k); },
+    build: () => hierarchyModel(pose(), narrow()),
     aria: 'The memory hierarchy as distances in 3D: a core, then along a road a desk, a shelf, a library, a warehouse across town and another city, each at a distance that is its latency on a log scale, and a courier that fetches data from the level you pick',
-    camera: overview(false),
-    limits: { minDist: 25, maxDist: 500 },
     note: 'Distance is the latency on a log scale (20 units per factor of ten), not a straight one: on a straight scale the SSD would be 80 000 times as far as L1. The flight is a drawing: it takes a second or a few, not the access’s real time; the clock on it counts a round trip (half the latency at the far end, the rest on the way back). The hit-rate sliders use the table’s latencies in cycles; hit rates are each level’s own, of the requests that reach it. Block sizes are not capacities. L1 and L2 follow the Golden Cove / Willow Cove measurements and the SSD a NAND page read, so they are orders of magnitude that vary by product.',
-    draw: () => paint(),
   });
-  const palette = (): HPalette => ({
-    ground: stage.rgb('--hy-ground'), road: stage.rgb('--hy-road'), tick: stage.rgb('--hy-tick'), wood: stage.rgb('--hy-wood'), shelf: stage.rgb('--hy-shelf'),
-    wall: stage.rgb('--hy-wall'), roof: stage.rgb('--hy-roof'), door: stage.rgb('--hy-door'), core: stage.rgb('--hy-core'), metal: stage.rgb('--m3-metal'),
-    mark: stage.rgb('--hy-mark'), live: stage.rgb('--m3-charge'), courier: stage.rgb('--hy-courier'),
-  });
-  const pose = (): HPose => ({ x, phase, target });
+  function pose(): HPose { return { x, phase, target }; }
   const home = () => overview(narrow());
   function applyCamera(): void {
-    if (stage.isFlat()) return; // one fixed view
-    stage.setView(cam <= 0 ? home() : mix(home(), followView(x), ease(cam)));
+    if (stage.isFlat() || touring) return; // one fixed view; the tour moves its own camera
+    stage.look(cam <= 0 ? home() : mix(home(), followView(x), ease(cam)));
   }
-  /** A label whose box would cross the canvas edge is hidden, not cut. */
-  function keepLabelsIn(): void {
-    const box = stage.el.getBoundingClientRect();
-    for (const l of stage.el.querySelectorAll<HTMLElement>('.r3-lbl')) {
-      const r = (l.querySelector('b') ?? l).getBoundingClientRect();
-      l.style.visibility = r.width > 0 && (r.left < box.left + 2 || r.right > box.right - 2 || r.top < box.top + 2 || r.bottom > box.bottom - 2) ? 'hidden' : '';
-    }
-  }
+  /** Rebuild when what is drawn changed: the courier moved, a crate lit, the flag turned. */
   function paint(): void {
-    stage.paint(hierarchyParts(pose(), palette()), hierarchyAnchors(narrow()));
-    requestAnimationFrame(keepLabelsIn); // after the renderer has placed them
+    const key = `${x.toFixed(3)} ${phase} ${target} ${narrow()}`;
+    if (key !== shownKey) { shownKey = key; stage.refresh(); }
   }
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' });
@@ -114,9 +106,9 @@ export function hierarchyView(): Widget {
     live.textContent = '';
     readout(); loop.kick();
   }
-  function toOverview(): void {
+  function toOverview(keepCamera = false): void {
     phase = 'idle'; arrived = false; target = null; x = 0; camGoal = 0;
-    if (reducedMotion()) cam = 0;
+    if (reducedMotion() || keepCamera) cam = 0;
     live.textContent = '';
     applyCamera(); readout(); paint(); loop.kick();
   }
@@ -126,7 +118,8 @@ export function hierarchyView(): Widget {
     b.addEventListener('click', () => go(k));
     return b;
   });
-  stage.resetBtn.addEventListener('click', toOverview);
+  const back = h('button', { type: 'button', class: 'btn sm' }, 'Back to the core');
+  back.addEventListener('click', () => toOverview());
 
   // Hit rates: the lesson of the step. Local rates (of the requests that reach a level), AMAT over the table's own latencies.
   const hits: HitRates = { ...DEFAULT_HITS };
@@ -154,14 +147,18 @@ export function hierarchyView(): Widget {
     h('p', { class: 'm3-sub' }, 'The registers are in the core itself. What you use now is on the desk (L1), this week’s work on a shelf (L2), the department’s in the library (L3), and everything else in a warehouse across town (DRAM); the SSD is another city. Each place sits as far from the core as its latency, on a log scale with the table’s own figures. Pick the level where the data is and a courier goes out to it and comes back with the time on the clock; the camera follows.'),
     h('div', { class: 'r3' },
       h('div', { class: 'r3-main' },
-        h('div', { class: 'r3-ctl' }, h('div', { class: 'hy-btns', role: 'group', 'aria-label': 'Where the data is' }, h('span', { class: 'hy-lbl' }, 'Hit in'), ...btns, stage.resetBtn)),
+        h('div', { class: 'r3-ctl' }, h('div', { class: 'hy-btns', role: 'group', 'aria-label': 'Where the data is' }, h('span', { class: 'hy-lbl' }, 'Hit in'), ...btns, back)),
         stage.el,
         h('div', { class: 'r3-ctl hy-rates' }, h('span', { class: 'hy-lbl' }, 'Hit rate (of the requests that reach it)'), rate('L1', 'l1'), rate('L2', 'l2'), rate('L3', 'l3')),
-        stage.hint, live),
+        live),
       h('div', { class: 'r3-side' }, h('h4', null, 'This access ', h('span', { class: 'r3-badge' }, 'model')), kv,
         h('h4', null, 'Average over many loads'), amatKv, amatLive)));
   amatOut();
   readout();
   paint();
-  return { el: panel, destroy() { loop.stop(); stage.destroy(); } };
+  // the home view depends on the width (a phone stands further back): re-home when it crosses the line
+  let wasNarrow = false;
+  const ro = new ResizeObserver(() => { const n = narrow(); if (n !== wasNarrow) { wasNarrow = n; shownKey = ''; stage.goTo(home()); paint(); } });
+  ro.observe(panel);
+  return { el: panel, destroy() { ro.disconnect(); loop.stop(); stage.destroy(); } };
 }
