@@ -28,7 +28,7 @@ const mk = (m: Material): Material => M.make(m);
 export const MATS = {
   frame: mk({ base: [0.42, 0.44, 0.46], metal: 0.3, rough: 0.55, coat: 0.3, label: 'cast frame, grey enamel' }),
   steel: mk({ ...M.steel, label: 'hardened steel' }),
-  cam: mk({ ...M.steel, rough: 0.25, label: 'selector cam: hardened steel, one notch' }),
+  cam: mk({ base: [0.6, 0.62, 0.64], metal: 0.55, rough: 0.42, coat: 0.25, label: 'selector cam: oiled steel, one notch' }),
   lever: mk({ base: [0.62, 0.63, 0.65], metal: 0.9, rough: 0.35, label: 'selector lever (follower)' }),
   brass: mk({ ...M.brass, label: 'brass' }),
   push: mk({ ...M.brass, label: 'push lever: holds the level it read' }),
@@ -126,6 +126,9 @@ function statics(): Statics {
 
 // ---------------------------------------------------------------- the model
 
+/** No dimension of the 33's selector was found: what the hover cards say instead of a size. */
+const DRAWN = 'proportions drawn, not measured';
+
 export const TT_HOME: OrbitView = { target: [24, 48, -14], yaw: 0.55, pitch: 0.38, dist: 230 };
 /** The tour's moments: transmitter time (units since the start edge) and clock error. */
 export const TOUR = [
@@ -135,7 +138,7 @@ export const TOUR = [
 export function teletypeModel(p: TtyPose): Model3 {
   const S = statics(), items: Item[] = [];
   const add = (geo: Geo, mat: Material, name: string, group: string, extra: Partial<Item> = {}) => items.push({ geo, mat, name, group, ...extra });
-  add(S.frame, MATS.frame, 'frame', 'frame', { cut: 'none' });
+  add(S.frame, MATS.frame, 'frame', 'frame', { cut: 'none', info: { dim: DRAWN } });
   add(merge([S.shaft, plateX(gearOutline(p.shaft), GEAR_X, 6, SHAFT_Y, 0)], 'drive'), MATS.steel, 'main shaft', 'drive', { info: { note: 'turned by the motor all the time the machine is on' } });
   add(merge([S.drum, S.spring], 'clutch'), p.clutch ? MATS.clutchOn : MATS.brass, 'clutch', 'drive', { info: { note: p.clutch ? 'engaged: the sleeve turns with the shaft for one revolution' : 'held by the trip pawl: the shaft turns, the sleeve does not' } });
   // the clutch's shoe lug turns with the sleeve; the trip pawl stands in its way until the start lever lifts it
@@ -149,7 +152,7 @@ export function teletypeModel(p: TtyPose): Model3 {
   // the sleeve and its cams
   const cams = Array.from({ length: TTY33.data }, (_, i) => plateX(camOutline(i, p.sleeve), camX(i) - CAM_T / 2, CAM_T, SHAFT_Y, 0));
   add(S.sleeve, MATS.steel, 'cam sleeve', 'sleeve', { info: { note: `one revolution in ${REV_UNITS} units of its own clock, a little less than the ${TTY33.data + 3}-unit character` } });
-  add(merge(cams, 'cams'), MATS.cam, 'selector cams', 'sleeve', { info: { note: 'one notch each, offset round the sleeve: notch i meets its lever in the middle of data unit i' } });
+  add(merge(cams, 'cams'), MATS.cam, 'selector cams', 'sleeve', { info: { dim: DRAWN, note: 'one notch each, offset round the sleeve: notch i meets its lever in the middle of data unit i' } });
   // followers, push levers, the pivot rod
   const levers: Geo[] = [], push: Geo[] = [], pushSet: Geo[] = [];
   for (let i = 0; i < TTY33.data; i++) {
