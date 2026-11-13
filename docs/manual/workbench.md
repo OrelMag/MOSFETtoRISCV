@@ -1,6 +1,6 @@
 # The workbench
 
-[← Manual](README.md)
+[← Back to the manual](README.md)
 
 ## What it is for
 
@@ -79,7 +79,7 @@ of this page covers every control.
 ![The workbench screen](img/workbench/02-workbench.png)
 
 - **Top bar.** **My path**, **Chapters**, **Campaign**, **Workbench** and **Sandbox** take you to the other
-  sections. The search button (Ctrl K) is on the right. **HEX / BIN / DEC** sets how values are written everywhere on
+  sections. The search button (**Ctrl K**) is on the right. **HEX / BIN / DEC** sets how values are written everywhere on
   the page. **Slow motion** draws every change as it travels, one gate delay at a time. Then View options and the
   theme switch.
 - **Left pane: four tabs.**
@@ -224,7 +224,7 @@ On a touch screen, pinch with two fingers to zoom and open, and drag with one to
 
 ### Colour the circuit by a quantity (Overlay)
 
-1. In the **Overlay** menu on the bar, choose one of **Slack**, **Activity**, **Load**, **Unknown**, **Cost**,
+1. In the **Overlay: off** drop-down on the bar, choose one of **Slack**, **Activity**, **Load**, **Unknown**, **Cost**,
    **Energy** or **Depth**. The whole circuit is coloured by it, with a key.
    - **Slack** shows how much later each part's slowest path could be before the whole part got slower: parts on the
     critical path are red. The key in the corner explains the colours and counts the parts in each.
@@ -236,7 +236,7 @@ On a touch screen, pinch with two fingers to zoom and open, and drag with one to
 
 ### Use a part's menu (right-click)
 
-Right-click a part (or select it and press the Menu key, or Shift F10) for everything about it:
+Right-click a part (or select it and press the **Menu** key, or **Shift F10**) for everything about it:
 - **Look inside**: the same as a double-click.
 - **Inspect**: its datasheet and cost in the inspector.
 - **Measure ▸**
@@ -265,9 +265,9 @@ Right-click empty space for the same menus about the whole level.
 
 1. Drag a part or a wire to move it. Shift-click or drag a box around several parts to move them together. **Ctrl Z**
    undoes and **Ctrl Y** redoes. Your arrangement is kept for that part on this computer.
-2. **Layout** (the four arrows) opens a menu: **Undo** (Ctrl+Z) and **Reset layout**, which puts this level back as it
-   was first drawn (wire colours you picked stay). On a level drawn with named pointers it also offers to unravel
-   them into wires.
+2. **Layout** (the four arrows) opens a menu. Before you have moved anything it only explains how to move parts; once
+   you have, it offers **Undo** (**Ctrl Z**) and **Reset layout**, which puts this level back as it was first drawn
+   (wire colours you picked stay).
 3. **Lock the layout** (the padlock) stops drags from moving anything: a drag then moves the view.
 
 Moving parts changes only the drawing, never the circuit.
@@ -324,17 +324,17 @@ Click **Statistics** in the left pane. **Hardware statistics** lists every part:
 - levels;
 - boxes inside.
 
-Use the tabs to see it built in **CMOS**, **Relays** or **Tubes**. Click a column heading to sort by it (click
-**Transistors**, and the largest parts come first).
+Use the tabs to see it built in **CMOS**, **Relays** or **Tubes**. Click a column heading to sort by it; the table
+starts sorted by **NAND gates**. Click a name to open that part on the workbench.
 
 ![Hardware statistics](img/workbench/20-statistics.png)
 
 ### Compare the processors (Benchmarks)
 
 Click **Benchmarks**.
-- **Speed against cost** plots every processor in the site against the same programs: Fibonacci, insertion sort,
-  matrix multiply, CRC-32 and more.
-- The switches above it choose what is measured: **Cost**, **Energy**, **Time**, **Cycles**, **CPI**.
+- **Speed against cost** plots every processor in the site: its mean time on the same programs (Fibonacci, insertion
+  sort, matrix multiply and more) against its size in NAND gates. Down and left is better.
+- The **Cost** and **Energy** switches above it change what the plot shows.
 - The table below gives each processor's NAND gates, clock period and its result on each program.
 
 ![Benchmarks: speed against cost](img/workbench/21-benchmarks.png)
@@ -419,3 +419,5 @@ On a phone the page stacks up:
   move.
 - **I zoomed in, stepped into a block, and zooming out does not bring me back.** Zooming out closes opened blocks
   but does not leave the level you stepped into. Press **Esc**, or click a name in the path above the circuit.
+
+Next: [The sandbox](sandbox.md)
