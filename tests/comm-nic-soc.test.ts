@@ -10,7 +10,7 @@ import { busComputer, type SocOptions } from '../src/lib/soc';
 import { assemble } from '../src/riscv/asm';
 import { ISS } from '../src/riscv/iss';
 import { NIC_COSTS, nicIrqSource, nicPollSource } from '../src/riscv/nicprograms';
-import { flatten } from '../src/sim/flatten';
+import { flatten, signalBits } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { pack } from '../src/sim/values';
 import { NIC_OUTS } from './nickit';
@@ -32,7 +32,7 @@ function build(src: string, lock: boolean) {
   const iss = new ISS(program, { system: true, imemWords: 2 ** IMEM_K, bus });
   const root = sim.design.root, nicNode = root.children!.get('nic')!, rf = root.children!.get('cpu')!.children!.get('rf')!;
   const out = (p: string) => pack(sim.getBits(root.ports[p]));
-  const np = (p: string) => pack(sim.getBits(nicNode.ports[p])) >>> 0;
+  const np = (p: string) => pack(sim.getBits(signalBits(nicNode, p)!)) >>> 0;
   const reg = (i: number) => (i === 0 ? 0 : pack(sim.getBits(rf.children!.get(`w${i}`)!.ports.q)) >>> 0);
   const IN_PORTS = ['awvalid', 'awaddr', 'wvalid', 'wdata', 'wstrb', 'bready', 'arvalid', 'araddr', 'rready', 'm_awready', 'm_wready', 'm_bvalid', 'm_arready', 'm_rvalid', 'm_rdata', 'rxd', 'crs'] as const;
   let c = 0, retired = 0, irqAt = -1;

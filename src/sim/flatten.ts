@@ -409,3 +409,20 @@ export function findNode(root: HierNode, path: readonly string[]): HierNode | nu
   }
   return n;
 }
+
+/**
+ * A signal of a node by name: its port's bits, else (an expanded node) the bits of the net its netlist names so. A part with its
+ * bus link packed (lib/axi.ts bundled) has `req` / `rsp` ports and keeps `awvalid` … as named nets inside.
+ */
+export function signalBits(node: HierNode, name: string): number[] | undefined {
+  const p = node.ports[name];
+  if (p) return p;
+  if (!node.nets) return undefined;
+  const nets = netlistOf(node.def)?.nets ?? [], end = innerSignals.get(node.def)?.get(name);
+  // by the end a definition registered for it (several signals on one net: one name only), else by the net's name
+  const i = end ? nets.findIndex((n) => n.ends.includes(end)) : nets.findIndex((n) => n.name === name);
+  return i >= 0 ? node.nets[i] : undefined;
+}
+
+/** Signals a definition carries inside, by the end of its netlist each sits on (a bus-packed part's `awvalid` → its splitter's output). */
+export const innerSignals = new WeakMap<ComponentDef, ReadonlyMap<string, string>>();

@@ -14,7 +14,7 @@ import { lanSoc } from '../src/lib/lan';
 import { stats } from '../src/sim/stats';
 import { LAN_SWITCH } from '../src/lib/lan';
 import { DualSim } from '../src/sim/dualsim';
-import { flatten } from '../src/sim/flatten';
+import { flatten, signalBits, type HierNode } from '../src/sim/flatten';
 import { pack } from '../src/sim/values';
 
 export interface Cost { instr: number; clocks: number; loads: number; stores: number }
@@ -84,7 +84,7 @@ export async function measureLan(pings = 1, tick: () => Promise<void> = async ()
   const node = (c: 'a' | 'b', n: string) => root.children!.get(c)!.children!.get(n)!;
   const cpu = { a: node('a', 'cpu'), b: node('b', 'cpu') };
   const nicN = { a: node('a', 'nic'), b: node('b', 'nic') };
-  const get = (n: { ports: Record<string, number[]> }, p: string) => pack(sim.getBits(n.ports[p]));
+  const get = (n: HierNode, p: string) => pack(sim.getBits(signalBits(n, p)!));
   const layers = { a: {} as Record<string, Cost>, b: {} as Record<string, Cost> };
   const functions = { a: {} as Record<string, Cost>, b: {} as Record<string, Cost> };
   const dma = { a: { reads: 0, writes: 0 }, b: { reads: 0, writes: 0 } };
