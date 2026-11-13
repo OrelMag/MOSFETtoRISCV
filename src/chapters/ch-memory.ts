@@ -1011,8 +1011,8 @@ export const chMemory: Chapter = {
     {
       title: 'Read-only memory',
       body: `
-        <p>If the contents never change, the flip-flops can go. <span data-show="u0">A decoder</span> raises one word line; output bit j is
-        <span data-show="u1 u3 u4 u5 u6 u7 u8">the OR of the word lines</span>
+        <p>If the contents never change, the flip-flops can go. <span data-show="dec">A decoder</span> raises one word line; output bit j is
+        <span data-show="b0 b2 b3 b4 b5 b6 b7">the OR of the word lines</span>
         of every word whose bit j is 1. The data is in the wiring. Mask ROMs were made exactly like this, the pattern set by one metal layer;
         a fuse PROM (programmable ROM) blows the unwanted connections once; flash keeps the same array but stores each connection as charge, so it can be rewritten.</p>
         <p>This one holds the squares of 0–15. The CPU's instruction memory in <a href="#/c/cpu/0">chapter ${numOf('cpu')}</a> is a ROM too (built there from constants and a
@@ -1022,7 +1022,7 @@ export const chMemory: Chapter = {
         <div class="try">Set addr = 7: data = 0x31 = 49. Open the decoder, then one of the OR gates, and count its inputs.</div>`,
       tour: {
         beats: [
-          { title: 'Address 3', set: { addr: 3 }, show: ['u0'], expect: { data: 9 },
+          { title: 'Address 3', set: { addr: 3 }, show: ['dec'], expect: { data: 9 },
             say: '<p>addr = 3: the decoder raises word line 3, and each output bit ORs the lines of the words that have it set. data = {v:data} = {b:data}: 3² = 9.</p>' },
           { title: 'Address 7', set: { addr: 7 }, expect: { data: 49 },
             say: '<p>addr = 7: data = {v:data} = {b:data}. Seven squared, from wiring alone.</p>' },

@@ -10,7 +10,7 @@ import { addSub, andN, busMux2, decoder, equal, incrementer } from './combinatio
 import { priorityEncoder } from './coding';
 import { define, merger, ones, splitter } from './define';
 import { LiteralRails } from './rails';
-import { symbolGeom } from '../sim/geometry';
+import { instPort, orientGeom, symbolGeom, type Vec } from '../sim/geometry';
 import { AND, NOT, OR, XOR } from './gates';
 import { readPort } from './regfile';
 import { register } from './sequential';
@@ -27,8 +27,6 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
   if (!d) cache.set(key, (d = f()));
   return d;
 }
-const orOf = (b: Builder, drivers: string[], label?: string): string =>
-  drivers.length === 0 ? b.op1(TIE0, []) : drivers.length === 1 ? drivers[0] : b.op1(drivers.length === 2 ? OR : orN(drivers.length), drivers, label);
 
 // ---- tables ---------------------------------------------------------------------------------------------
 
@@ -51,21 +49,65 @@ export const ROM_PRESETS: Record<string, RomPreset> = {
 export function romArray(preset: keyof typeof ROM_PRESETS): ComponentDef {
   const P = ROM_PRESETS[preset];
   return memo(`rom_${preset}`, () => {
-    const b = new Builder(10, 14);
-    b.pins('addr');
-    const dec = b.op(decoder(P.k), ['addr'], 'word lines');
-    b.next();
-    const bits = Array.from({ length: P.w }, (_, j) => orOf(b, P.data.map((v, i) => ((v >> j) & 1 ? `${dec}.y${i}` : '')).filter(Boolean), `bit ${j}`));
-    b.next();
-    b.wire(b.op1(merger(ones(P.w)), bits), 'data');
-    const R = b.right;
+    // Drawn as the matrix it is: the decoder's word lines run across, each output bit's OR stands turned below them with its
+    // inputs facing up, and every 1 in the contents is a drop from a word line (its dot) to that OR. A crossing without a dot is
+    // a 0. (Drawn by the Builder, the 112 connections were pointers in a column: rom_seg7 3.3 px a unit at fit.)
+    const dec = decoder(P.k), D: Vec = [6, 0];
+    const yOf = (i: number) => instPort(dec, D, false, `y${i}`).pos[1];
+    const top = Math.max(...P.data.map((_, i) => yOf(i))) + 3;
+    const instances: InstanceDef[] = [{ name: 'dec', def: dec, at: D, label: 'word lines' }];
+    const nets: NetDef[] = [{ name: 'addr', ends: ['addr', 'dec.a'] }];
+    const word = new Map<number, NetDef>();
+    // each bit's driver and the x its wire comes down at (a bit set in one word only is that word line: no x)
+    const bits: { end: string; x?: number; word?: number }[] = [];
+    let x = D[0] + symbolGeom(dec).w + 6, bottom = top;
+    for (let j = 0; j < P.w; j++) {
+      const on = P.data.map((v, i) => ((v >> j) & 1 ? i : -1)).filter((i) => i >= 0);
+      const name = `b${j}`;
+      const drop = (wi: number, end: string, px: number) => {
+        let n = word.get(wi);
+        if (!n) word.set(wi, (n = { name: `w${wi}`, ends: [`dec.y${wi}`], via: {} }));
+        n.ends.push(end);
+        n.via![end] = [[px, yOf(wi)]];
+      };
+      if (on.length < 2) {
+        // no 1 in this bit: a tie cell; one: the word line itself is the bit
+        if (!on.length) {
+          instances.push({ name, def: TIE0, at: [x, top], rot: 1, label: `bit ${j}` });
+          bits.push({ end: `${name}.y`, x: instPort(TIE0, [x, top], false, 'y', 1).pos[0] });
+          x += orientGeom(TIE0, false, 1).w + 4;
+        } else bits.push({ end: `dec.y${on[0]}`, word: on[0] });
+        continue;
+      }
+      const o = on.length === 2 ? OR : orN(on.length), g = orientGeom(o, false, 1);
+      instances.push({ name, def: o, at: [x, top], rot: 1, label: `bit ${j}` });
+      // left to right in word order, so the drops nest instead of crossing each other
+      const ins = on.map((_, q) => [instPort(o, [x, top], false, o === OR ? 'ab'[q] : `i${q}`, 1).pos[0], q] as const).sort((p, r) => p[0] - r[0]);
+      on.forEach((wi, n) => drop(wi, `${name}.${o === OR ? 'ab'[ins[n][1]] : `i${ins[n][1]}`}`, ins[n][0]));
+      bits.push({ end: `${name}.y`, x: instPort(o, [x, top], false, 'y', 1).pos[0] });
+      bottom = Math.max(bottom, top + g.h);
+      x += g.w + 4;
+    }
+    const mg = merger(ones(P.w)), M: Vec = [x + 2, bottom + 4];
+    // mirrored and turned half round: bit 0 enters at the bottom, so each bit's wire turns under the ones to its right, never across
+    instances.push({ name: 'mg', def: mg, at: M, flip: true, rot: 2 });
+    bits.forEach((b, j) => {
+      const end = `mg.i${j}`, y = instPort(mg, M, true, `i${j}`, 2).pos[1];
+      const n = b.word === undefined ? undefined : word.get(b.word);
+      if (n) n.ends.push(end);
+      else nets.push({ ends: [b.end, end], ...(b.x === undefined ? {} : { via: { [end]: [[b.x, y]] } }) });
+    });
+    nets.push(...[...word.keys()].sort((p, r) => p - r).map((k) => word.get(k)!));
+    nets.push({ name: 'data', ends: ['mg.out', 'data'] });
+    const R = M[0] + orientGeom(mg, true, 2).w + 4, dy = instPort(mg, M, true, 'out', 2).pos[1];
+    const ay = instPort(dec, D, false, 'a').pos[1];
     return define({
       id: `rom_${preset}`, name: `ROM: ${P.name}`, category: 'memory',
       summary: `${2 ** P.k} words × ${P.w} bits. A ${P.k}→${2 ** P.k} decoder raises one word line; output bit j is the OR of the word lines whose word has bit j set. Changing the contents means rewiring the OR plane: mask ROMs were set by the last metal layer.`,
       ports: [bus('addr', P.k, 'in'), bus('data', P.w, 'out')],
       symbol: { kind: 'box', label: 'ROM' },
       spec: ([a]) => [P.data[a]],
-      netlist: () => ({ pins: { addr: [0, 6], data: [R, 6] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { addr: [0, ay], data: [R, dy] }, instances, nets }),
       hdl: { verilog: `always_comb case (addr)\n${P.data.map((v, i) => `  ${P.k}'d${i}: data = ${P.w}'h${v.toString(16)};`).join('\n')}\nendcase` },
     });
   });

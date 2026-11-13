@@ -118,6 +118,11 @@ export function romComposer(ce: CodeEditor, body: HTMLElement, toast: (m: string
     });
     body.append(pane);
     body.classList.add('composing');
+    // the pane scrolls (the immediate's wiring strip is often below its edge): a fade at the bottom while there is more
+    const p = pane, more = () => p.classList.toggle('more', p.scrollHeight - p.scrollTop > p.clientHeight + 2);
+    p.addEventListener('scroll', more, { passive: true });
+    new ResizeObserver(more).observe(p);
+    more();
     ce.reveal(n);
     cmp.focus();
   };

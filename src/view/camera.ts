@@ -164,6 +164,21 @@ export function underCover(vb: ViewBox, bbox: ViewBox, width: number, height: nu
 }
 
 /**
+ * The least pan (never a zoom) that brings `targets` into `vb` with `margin` grid units to spare: `vb` unchanged
+ * when they are all in view already. A union taller or wider than the view keeps its top / left edge in view.
+ * The test player opening under the sandbox's canvas uses it to keep the failing pins on screen.
+ */
+export function panToShow(vb: ViewBox, targets: Rect[], margin = 2): ViewBox {
+  if (!targets.length) return vb;
+  const x0 = Math.min(...targets.map((r) => r.x)) - margin, y0 = Math.min(...targets.map((r) => r.y)) - margin;
+  const x1 = Math.max(...targets.map((r) => r.x + r.w)) + margin, y1 = Math.max(...targets.map((r) => r.y + r.h)) + margin;
+  const along = (v: number, len: number, lo: number, hi: number): number =>
+    hi - lo > len || lo < v ? lo : hi > v + len ? hi - len : v;
+  const x = along(vb.x, vb.w, x0, x1), y = along(vb.y, vb.h, y0, y1);
+  return x === vb.x && y === vb.y ? vb : { ...vb, x, y };
+}
+
+/**
  * On a touch screen the sandbox shows a small circuit at no fewer than this many px per grid unit: a NAND
  * (4 units) 64 px wide, a pin's knob 26 px, inputs 2 units apart 32 px apart, so a finger can hit them.
  */

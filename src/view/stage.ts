@@ -199,6 +199,9 @@ function clipWhileMeasuring(el: HTMLElement, measure: () => void): void {
   }
 }
 
+/** How long the stage bar ignores clicks after a level change (a double tap is two taps within ~300 ms). */
+export const BAR_QUIET_MS = 350;
+
 export class Stage {
   readonly el: HTMLElement;
   readonly inspector: Inspector;
@@ -339,6 +342,9 @@ export class Stage {
   /** A chip (or a board's module) opened from the boards: its board beside its inside (Stage.syncDrill). */
   private drill: BbDrill | null = null;
   private drillFold = false;
+  /** Clicks on the stage bar are swallowed until then: after a level change the bar re-lays out, and the second tap of a
+   *  double tap that drilled would land on whichever button moved under the finger (Probe, Timing: R-3). */
+  private barQuietUntil = 0;
   /** The panels the drill folded (unfolded again when it ends). */
   private drillFolded: HTMLElement[] = [];
   /** The learner's fold choice on the right when the drill folded the panels (a different one at the end: theirs stands). */
@@ -513,6 +519,7 @@ export class Stage {
       this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, lockBtn, this.probeBtn, this.whyBtn, this.ovBar.el, this.timingBtn, moreWrap,
       upBtn, readBtn, zoomOut, zoomIn, fitBtn,
       this.panesBtn);
+    bar.addEventListener('click', (e) => { if (performance.now() < this.barQuietUntil) { e.stopPropagation(); e.preventDefault(); } }, true);
     this.canvas = h('div', { class: 'canvas' });
     this.levelBadge = h('div', { class: 'level-badge' });
     this.layoutPill = h('div', { class: 'layout-pill sch-only', hidden: true, role: 'status' });
@@ -1038,6 +1045,7 @@ export class Stage {
     this.lens?.levelChanged(path);
     this.lens?.lit(this.litFor(path));
     if (!this.rootCtx) return;
+    this.barQuietUntil = performance.now() + BAR_QUIET_MS;
     this.closeLeaf();
     let ctx = this.rootCtx;
     let leafName: string | null = null;

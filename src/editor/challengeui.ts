@@ -458,6 +458,8 @@ class ChallengeUi {
     const p = new TestPlayer(this.ed, ch, set, r, () => { this.closePlayer(); this.version++; this.render(); });
     this.player = p;
     this.playerPins = this.inputsKey();
+    // the canvas loses the player's height: keep the view where it is, panning only to keep the failing pins in sight
+    this.ed.holdView(() => (this.player === p ? p.failingPins() : []));
     p.goto(k);
     this.version++;
     this.render();
@@ -468,6 +470,7 @@ class ChallengeUi {
     if (!p) return;
     this.player = null;
     p.close();
+    this.ed.releaseView();
   }
 
   /** A campaign level's tips (one at a time) and its way back / onward. */

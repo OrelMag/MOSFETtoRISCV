@@ -877,6 +877,59 @@ const ANALOGY_DRIVE = `(async () => {
  * left waiting), that the dialog was asked for exactly once (window.print is stubbed for every route: see visit()), and that a
  * wrong theme did not leak into the sheet (the page behind keeps the learner's own).
  */
+// A failing Check opens the test player under the canvas: the view keeps its corner and scale (it may pan to show the
+// failing pins, never zoom), and closing the player fits an untouched view again (editor.ts holdView / releaseView).
+const PLAYER_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const c = document.querySelector('.sb-canvas'), svg = c && c.querySelector('svg');
+  if (!svg) return ['no canvas'];
+  const px = () => c.clientWidth / +svg.getAttribute('viewBox').split(' ')[2];
+  const before = px(), vb0 = svg.getAttribute('viewBox'), size = () => c.clientWidth + '×' + c.clientHeight, size0 = size();
+  const check = [...document.querySelectorAll('button')].find((b) => /^Check/.test(b.textContent.trim()) && b.offsetParent);
+  if (!check) return ['no Check button'];
+  check.click(); await wait(2500);
+  const bad = [];
+  if (!document.querySelector('[data-chal=player]')) return ['an empty circuit failed nothing: no test player'];
+  if (Math.abs(px() - before) > 1e-3 * before) bad.push('the scale changed when the test player opened: ' + before.toFixed(3) + ' → ' + px().toFixed(3) + ' px a unit');
+  // t_inv's pins stay in view above the player, so nothing pans either: the corner is where it was
+  const corner = (v) => v.split(' ').slice(0, 2).map((n) => (+n).toFixed(3)).join(' ');
+  if (corner(svg.getAttribute('viewBox')) !== corner(vb0)) bad.push('the view moved when the test player opened: ' + corner(vb0) + ' → ' + corner(svg.getAttribute('viewBox')));
+  const close = document.querySelector('[data-chal=player] [data-tp=close]');
+  if (close) {
+    close.click(); await wait(1500);
+    // fitted again: what Fit to view gives now (the strip may have grown with the result, so not always vb0)
+    const vb1 = svg.getAttribute('viewBox'), r = c.getBoundingClientRect();
+    svg.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 4, clientY: r.top + 4, button: 2 }));
+    await wait(300);
+    const fit = [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Fit to view/.test(m.textContent.trim()));
+    if (!fit) bad.push('no Fit to view in the canvas menu');
+    else { fit.click(); await wait(500); if (svg.getAttribute('viewBox') !== vb1) bad.push('closing the player did not fit the view again: ' + vb1 + ' in ' + size() + ', fitted ' + svg.getAttribute('viewBox') + ' (opened at ' + vb0 + ' in ' + size0 + ')'); }
+  }
+  return bad;
+})()`;
+
+// Statistics on a phone (ui/pages/hwstats.ts renderCards): two-line cards of one height, built only in view, a sort select,
+// no sideways scroll, every control 40 px; the desktop table hidden.
+const STATS_PHONE_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (let i = 0; i < 60 && !document.querySelector('.hw-card'); i++) await wait(250);
+  const bad = [];
+  const cards = [...document.querySelectorAll('.hw-card')];
+  if (!cards.length) return ['no cards on a phone'];
+  if (document.querySelector('.hw-table-wrap:not([hidden])')) bad.push('the table shows on a phone');
+  if (cards.length > 60) bad.push(cards.length + ' cards built: the list should build only those in view');
+  const sel = document.querySelector('.hw-sort-sel');
+  if (!sel) bad.push('no Sort by select');
+  else { sel.value = 'period'; sel.dispatchEvent(new Event('change')); await wait(300); }
+  const list = document.querySelector('.hw-cards'); list.scrollTop = list.scrollHeight / 2; await wait(300);
+  const hs = new Set([...document.querySelectorAll('.hw-card')].map((c) => c.offsetHeight));
+  if (hs.size > 1) bad.push('cards of different heights: ' + [...hs].join(', '));
+  const small = [...document.querySelectorAll('.hw-card-wrap button, .hw-card-wrap select, .hw-card a')].filter((b) => b.getBoundingClientRect().height < 39.5);
+  if (small.length) bad.push(small.length + ' controls under 40 px');
+  if (document.querySelector('.hw-page').scrollWidth > innerWidth + 1) bad.push('the page scrolls sideways');
+  return bad;
+})()`;
+
 const PRINT_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
@@ -1480,6 +1533,7 @@ function routes(): Route[] {
   // The default of every workbench family (what the family picker opens first).
   for (const f of families) add(`#/workbench/${f.key(initialParams(f))}`, light);
   add('#/workbench/stats', light);
+  add('#/workbench/stats', light, ` (${phoneVp.name})`, phoneVp, STATS_PHONE_DRIVE);
   add('#/workbench/bench', light);
   add('#/workbench/lab', light);
   // A line opened: its model's panel, not a schematic (widgets/modelleaf.ts).
@@ -1527,6 +1581,7 @@ function routes(): Route[] {
   for (const c of DSP_CAPSTONES) if (c.route) add(c.route, light);
   // The Verilog twins (campaign/twinids.ts): the source beside the check, never synthesized here (Yosys is 78 MB)
   for (const l of TWIN_LEVELS) add(`#/campaign/play/${twinKey(l)}`, unlocked);
+  add('#/campaign/play/t_inv', unlocked, ' (test player keeps the view)', undefined, PLAYER_DRIVE);
   // A locked level renders its notice (fresh progress: only the first levels are open).
   add(`#/campaign/play/${NODES[NODES.length - 1].id}`, light, ' (locked)');
   add('#/sandbox', light);
