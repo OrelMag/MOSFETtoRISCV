@@ -62,7 +62,9 @@ const translate = (g: Geo, x: number, y: number, z: number): Geo => { const m = 
 // ---------------------------------------------------------------- materials
 
 const ceramic = M.make({ base: [0.16, 0.15, 0.15], metal: 0, rough: 0.5, coat: 0.2, label: 'dark alumina ceramic' });
-const quartzMat = { ...M.quartz, transmit: 0.9, tint: [0.9, 0.95, 1.0] as [number, number, number], label: 'crystal quartz (Z-cut wafer)' };
+/** The cavity floor a shade lighter, so the clear tines read against it. */
+const floorMat = M.make({ base: [0.34, 0.32, 0.31], metal: 0, rough: 0.55, label: 'dark alumina ceramic, cavity floor' });
+const quartzMat = { ...M.quartz, transmit: 0.82, coat: 0.8, tint: [0.9, 0.95, 1.0] as [number, number, number], label: 'crystal quartz (Z-cut wafer)' };
 const glue = M.make({ base: '--qz-glue', metal: 0.4, rough: 0.5, label: 'silver-filled conductive glue' });
 const lidMat = M.make({ base: [0.7, 0.68, 0.64], metal: 1, rough: 0.3, label: 'Kovar lid, nickel-plated' });
 const mask = M.make({ base: [0.07, 0.19, 0.11], metal: 0, rough: 0.45, coat: 0.4, label: 'FR-4 under green solder mask' });
@@ -128,7 +130,8 @@ function crystalStatic(d: Detail): Static {
     base: B(BX0, f.x0 + 0.02, f.y0, Y1, -ZO, ZO, 0.05),
     traces: merge([B(BX0 + 0.3, f.x0, Y1, Y1 + FILM, -2.9, -1.1, 0.02), B(BX0 + 0.3, f.x0, Y1, Y1 + FILM, 1.1, 2.9, 0.02)], 'traces'),
     lid: B(-16, 16, 8.15, 8.6, -7.5, 7.5, 0.2),
-    seal: merge([B(-16, 16, 8, 8.15, -7.5, -6, 0.02), B(-16, 16, 8, 8.15, 6, 7.5, 0.02), B(-16, -14.5, 8, 8.15, -6, 6, 0.02), B(14.5, 16, 8, 8.15, -6, 6, 0.02)], 'seal ring'),
+    // a narrow band on the wall top, its inner edge (the walls are 1.5 units = 0.15 mm wide)
+    seal: merge([B(-15, 15, 8, 8.08, -6.6, -6, 0.02), B(-15, 15, 8, 8.08, 6, 6.6, 0.02), B(-15, -14.5, 8, 8.08, -6, 6, 0.02), B(14.5, 15, 8, 8.08, -6, 6, 0.02)], 'seal ring'),
   };
   statics.set(d, s);
   return s;
@@ -139,7 +142,7 @@ function crystalItems(key: string, disp: number, detail: Detail, dx = 0, dz = 0,
   const S = crystalStatic(detail), o: Vec3 = [dx, 0, dz], mag = Math.min(1, Math.abs(disp)), v = Math.sign(disp) || 1;
   const grp = { group: 'package', at: o };
   const items: Item[] = [
-    { geo: S.pkg, mat: ceramic, name: 'ceramic package', ...grp, info: { dim: '3.2 × 1.5 × 0.8 mm', source: SRC.fc135, note: 'a cavity in alumina, sealed in vacuum: air would damp the fork to a Q of a few thousand' } },
+    { geo: S.pkg, mat: floorMat, name: 'ceramic package', ...grp, info: { dim: '3.2 × 1.5 × 0.8 mm', source: SRC.fc135, note: 'a cavity in alumina, sealed in vacuum: air would damp the fork to a Q of a few thousand' } },
     { geo: S.walls, mat: ceramic, name: 'ceramic package', ...grp },
     { geo: S.seal, mat: M.gold, name: 'seal ring', ...grp, cut: 'none', info: { note: 'gold-plated Kovar ring on the walls: the lid is seam-welded to it' } },
     { geo: S.under, mat: M.gold, name: 'underside pads', ...grp, info: { note: 'the two terminals the board is soldered to, joined to the inner pads through the ceramic' } },
@@ -303,11 +306,11 @@ function anchors(st: QuartzState): StudioAnchor[] {
   if (st.view === 'crystal') {
     const tipZ = ZO + st.disp * TIP_DRAWN;
     return [
-      { text: 'tine, bending', p: [f.x0 + f.L * 0.85, Y1, tipZ], side: 'r', n: up },
+      { text: 'tine, bending', p: [f.x0 + f.L * 0.85, Y1, tipZ], side: 'r', n: up, gutter: 'r' },
       { text: 'gold in the groove', p: [f.x0 + f.L * 0.4, Y1 - GD + FILM, -ZC], side: 'b', n: up },
       { text: 'quartz base', p: [BX0 + f.base * 0.5, Y1, -2.0], side: 't', n: up },
       { text: 'glue on a gold pad', p: [BX0 + 1.15, 3.1, 2.5], side: 'l', n: up, minor: true },
-      { text: 'ceramic package', p: [6, 7, 7.5], side: 't', n: [0, 0.3, 1] },
+      { text: 'ceramic package', p: [6, 7, 7.5], side: 't', n: [0, 0.3, 1], gutter: 'r' },
     ];
   }
   if (st.view === 'loop') return [
