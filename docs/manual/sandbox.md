@@ -251,8 +251,8 @@ folds the editor away.
 ### Find a part in the parts list
 
 The groups are **Basics**, **My chips** (once you package one), **Inputs & outputs** (pins, buttons, clocks, switches,
-and under **Special I/O** the key, the keyboard, the puzzle ports and the card reader), **Sources**,
-**Transistors**, **Switch level** (strong and weak transistors, resistors, pull-ups, capacitors, transmission gates,
+and under **Special I/O** the key, the keyboard, the puzzle ports and the card reader), **Sources** (cycle counter, random source, timer),
+**Transistors**, **Switch level** (resistors, pull-ups and pull-downs, capacitors, transmission gates,
 tri-state parts), **Relays and tubes**, **Constants**, **Displays** (with the console and the screen), **Wiring**, **Memory**, **Processor
 cores**, **Communication** and **Library** (every gate, adder, register and larger block of the site). Type in **Search…**
 to find a part by name. Tick **Purist** to see only NAND and what you have built from it.
