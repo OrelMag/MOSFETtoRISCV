@@ -130,7 +130,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'fibre', title: 'An optical fibre, cut open', category: 'comms', chapter: 'glass', step: 1,
     summary: 'Core, cladding and coating to scale: rays held by total internal reflection, and a pulse spread by the modes.',
-    files: ['fibre3d', 'fibre3dview', 'fibre3dparts'], factory: 'fibre3d', codex: ['dispersion'],
+    files: ['fibre3d', 'fibre3dview', 'fibre3dkit', 'fibre3dparts'], factory: 'fibre3d', codex: ['dispersion'],
     open: () => import('./fibre3d').then((m) => m.fibre3d()),
   },
   {

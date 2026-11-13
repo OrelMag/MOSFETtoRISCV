@@ -8,15 +8,10 @@ import { h, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
-import { endTau, facts, fibreAnchors, fibreParts, FIBRES, LENGTH_KM, profileOf, pulseView, rayDelayOf, SIGMA_NS, X0, type FibrePalette, type FibreState, type Kind, type Profile } from './fibre3dparts';
+import { studioStage } from './studiostage';
+import { endTau, facts, FIBRES, LENGTH_KM, profileOf, pulseView, rayDelayOf, SIGMA_NS, UM, type FibreState, type Kind, type Profile } from './fibre3dparts';
+import { FIBRE_ASPECT, FIBRE_HOME, FIBRE_HOME_FRAME, fibreModel, lookIn } from './fibre3dkit';
 import { bandwidthMHzKm, gradedDelayPsKm, stepDelayPsKm } from '../phys/fibre';
-import type { OrbitView } from '../gl/camera';
-
-const VIEW: OrbitView = { target: [0, 0, 0], yaw: 0.18, pitch: 0.4, dist: 118 };
-/** Close on the input end face, where the core is: a 50 µm core fills a little of the 250 µm coating, an 8 µm one needs the closer view. */
-const LOOK = (kind: Kind): OrbitView => ({ target: [X0 + 4, 0, 0], yaw: -0.9, pitch: 0.3, dist: kind === 'single' ? 11 : 30 });
 /** Seconds for a pulse to cross the drawn stretch. */
 const CROSS_S = 3.5;
 const nf = (x: number, d = 1) => x.toFixed(d);
@@ -27,24 +22,17 @@ export function fibreView(initial: Kind = 'multi'): Widget {
   const end = () => endTau(st.kind, profileOf(st));
   const stops = () => [0, 0.3, 0.6, 0.9, end()];
 
-  const panel = h('div', { class: 'panel' });
-  const palette = (): FibrePalette => ({
-    glass: stage.rgba('--fb-glass', 0.28), coat: stage.rgba('--fb-coat', 0.2), core: stage.rgb('--fb-core'), coreEnd: stage.rgb('--fb-core'), ray: stage.rgb('--fb-ray'), fan: stage.rgb('--fb-fan'),
-    leak: stage.rgb('--fb-leak'), pulse: stage.rgb('--fb-pulse'), glow: stage.rgba('--fb-glow', 0.55), air: stage.rgb('--fb-air'), cut: stage.rgb('--fb-cut'),
-  });
-  const stage = modelStage(panel, {
-    look: LOOKS.lab,
+  const panel = h('div', { class: 'panel fb3' });
+  const stage = studioStage({
+    home: FIBRE_HOME, homeFrame: FIBRE_HOME_FRAME, aspect: FIBRE_ASPECT,
+    knobs: { cut: 1 },
+    scaleBar: (len) => (len * UM >= 1000 ? `${(len * UM) / 1000} mm` : `${len * UM} µm`),
     aria: 'An optical fibre cut away in 3D: the core, the cladding and the coating, with a ray launched at a chosen angle that is guided by total internal reflection or leaks into the cladding, and a pulse travelling down it',
-    camera: { ...VIEW },
     limits: { minDist: 7, maxDist: 400 },
-    views: [
-      { label: 'Whole stretch', view: VIEW, pick: () => { st.look = false; paint(); } },
-      { label: 'Look in', view: () => LOOK(st.kind), title: 'Close on the input end face: the core, the cladding and the coating to scale', pick: () => { st.look = true; paint(); } },
-    ],
-    note: `Scale: 12.5 µm to the unit across and along, so the drawn stretch is 1 mm of fibre, with true diameters (50 or 8 µm core, 125 µm cladding, 250 µm coating) and true ray angles (the bounce spacing and the graded ray’s 1.1 mm period are real). The delays and the pulse plot are for 1 km, and the packets’ lag is drawn 20 times too long (in a graded core it is too small to see). The rays are meridional (they cross the axis); skew rays are left out. The single-mode field is drawn as a Gaussian at the 10.4 µm mode-field diameter. Between the rays and the extreme one, a graded ray’s delay follows turning radius to the fourth power. Fresnel partial reflection, loss and bends are left out. The multimode core’s index (${FIBRES.multi.n1}) is illustrative: data sheets give the group index, not the core’s own.`,
-    draw: () => paint(),
+    note: `Scale: 12.5 µm to the unit across and along, so the drawn stretch is 1 mm of fibre, with true diameters (50 or 8 µm core, 125 µm cladding, 250 µm coating) and true ray angles (the bounce spacing and the graded ray’s 1.1 mm period are real). The delays and the pulse plot are for 1 km, and the packets’ lag is drawn 20 times too long (in a graded core it is too small to see). The rays are meridional (they cross the axis); skew rays are left out. The single-mode field is drawn as a Gaussian at the 10.4 µm mode-field diameter. The core is tinted to be seen: doped silica looks the same as the cladding. The coating is nominally 250 µm (data sheets give 242 to 245). Between the rays and the extreme one, a graded ray’s delay follows turning radius to the fourth power. Fresnel partial reflection, loss and bends are left out. The multimode core’s index (${FIBRES.multi.n1}) is illustrative: data sheets give the group index, not the core’s own.`,
+    build: (detail) => fibreModel(st, detail),
   });
-  const paint = () => stage.paint(fibreParts(st, palette()), fibreAnchors(st));
+  const paint = () => stage.refresh();
 
   const chip = h('span', { class: 'r3-chip' });
   stage.chips.append(chip);
@@ -164,7 +152,7 @@ export function fibreView(initial: Kind = 'multi'): Widget {
       st.kind = k;
       segBtns.forEach((x, i) => { const on = kinds[i][0] === k; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); });
       profSeg.hidden = k === 'single';
-      if (st.look) stage.setView(LOOK(k));
+      if (st.look) stage.goTo(lookIn(k === 'single'));
       resetPulse();
     });
     return b;
@@ -176,11 +164,13 @@ export function fibreView(initial: Kind = 'multi'): Widget {
     h('p', { class: 'm3-sub' }, 'A glass core inside a glass cladding of slightly lower index, in a 250 µm acrylate coating whose higher index strips any light that leaks into it. A ray meeting the core wall at more than the critical angle reflects totally, so only rays within the acceptance cone stay in; steeper ones refract into the cladding and are lost. Every 50/125 multimode fibre in use is graded-index (ITU-T G.651.1): the index falls smoothly from the axis, rays bend back along sinusoids and the modal spread shrinks from n₁Δ/c (step index, the contrast case) to n₁Δ²/8c per km. The single-mode core is so small that it carries one mode: no ray picture, one speed, no modal spread. The drawn stretch is 1 mm of fibre; the delays are for 1 km. Use Look in to see the 8 µm core to scale.'),
     h('div', { class: 'r3' },
       h('div', { class: 'r3-main' },
-        h('div', { class: 'r3-ctl' }, h('div', { class: 'seg fb-seg', role: 'group', 'aria-label': 'Fibre type' }, ...segBtns), profSeg, slider),
-        h('div', { class: 'r3-btns r3-ctl' }, sendBtn, stepBtn, coneBtn),
-        stage.viewBar(),
-        stage.el, stage.hint, live),
+        stage.el, live),
       h('div', { class: 'r3-side' }, h('h4', null, 'This fibre ', h('span', { class: 'r3-badge' }, 'the chapter’s model')), kv, plot)));
+  const wholeBtn = h('button', { type: 'button', class: 'btn sm' }, 'Whole stretch'), lookBtn = h('button', { type: 'button', class: 'btn sm', title: 'Close on the input end face: the core, the cladding and the coating to scale' }, 'Look in');
+  wholeBtn.addEventListener('click', () => { st.look = false; stage.goTo(FIBRE_HOME); paint(); });
+  lookBtn.addEventListener('click', () => { st.look = true; stage.goTo(lookIn(st.kind === 'single')); paint(); });
+  stage.slot.append(h('div', { class: 'r3-ctl' }, h('div', { class: 'seg fb-seg', role: 'group', 'aria-label': 'Fibre type' }, ...segBtns), profSeg, slider),
+    h('div', { class: 'r3-btns r3-ctl' }, sendBtn, stepBtn, coneBtn, wholeBtn, lookBtn));
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape' && running) { running = false; readout(true); kick(); } });
   drawPlot(); readout(true); paint();
   return { el: panel, destroy() { loop.stop(); stage.destroy(); } };
