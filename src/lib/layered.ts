@@ -464,5 +464,8 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
  * definition's own, read when the netlist is first asked for (netlistOf calls it as the definition's method).
  */
 export function laid(b: Builder, opts: LayeredOptions = {}): (this: ComponentDef) => Netlist {
-  return function (this: ComponentDef) { return layered(this.ports, b, opts); };
+  return function (this: ComponentDef) { laidFrom.set(this, { b, opts }); return layered(this.ports, b, opts); };
 }
+
+/** The Builder and options a laid() level was made from, once its netlist has been asked for (lib/axi.ts bundled lays it out again). */
+export const laidFrom = new WeakMap<ComponentDef, { b: Builder; opts: LayeredOptions }>();

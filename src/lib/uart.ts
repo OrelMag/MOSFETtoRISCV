@@ -324,7 +324,7 @@ export const AXI_UART: ComponentDef = (() => {
   const popq = b.op(DFF, [b.name(g.and(rdHs, `${rsel}.y0`, status[0]), 'take the byte', true), 'clk'], 'pop next cycle', 'popq');
   b.wire(`${popq}.q`, `${core}.pop`);
   b.wire(`${core}.tx`, 'tx');
-  b.wire(`${core}.irq`, 'irq');
+  b.wire(b.name(`${core}.irq`, 'irq', true), 'irq');
   const ports: PortDef[] = [...slavePorts(), bit('rx', 'in'), bit('clk', 'in', 'bottom', true), bit('tx', 'out'), bit('irq', 'out')];
   return define({
     id: 'axi_uart', name: 'UART slave', category: 'memory',

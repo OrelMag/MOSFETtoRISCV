@@ -83,4 +83,20 @@ export class Builder {
     }
     return out;
   }
+  /**
+   * Into `to` (after what it holds): this Builder's instances and nets, a driver renamed by `drv` and a sink by `sink`
+   * (undefined: unchanged). The bus-packed parts (lib/axi.ts bundled) lay a level out again with their splitters and
+   * mergers in it.
+   */
+  copyInto(to: Builder, drv: (d: string) => string | undefined, sink: (s: string) => string | undefined): void {
+    for (const i of this.instances) to.instances.push({ ...i });
+    for (const [d, ss] of this.sinks) {
+      const d2 = drv(d) ?? d;
+      for (const s of ss) to.wire(d2, sink(s) ?? s);
+      const n = this.names.get(d);
+      if (n !== undefined) to.name(d2, n, this.tagged.has(d));
+      else if (this.tagged.has(d)) to.tagged.add(d2);
+    }
+    to.n = Math.max(to.n, this.n);
+  }
 }

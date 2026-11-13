@@ -8,7 +8,7 @@ import { busBench, isKeyQueue, KEY_QUEUE_DEPTH } from '../lib/axi';
 import { ramLeafState } from '../lib/bigmem';
 import { CARD_COMPUTER, CARD_DECK, CHAPTER_COMPUTER, SOC_SCREEN, SYSTEM_COMPUTER } from '../lib/soc';
 import { type CardReaderState, readerProgress } from '../cards/reader';
-import { findNode } from '../sim/flatten';
+import { findNode, signalBits } from '../sim/flatten';
 import { pack } from '../sim/values';
 import { h, icon } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
@@ -49,7 +49,7 @@ function busBenchPanel(wait: number): ScenePanel {
     const root = () => sim().design.root;
     const out = (p: string) => pack(sim().getBits(root().ports[p]));
     const node = (path: string[]) => findNode(root(), path);
-    const port = (path: string[], p: string) => { const n = node(path); return n ? pack(sim().getBits(n.ports[p])) : 0; };
+    const port = (path: string[], p: string) => { const n = node(path), bits = n && signalBits(n, p); return bits ? pack(sim().getBits(bits)) : 0; };
     const st: BenchState = { txns: [], trace: [], cycles: 0 };
     benchStates.set(stage, st);
     let sel = 0, data = 0x12345678;
@@ -191,7 +191,7 @@ const computerPanel = (full: boolean, cards = false): ScenePanel => (stage: Stag
   const root = () => sim().design.root;
   const out = (p: string) => pack(sim().getBits(root().ports[p]));
   const node = (path: string[]) => findNode(root(), path);
-  const port = (path: string[], p: string) => { const n = node(path); return n ? pack(sim().getBits(n.ports[p])) : 0; };
+  const port = (path: string[], p: string) => { const n = node(path), bits = n && signalBits(n, p); return bits ? pack(sim().getBits(bits)) : 0; };
   const st: CompState = { console: '', retired: 0, cycles: 0, inRam: 0, dmaCycles: 0, booted: -1, dram: { hit: 0, miss: 0, conflict: 0, refresh: 0 } };
   compStates.set(stage, st);
   const hook = {
