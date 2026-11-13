@@ -56,6 +56,8 @@ export const stageX = (s: number): number => (s - (STAGES - 1) / 2) * PITCH;
 export const RING_Z = 30, BACK_Z = -40;
 /** The digit's other tubes drawn in the back row (36 a digit − 10 in the ring). */
 export const OTHER_TUBES = TUBES_PER_DIGIT - STAGES;
-/** The neons on the front edge, one per stage, under its tube; decades stacked one above the other, UNIT_GAP apart. */
-export const NEON_Y = CHASSIS_H * 0.55, UNIT_GAP = 280;
-export const decadeY = (k: number): number => k * UNIT_GAP;
+/** The neons on the front edge, one per stage, under its tube. The tens decade stands behind the units and higher (as on
+ *  a stepped rack, drawn), so a view along the units' front sees it over their tubes. */
+export const NEON_Y = CHASSIS_H * 0.55, UNIT_RISE = 150, UNIT_BACK = 420;
+export const decadeY = (k: number): number => k * UNIT_RISE;
+export const decadeZ = (k: number): number => -k * UNIT_BACK;
