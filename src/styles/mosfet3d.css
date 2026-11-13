@@ -1,13 +1,16 @@
 /* ---------- The MOSFET in 3D (widgets/mosfet3dview.ts) ---------- */
-.m3d {
+.m3d, .mf3 {
   --mf-depl: light-dark(#e0a44a, #f0b860);
+  --mf-ldd: light-dark(#eaa9b6, #e08da0);     /* the extensions: the n+ islands' colour, lighter (less doped) */
+  --mf-spacer: light-dark(#b7c0cc, #8f99aa);  /* silicon nitride */
+  --mf-poly: light-dark(#5f5f8c, #8d88c4);    /* polysilicon: its own colour, unlike the n+ islands and every metal */
+  --mf-ion: light-dark(#8a5a12, #ffd28a);     /* a bare acceptor ion in the depletion layer */
 }
-/* Phone: the stage first, the sliders under it, so the transistor stays in view while a slider is dragged. */
-.mf3 .r3-main { display: flex; flex-direction: column; }
-.mf3 .r3-main > .r3-stage { order: 1; }
-.mf3 .r3-main > .r3-hint { order: 2; }
-.mf3 .r3-main > .r3-ctl { order: 3; margin: 8px 0 0; }
-.mf3 .r3-main > .mf-try { order: 4; }
-@container (min-width: 760px) {
-  .mf3 .r3-main > .r3-ctl { order: 0; margin: 0 0 8px; }
-}
+/* The layout switch: Textbook | Real layout (the studio stage already puts the canvas first on a phone). */
+.mf-layout { display: inline-flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.mf-layout .btn { border: 0; border-radius: 0; }
+.mf-layout .btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+/* The canvas takes the column's whole width; the numbers follow under it. */
+.mf3 .r3 { grid-template-columns: minmax(0, 1fr); }
+.mf3 .r3-kv { grid-template-columns: auto 1fr auto 1fr; }
+@container (max-width: 620px) { .mf3 .r3-kv { grid-template-columns: auto 1fr; } }

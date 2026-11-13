@@ -1,11 +1,11 @@
-/* ---------- The Strowger selector (widgets/strowger3dview.ts): materials and the busy grid ---------- */
-.m3d {
-  --sw-brass: light-dark(#b8862b, #e0b04a);
-  --sw-free: light-dark(#5d6a82, #9aa6bf);
+/* ---------- The Strowger selector (widgets/strowger3dview.ts): its colours and the busy grid ---------- */
+.sw3 {
   --sw-busy: light-dark(#cf4a4a, #ef6a6a);
-  --sw-coil: light-dark(#b9773c, #c98a4f);
+  --sw-live: light-dark(#1f9d55, #3ddc84);
   --sw-lit: light-dark(#ff9a2e, #ffb04a);
 }
+.sw3 .r3 { grid-template-columns: minmax(0, 1fr); }
+@container (min-width: 760px) { .sw3 .r3-side { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 360px); gap: 0 24px; align-items: start; } .sw3 .r3-side h4 { grid-row: 1; } .sw3 .r3-side > .r3-kv { grid-column: 1; grid-row: 2; } .sw3 .r3-side > .sw-grid { grid-column: 2; grid-row: 2; } }
 .sw-dial { display: flex; flex-wrap: wrap; gap: 6px; }
 .sw-key { min-width: 34px; font-weight: 600; }
 .sw-grid { display: grid; grid-template-columns: auto repeat(10, minmax(0, 1fr)); gap: 3px; max-width: 360px; font-size: 11px; }

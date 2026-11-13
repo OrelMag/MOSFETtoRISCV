@@ -1,5 +1,5 @@
 /* ---------- The core memory plane (widgets/core3dview.ts): materials and its address grid ---------- */
-.m3d {
+.m3d, .co3 {
   --co-ferrite: light-dark(#3b3c42, #55575f);   /* dark grey-black sintered ferrite */
   --co-frame: light-dark(#a89870, #7c7050);     /* epoxy-glass board */
   --co-wx: light-dark(#c4622d, #e0884f);        /* enamelled copper, one colour per wire */
@@ -37,3 +37,6 @@
 .co-sl ~ .btn.sm[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* the plane is near square: a phone's stage is as tall as it is wide */
 @media (max-width: 600px) { .m3d .r3-stage { aspect-ratio: 1 / 1; } }
+/* The canvas takes the column's width; the address grid, the cycle and the loop follow under it, side by side where wide. */
+.co3 .r3 { grid-template-columns: minmax(0, 1fr); }
+@container (min-width: 760px) { .co3 .r3-side { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 280px); gap: 0 24px; align-items: start; } }

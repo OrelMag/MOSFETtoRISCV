@@ -12,6 +12,7 @@ import { stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
 import { strowger3d } from '../widgets/strowger3d';
 import { telegraph3d } from '../widgets/telegraph3d';
+import { teletype3d } from '../widgets/teletype3d';
 import { withModel } from '../widgets/modelhost';
 import { codesWidget, limitsWidget, telegraphLineWidget } from '../widgets/comm';
 import { erlangWidget, meshWidget, networkCostWidget, startStopWidget } from '../widgets/exchange';
@@ -538,7 +539,7 @@ export const chExchange: Chapter = {
         ±${(100 * SS.ita2.fast).toFixed(2)} % for the teleprinter, ±${(100 * SS.uart.fast).toFixed(2)} % for 8N1 (K = 9), both for an isolated character. (8N1, the frame of most serial ports, is eight data bits, no parity and one stop bit.) With characters back to back the slow side of 8N1 tightens to −${(100 * SS.uartB2B.slow).toFixed(2)} %, because the stop sample at 9.5 / (1 + e) must come before the next start edge at 10; the teleprinter's 1.5 stop units leave it unaffected. The widget searches every code to find where the first one fails (a code ending in 0 goes first: a sample that
         lands in a neighbour of the same level reads right). The frame is general: the serial-port chip (UART) of chapter ${numOf('uart')} reuses it with another length, and a clock that counts sixteen ticks a bit loses part of the margin. Everything so far took for granted that a level sent is a level received; chapter ${numOf('wire')} asks what the wire does to it.</p>
         <div class="try">Move the receiver's speed until a sample crosses a boundary. Then pick the 8-bit frame, and search every code.</div>`,
-      widget: () => startStopWidget(),
+      widget: () => withModel(startStopWidget(), teletype3d()),
       more: {
         derive: `<p>The receiver detects the start edge, then samples data bit i at (i + 1 + p) bits of its own clock, p = ½ for mid-bit. With its clock fast by e it reaches that instant after (i + 1 + p) / (1 + e) transmitter units. The bit read is the unit that instant falls in. The first failure on the fast side is the stop sample at K + p, which must stay at or after K:
           e ≤ p / K. On the slow side, the last data sample at K − 1 + p must stay before K: e ≥ −(1 − p) / K. K = 1 + data + parity: ${K_ITA2} for ITA2, 9 for 8N1.</p>`,

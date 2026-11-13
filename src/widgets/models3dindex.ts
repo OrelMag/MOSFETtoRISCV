@@ -46,7 +46,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'mosfet', title: 'The MOSFET in 3D', category: 'devices', chapter: 'mosfet', step: 0,
     summary: 'Width, length and gate area as solid geometry: the inversion sheet and the carriers that cross it.',
-    files: ['modelhost', 'mosfet3dview', 'mosfet3dparts'], factory: 'mosfet3d', codex: ['mosfet', 'cmos'],
+    files: ['modelhost', 'mosfet3dview', 'mosfet3dkit'], factory: 'mosfet3d', codex: ['mosfet', 'cmos'],
     open: () => import('./modelhost').then((m) => m.mosfet3d()),
   },
   {
@@ -72,6 +72,18 @@ export const MODELS_3D: readonly Model3d[] = [
     summary: 'The same cell built step by step: each mask above the die, and the layer it patterns landing below.',
     files: ['masks3d', 'masks3dview', 'masks3dparts'], factory: 'masks3d', codex: ['stdcell'],
     open: () => import('./masks3d').then((m) => m.masks3d()),
+  },
+  {
+    id: 'finfet', title: 'Planar, fin and nanosheet', category: 'devices', chapter: 'silicon', step: 6,
+    summary: 'Three transistors cut across the gate: one side gated, three (Intel 22 nm fins), four (IBM 2 nm sheets), and what each leaks.',
+    files: ['finfet3d', 'finfet3dview', 'finfet3dkit'], factory: 'finfet3d', codex: ['cmos'],
+    open: () => import('./finfet3d').then((m) => m.finfet3d()),
+  },
+  {
+    id: 'nmosgate', title: 'A 6502-style NMOS gate', category: 'devices', chapter: 'appendix-6502', step: 7,
+    summary: 'A two-input NOR in diffusion, polysilicon and aluminium: two pull-downs and a depletion load, three transistors, a ratio of four.',
+    files: ['nmosgate3d', 'nmosgate3dview', 'nmosgate3dkit'], factory: 'nmosGate3d', codex: ['cmos'],
+    open: () => import('./nmosgate3d').then((m) => m.nmosGate3d()),
   },
   {
     id: 'package', title: 'A package, opened up', category: 'devices', chapter: 'wire', step: 8,
@@ -124,7 +136,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'enigma', title: 'The Enigma M4', category: 'machines', chapter: 'secret', step: 0,
     summary: 'The naval Enigma opened as an operator would: wheels, pawls, plugs and lamps are the cipher\'s state. Type on it.',
-    files: ['enigma3d', 'enigma3dview', 'enigma3dparts', 'enigma3dmachine', 'enigma3dextras'], factory: 'enigma3d', codex: ['enigma'],
+    files: ['enigma3d', 'enigma3dview', 'enigma3dstudio', 'enigma3dparts', 'enigma3dmachine', 'enigma3dextras'], factory: 'enigma3d', codex: ['enigma'],
     open: () => import('./enigma3d').then((m) => m.enigma3d()),
   },
   {
@@ -146,9 +158,15 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./dipole3d').then((m) => m.dipole3d()),
   },
   {
+    id: 'teletype', title: 'The Teletype Model 33 selector', category: 'comms', chapter: 'exchange', step: 7,
+    summary: 'A start-stop receiver made of cams: the start edge releases a clutch and eight notched cams read the line mid-unit.',
+    files: ['teletype3d', 'teletype3dview', 'teletype3dkit'], factory: 'teletype3d', codex: ['uart'],
+    open: () => import('./teletype3d').then((m) => m.teletype3d()),
+  },
+  {
     id: 'strowger', title: 'The Strowger selector', category: 'comms', chapter: 'exchange', step: 3,
     summary: 'The stepping switch behind the exchange: dial a level, mark lines busy, hang up.',
-    files: ['strowger3d', 'strowger3dview', 'strowger3dparts'], factory: 'strowger3d', codex: ['relay'],
+    files: ['strowger3d', 'strowger3dview', 'strowger3dkit'], factory: 'strowger3d', codex: ['relay'],
     open: () => import('./strowger3d').then((m) => m.strowger3d()),
   },
   {
@@ -166,7 +184,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'cores', title: 'A core memory plane', category: 'memory', chapter: 'memory', step: 10,
     summary: 'Sixteen ferrite cores on X, Y, sense and inhibit wires: only the core where two half currents cross flips; reads restore.',
-    files: ['core3d', 'core3dview', 'core3dparts'], factory: 'core3d', codex: ['coremem', 'ram', 'senseamp'],
+    files: ['core3d', 'core3dview', 'core3dkit', 'core3dparts'], factory: 'core3d', codex: ['coremem', 'ram', 'senseamp'],
     open: () => import('./core3d').then((m) => m.core3d()),
   },
   {
@@ -220,7 +238,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'hierarchy', title: 'The memory hierarchy as distances', category: 'analogies', chapter: 'cache', step: 6,
     summary: 'Desk, shelf, library, warehouse, another city: each level as far away as its latency on a log scale, with a courier for one access.',
-    files: ['hierarchy3d', 'hierarchy3dview', 'hierarchy3dparts', 'hierarchy3ddata'], factory: 'hierarchy3d', codex: ['cache', 'memwall', 'amat'],
+    files: ['hierarchy3d', 'hierarchy3dview', 'hierarchy3dkit', 'hierarchy3dparts', 'hierarchy3ddata'], factory: 'hierarchy3d', codex: ['cache', 'memwall', 'amat'],
     open: () => import('./hierarchy3d').then((m) => m.hierarchy3d()),
   },
   {

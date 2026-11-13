@@ -1,5 +1,5 @@
 /* ---------- The Jacquard head (widgets/loom3dview.ts): materials ---------- */
-.m3d {
+.m3d, .lm3 {
   --lm-wood: light-dark(#b98a55, #8a6540);
   --lm-iron: light-dark(#4a4f5a, #8a92a3);
   --lm-steel: light-dark(#9aa3b3, #b7c0d0);

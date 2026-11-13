@@ -3,10 +3,11 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { RGB, RGBA } from '../src/gl/instances';
 import {
-  activeOf, area, channelOf, DEPTH, implanted, intersect, LAND_AT, LAYERS, maskRects, MASK_AT, masksAnchors, masksParts, minus, misalignment, polyOf, rayPoints, reticle, windowOf, WINDOW_MARGIN, zs,
+  activeOf, area, channelOf, DEPTH, LAMBDA_UM, MK_DEPTH, TRUE_UM, V_FACTOR, implanted, intersect, LAND_AT, LAYERS, maskRects, MASK_AT, masksAnchors, masksParts, minus, misalignment, place, polyOf, rayPoints, reticle, windowOf, WINDOW_MARGIN, zs,
   type MaskName, type MasksPalette, type R,
 } from '../src/widgets/masks3dparts';
 import { CELLS, FAB } from '../src/widgets/silicon';
+import { cutZ, ionInstances, masksModel, TOUR_STEPS } from '../src/widgets/masks3dkit';
 
 const G: RGB = [0.5, 0.5, 0.5], CLEAR: RGBA = [0.5, 0.5, 0.5, 0.3];
 const P: MasksPalette = { psub: G, sti: G, gox: G, resist: CLEAR, ild: CLEAR, uv: CLEAR, chrome: CLEAR, plate: CLEAR, pell: CLEAR, frame: G, layer: Object.fromEntries(LAYERS.map((l) => [l, G])) as MasksPalette['layer'] };
@@ -131,5 +132,58 @@ describe('masks in 3D', () => {
     const src = readFileSync(new URL('../src/widgets/masks3dview.ts', import.meta.url), 'utf8');
     expect(CELLS[1].name).toBe('NAND2');
     expect(src).toMatch(/let cell = CELLS\[1\]/);
+  });
+});
+
+describe('masks on the studio renderer', () => {
+  const cell = CELLS[1];
+  it('every slab is drawn once, merged by what it is made of', () => {
+    for (let s = 0; s < FAB.length; s++) {
+      const m = masksModel(cell, st(s)), parts = masksParts(cell, st(s), P), dark = s === 6 || s === 7;
+      const tri = (n: number) => n * 12; // a box is 12 triangles
+      const drawn = m.items.reduce((a, i) => a + i.geo.indices.length / 3, 0);
+      // the boxes (dark-field implant masks redraw the chrome: plate minus window) and the beams' cylinders
+      const boxes = parts.filter((p) => p.kind === 'box').length - (dark ? maskRects(cell, MASK_AT[s]!).length : 0);
+      if (!dark && !parts.some((p) => p.kind === 'cyl')) expect(drawn).toBe(tri(boxes));
+      for (const it of m.items) for (const v of it.geo.positions) expect(Number.isFinite(v)).toBe(true);
+      expect(new Set(m.items.map((i) => i.name)).size).toBe(m.items.length);
+    }
+  });
+  it('an implant reticle is dark-field: the window is clear, so the ions fall through it and stop on the gate or in the silicon', () => {
+    const m = masksModel(cell, st(6)), chrome = m.items.find((i) => i.name === 'chrome pattern')!.geo, w = windowOf(cell, 'n')[0];
+    // no chrome over the window's middle
+    const mid = place(cell, w[0] + w[2] / 2, w[1] + w[3] / 2, 0);
+    const P3 = chrome.positions;
+    let over = false;
+    for (let i = 0; i < P3.length; i += 3) if (Math.abs(P3[i] - mid[0]) < 1 && Math.abs(P3[i + 2] - mid[2]) < 1) over = true;
+    expect(over).toBe(false);
+    const ions = ionInstances(cell, st(6), 10, [1, 1, 1]);
+    expect(ions.length).toBeGreaterThan(50);
+    for (const p of ions) { expect(p.pos[2]).toBeGreaterThanOrEqual(place(cell, 0, w[1], 0)[2] - 1e-9); expect(p.pos[2]).toBeLessThanOrEqual(place(cell, 0, w[1] + w[3], 0)[2] + 1e-9); }
+    expect(ionInstances(cell, st(5), 10, [1, 1, 1])).toEqual([]);
+  });
+  it('the cut runs along the NMOS row; the tour visits its steps', () => {
+    const m = masksModel(cell, st(6)), a = activeOf(cell, 'n');
+    expect(m.cuts!.planes[0].d).toBeCloseTo(place(cell, 0, (Math.min(...a.map((r) => r[1])) + Math.max(...a.map((r) => r[1] + r[3]))) / 2, 0)[2], 9);
+    expect(cutZ(cell)).toBe(m.cuts!.planes[0].d);
+    expect(m.beats).toHaveLength(TOUR_STEPS.length);
+    expect(TOUR_STEPS.map((s) => MASK_AT[s])).toEqual(['diff', 'poly', 'nsdm', 'met1']);
+  });
+});
+
+describe('masks: one height factor', () => {
+  it('every layer is drawn at V_FACTOR of its sky130 thickness against the footprint (1 λ = 62 nm)', () => {
+    expect(V_FACTOR).toBe(0.25);
+    expect(LAMBDA_UM).toBe(0.062);
+    const z = zs(0), u = (um: number) => (V_FACTOR * um) / LAMBDA_UM;
+    expect(z.poly1 - z.poly0).toBeCloseTo(u(0.18), 9);
+    expect(z.res1 - z.res0).toBeCloseTo(u(1.14), 9);
+    expect(z.metal1 - z.metal0).toBeCloseTo(u(0.35), 9);
+    expect(z.ild).toBeCloseTo(u(0.5) + z.poly0, 9); // the dielectric's top is 0.5 µm above the gate's foot
+    expect(MK_DEPTH.well).toBeCloseTo(u(1.1), 9);
+    expect(MK_DEPTH.junction).toBeCloseTo(u(0.1), 9);
+    // the true ratios hold in the drawing: metal 1 is 0.35 / 0.18 the poly's thickness
+    expect((z.metal1 - z.metal0) / (z.poly1 - z.poly0)).toBeCloseTo(0.35 / 0.18, 9);
+    expect(TRUE_UM).toEqual({ poly: 0.18, ild: 0.5, metal: 0.35, resist: 1.14, well: 1.1, junction: 0.1, sti: 0.3 });
   });
 });

@@ -4,6 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import { HOOKS, LOOM_PRESETS, PICKS, WARP, loomPick } from '../src/widgets/cards';
 import { HOOK_BAR_X, HOOK_Z, HOOK_ROW, ROW_A, NEEDLE_H, SHUTTLE_Y, Z_WEFT, Z_HEDDLE, HOOK_Y1, KNIFE_Y, PUSH, SHED, THREAD_X, Z_FELL, clothRow, loomParts, poseOf, steppedPose, type LoomPalette } from '../src/widgets/loom3dparts';
+import { bake, FRONT_Z, hookPath, loomModel, plate, redrawn, TOUR_T, wires } from '../src/widgets/loom3dkit';
+import { UNIT_BOX, UNIT_CYL } from '../src/gl/kit/fromparts';
 
 const col = (i: number): [number, number, number] => [i / 20, 0.5, 0.5];
 const P: LoomPalette = { wood: col(1), iron: col(2), steel: col(3), spring: col(4), card: col(5), hole: col(6), warp: col(7), weft: col(8), cord: col(9), lead: col(10), brass: col(11), live: col(12) };
@@ -105,5 +107,47 @@ describe('the Jacquard head model against the loom widget', () => {
     expect(knives).toHaveLength(2);
     // every needle ends in a tip; the prism has pits (wood boxes) under the hole positions: more pieces than one cube
     expect(parts.filter((q) => q.color === P.wood && q.scale![0] === 72).length).toBeGreaterThan(8);
+  });
+});
+
+describe('the loom on the studio renderer', () => {
+  const [, cards] = presets[0];
+  // the parts tagged by stuff, as the kit tags them
+  const R = Object.fromEntries(['wood', 'iron', 'steel', 'spring', 'card', 'hole', 'warp', 'weft', 'cord', 'lead', 'brass', 'live'].map((r) => [r, r])) as unknown as LoomPalette;
+  it('every part is either baked once or redrawn; the front, the boards, the hooks and the cylinder are redrawn', () => {
+    const o = poseOf(cards, 2, 0.3), parts = loomParts(cards, o, R), m = loomModel(cards, o, false);
+    const tris = (p: { kind: string }) => (p.kind === 'box' ? UNIT_BOX : UNIT_CYL).indices.length / 3;
+    const kept = parts.filter((p) => !redrawn(p)), added = [...wires(cards, o).values()].flat();
+    expect(parts.filter(redrawn).length).toBeGreaterThan(0);
+    expect(parts.some((p) => redrawn(p) && Math.abs(p.pos[2] - FRONT_Z) < 1e-6)).toBe(true);
+    expect(m.items.reduce((s, i) => s + i.geo.indices.length / 3, 0)).toBe(kept.reduce((s, p) => s + tris(p), 0) + added.reduce((s, g) => s + g.indices.length / 3, 0));
+    for (const it of m.items) for (const v of it.geo.positions) expect(Number.isFinite(v)).toBe(true);
+    expect(m.items.filter((i) => i.mat.emit).length).toBeGreaterThan(0);
+    expect(m.beats).toHaveLength(TOUR_T.length);
+  });
+  it('a hook over the knife rests its crook on the knife and rides up with it; a pushed-back hook is clear of it', () => {
+    const o = poseOf(cards, 2, 0.3), L = loomPick(cards, 2);
+    for (let k = 0; k < HOOKS; k++) {
+      const end = hookPath(k, o.push[k], o.hookLift[k]).at(-1)!;
+      if (L.hooks.includes(k)) {
+        expect(end[1]).toBeCloseTo(KNIFE_Y + 1.6 + o.griffe, 9);
+        expect(end[2]).toBeGreaterThan(HOOK_Z(k) - 4.6);
+        expect(end[2]).toBeLessThan(HOOK_Z(k) - 1.4);
+      } else expect(end[2]).toBeGreaterThan(HOOK_Z(k) - 1.4); // pushed back past the knife's edge
+    }
+  });
+  it('a card hole is round: nothing of the plate lies within its radius', () => {
+    const mesh = { P: [] as number[], N: [] as number[], I: [] as number[] }, id = { p: (x: number, a: number, r: number) => [x, a, r] as [number, number, number], n: (x: number, a: number, r: number) => [x, a, r] as [number, number, number] };
+    plate(mesh, id, -7, 7, 0, 6, 6, 10, 0, 2.5, 1.4);
+    let rim = 0;
+    for (let i = 0; i < mesh.P.length; i += 3) { const d = Math.hypot(mesh.P[i], mesh.P[i + 1] - 2.5); expect(d).toBeGreaterThan(1.4 - 1e-6); if (d < 1.4 + 1e-6) rim++; }
+    expect(rim).toBeGreaterThanOrEqual(2 * 28);
+    // the outline keeps its corners
+    for (const [x, y] of [[-7, 0], [7, 0], [-7, 6], [7, 6]]) expect(mesh.P.some((_, i) => i % 3 === 0 && Math.abs(mesh.P[i] - x) < 1e-9 && Math.abs(mesh.P[i + 1] - y) < 1e-9)).toBe(true);
+  });
+  it('bake puts a turned rod where its part says', () => {
+    const rod = loomParts(cards, poseOf(cards, 1, 0), P).find((p) => p.kind === 'cyl' && p.rot)!;
+    const g = bake([rod], 'r'), c = [(g.min[0] + g.max[0]) / 2, (g.min[1] + g.max[1]) / 2, (g.min[2] + g.max[2]) / 2];
+    for (let a = 0; a < 3; a++) expect(c[a]).toBeCloseTo(rod.pos[a], 3);
   });
 });

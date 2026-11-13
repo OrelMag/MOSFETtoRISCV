@@ -58,3 +58,7 @@
   .en-views { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 4px; }
   .en-views .btn { flex: none; }
 }
+/* On the studio stage: the canvas takes the column's width, the settings follow under it. */
+.en .r3 { grid-template-columns: minmax(0, 1fr); }
+/* A stage of the current's way, lit as the light reaches it. */
+.en-path span.on { background: color-mix(in srgb, currentColor 18%, transparent); border-radius: 3px; box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 45%, transparent); }
