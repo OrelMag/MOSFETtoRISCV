@@ -14,7 +14,7 @@ import { helix, lathe, merge, roundedBox, transform, tube, type Geo } from '../g
 import { M, type Material } from '../gl/kit/materials';
 import type { Beat, Item, Model3, StudioAnchor } from '../gl/kit/scene';
 import type { Mat4, Vec3 } from '../gl/math';
-import { PULL_I } from '../phys/telegraph';
+import { PULL_I, SOUNDER_R } from '../phys/telegraph';
 import { ANVIL_X, BRACKET_Y, CLOSER_L, CLOSER_OPEN, CLOSER_PIV, CLOSER_SHUT, KEY_TIP, LEVER_L, LEVER_REST, POLES, POLE_TOP, SPRING_S, armTheta, type TgPose } from './telegraph3dparts';
 import { RELAY } from '../phys/relay';
 
@@ -179,7 +179,7 @@ export function tgModel(p: TgPose, detail: Detail = 'full'): Model3 {
     { geo: s.closerWires, mat: closerMat, name: 'circuit closer', group: 'wires', shadow: false },
     { geo: s.sBase, mat: MATS.wood, name: 'sounder', group: 'sounder' },
     { geo: s.yoke, mat: MATS.iron, name: 'yoke', group: 'sounder', info: { note: 'closes the magnetic circuit under the two coils' } },
-    { geo: s.coils, mat: coilMat, name: 'coils', group: 'sounder', info: { note: '120 Ω main-line coils, worked by the line current itself' } },
+    { geo: s.coils, mat: coilMat, name: 'coils', group: 'sounder', info: { note: `${SOUNDER_R} Ω main-line coils, worked by the line current itself` } },
     { geo: s.cores, mat: MATS.iron, name: 'coils', group: 'sounder' },
     { geo: s.sPost, mat: MATS.brass, name: 'sounder', group: 'sounder' },
     { geo: s.armature, mat: MATS.iron, name: 'armature', group: 'armature', info: { note: 'pulled onto the anvil above the pull-in current (one click), lifted onto the upper stop by the spring (the other); its gap is drawn five times its size' } },

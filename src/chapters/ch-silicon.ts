@@ -20,6 +20,9 @@ import type { Chapter, Step } from './types';
 import { numOf } from './order';
 import { skyTimingHtml } from './silicon/skytiming';
 
+/** ASML's EUV system sales in 2024 (Q4 and full-year 2024 results, 29 January 2025): €8.3 billion on 44 systems (NXE and EXE). */
+const EUV_SALES_BN = 8.3, EUV_UNITS = 44;
+
 const num = (n: number) => groupDigits(Math.round(n));
 const times = (x: number) => (x >= 10 ? num(x) : x.toFixed(1));
 /** Poisson yield of a die of a mm² at d0 defects per cm². */
@@ -424,7 +427,7 @@ export const chSilicon: Chapter = {
         <p><strong>The scanner.</strong> From that hole to the wafer the light meets ${REFLECTIONS} mirrors: the illuminator's, which make the field even and choose the angles it arrives from, the mask (a mirror under its pattern), and six that image the mask onto the wafer four times smaller. After ten bounces ${(transmission(R_MIRROR, REFLECTIONS) * 100).toFixed(1)} % is left. Because the mask reflects, it is lit off its normal, at 6°, and the light coming in and going out must not share angles: at NA 0.33 each cone at the mask is ${maskHalfDeg(0.33, 4).toFixed(1)}° wide, inside the 6°. At NA 0.55 and the same 4× it would be ${maskHalfDeg(0.55, 4).toFixed(1)}°: the cones overlap. ${conesApart(OPTICS[2].na, OPTICS[2].mScan) ? 'The High NA tools therefore reduce 8× along the scan, which halves the field there, and keep 4× across it.' : ''}</p>`,
       widget: () => euv3d(),
       more: {
-        real: `<p>One company builds these scanners, with the mirrors from one optics maker; a tool costs well over a hundred million euros. The figures here are from ASML's published source paper (Fomenkov et al., Advanced Optical Technologies, 2017) and its product pages; the mirrors' positions in the model are an illustration of the path, not a design.</p>`,
+        real: `<p>One company builds these scanners, with the mirrors from one optics maker; ASML sold ${EUV_UNITS} EUV systems in 2024 for €${EUV_SALES_BN} billion, about €${Math.round((EUV_SALES_BN * 1000) / EUV_UNITS / 10) * 10} million each on average (ASML, Q4 and full-year 2024 results, January 2025; the first High-NA systems, dearer still, are in that sum). The figures here are from ASML's published source paper (Fomenkov et al., Advanced Optical Technologies, 2017) and its product pages; the mirrors' positions in the model are an illustration of the path, not a design.</p>`,
         pitfall: `<p>Thinking the scanner is a projector with lenses. At 13.5 nm every optic, the mask included, is a mirror, and each takes a third of the light: that, not the plasma, is why the source must make hundreds of watts.</p>`,
       },
     },
