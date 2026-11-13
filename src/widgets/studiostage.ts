@@ -225,10 +225,11 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     const k = st.knobs().explode;
     const seen: { r: typeof rows[number]; x: number; y: number; away: boolean }[] = [];
     const quiet = beat >= 0 && model.beats?.[beat]?.labels === false;
+    const cutNow = model.cutLabels ? cutsAt(model, st.knobs().cut) : [], isOpen = st.knobs().cut > 0.5;
     for (const r of rows) {
       const hiddenPart = !!hiddenNow && !!r.a.on && hiddenNow.has(r.a.on);
       const p3 = anchorAt(model, r.a, k, curMoves), p = st.project(p3);
-      const ok = !quiet && !hiddenPart && !!p && !!r.a.under === under && p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H;
+      const ok = !quiet && !hiddenPart && !isCut(cutNow, p3) && (r.a.whenCut === undefined || r.a.whenCut === isOpen) && !!p && !!r.a.under === under && p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H;
       r.el.style.display = 'none'; r.badge.style.display = 'none';
       r.li.hidden = !!r.a.under !== under; r.li.classList.toggle('off', !ok);
       if (!ok) continue;

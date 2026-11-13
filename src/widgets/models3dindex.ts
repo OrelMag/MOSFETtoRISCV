@@ -80,6 +80,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./finfet3d').then((m) => m.finfet3d()),
   },
   {
+    id: 'nmosgate', title: 'A 6502-style NMOS gate', category: 'devices', chapter: 'appendix-6502', step: 7,
+    summary: 'A two-input NOR in diffusion, polysilicon and aluminium: two pull-downs and a depletion load, three transistors, a ratio of four.',
+    files: ['nmosgate3d', 'nmosgate3dview', 'nmosgate3dkit'], factory: 'nmosGate3d', codex: ['cmos'],
+    open: () => import('./nmosgate3d').then((m) => m.nmosGate3d()),
+  },
+  {
     id: 'package', title: 'A package, opened up', category: 'devices', chapter: 'wire', step: 8,
     summary: 'Die, pads, bond wires, lead frame and board, with the ground bounce that more ground wires divide.',
     files: ['package3d', 'package3dview', 'package3dparts'], factory: 'package3d',

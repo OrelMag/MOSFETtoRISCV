@@ -1,0 +1,9 @@
+/* ---------- A 6502-style NMOS gate (widgets/nmosgate3dview.ts): Mead–Conway mask colours, as materials ---------- */
+.m3d, .ng3 {
+  --ng-diff: light-dark(#4f9a5e, #4a9a5c);
+  --ng-poly: light-dark(#c0504a, #c85a52);
+  --ng-metal: light-dark(#8fa8d8, #9bb3e0);
+  --ng-implant: light-dark(#e2c048, #e8c95a);
+  --ng-on: light-dark(#0aa5c8, #4fe3ff);
+  --ng-load: light-dark(#d08a1e, #ffb340);
+}
