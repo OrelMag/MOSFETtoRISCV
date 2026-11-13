@@ -311,8 +311,8 @@ Click **Statistics** in the left pane. **Hardware statistics** lists every part:
 - levels;
 - boxes inside.
 
-Use the tabs to see it built in **CMOS**, **Relays** or **Tubes**. Click a column to sort by it. **Group sizes**
-gathers the sizes of one part.
+Use the tabs to see it built in **CMOS**, **Relays** or **Tubes**. Click a column heading to sort by it (click
+**Transistors**, and the largest parts come first).
 
 ![Hardware statistics](img/workbench/20-statistics.png)
 
