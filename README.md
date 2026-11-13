@@ -5,7 +5,7 @@ silicon, and on to a GPU, a memory system, how computers talk from the telegraph
 digital signal processing up to a software radio, Doom and a breadboard computer, as a static website.
 **[Open it →](https://switchtocpu.com/)** · by Orel Magidish
 
-![Drilling from a 4-bit adder into a full adder, into one NAND, down to its four transistors](docs/images/drill.gif)
+![Opening a 4-bit adder, then a full adder, then one NAND, down to its four transistors](docs/images/drill.gif)
 
 Every level is built only from the level below it, and **every box is transparent**: double-click
 any part to look inside, all the way down to the MOSFETs. Wire values are computed live by an
@@ -23,16 +23,16 @@ The View options menu turns it off, and sets the palette, wire thickness, grid, 
 Two more are on by default: **Open blocks as you zoom** (zoom into a block and its inside opens in place, live; zoom
 further to step in, out to close it) and **Opened blocks without colour** (an opened block's inside reads on the plain board).
 
-The 3D models (transistors, relays, valves, memories, chips, a picture tube, the Enigma and more) share one stage: drag to
+The 3D models (transistors, relays, valves, memories, chips, a picture tube, the Enigma and more) share the same controls: drag to
 turn, Cutaway and Explode to open them, a Tour through their views, names on every part (**N** hides them), a card per part
 with its size and source, full screen and a saved image. Each says what is to scale and what is exaggerated, and a printed
 chapter keeps them as figures.
 
-Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journey-->94<!--/n--> chapters,
-<!--n:onramps-->2<!--/n--> on-ramps for newcomers, <!--n:prologue-->3<!--/n--> prologue chapters and <!--n:appendices-->6<!--/n--> appendices), the **[campaign](https://switchtocpu.com/#/campaign)**
-(<!--n:levels-->182<!--/n--> levels: build it to unlock it, or fix it), the **[workbench](https://switchtocpu.com/#/workbench/rca4)**
-(any component on its own, with statistics, benchmarks and the out-of-order lab) and the
-**[sandbox](https://switchtocpu.com/#/sandbox)** (your own circuits, up to whole computers).
+Four ways in, as the top bar names them: **[Chapters](https://switchtocpu.com/#/c/map/0)**, the journey (<!--n:journey-->94<!--/n--> chapters,
+<!--n:onramps-->2<!--/n--> on-ramps for newcomers, <!--n:prologue-->3<!--/n--> prologue chapters and <!--n:appendices-->6<!--/n--> appendices), **[Campaign](https://switchtocpu.com/#/campaign)**
+(<!--n:levels-->182<!--/n--> levels: build it to unlock it, or fix it), **[Workbench](https://switchtocpu.com/#/workbench/rca4)**
+(any component on its own, with statistics, benchmarks and the out-of-order lab) and
+**[Sandbox](https://switchtocpu.com/#/sandbox)** (your own circuits, up to whole computers).
 
 ## Manual
 
@@ -123,7 +123,7 @@ review queue; one backup file carries all progress; the site installs as an app 
 <table>
 <tr>
 <td width="50%"><img src="docs/images/relay3d.png" alt="A telephone relay in 3D beside its coil current and armature travel"><br><sub><b>P1</b>: a relay in 3D on a physical model: pull-in, contact bounce, the 8 ms step a relay computer runs at.</sub></td>
-<td width="50%"><img src="docs/images/triode3d.png" alt="A 6SN7 triode section in 3D with its plate curve"><br><sub><b>P2</b>: a 6SN7 triode warming up, its grid deciding the plate current; tube gates follow.</sub></td>
+<td width="50%"><img src="docs/images/triode3d.png" alt="A 6SN7 triode section in 3D, its grid, heater, cutaway and explode controls below"><br><sub><b>P2</b>: a 6SN7 triode warming up, its grid deciding the plate current; tube gates follow.</sub></td>
 </tr>
 <tr>
 <td><img src="docs/images/mosfet.png" alt="MOSFET cross-section: the channel forms past the threshold voltage"><br><sub><b>Ch. <!--n:ch.mosfet-->1<!--/n--></b>: the MOSFET. Raise the gate past the threshold and the channel forms.</sub></td>
