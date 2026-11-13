@@ -15,7 +15,7 @@ You reach them from the top bar: **Chapters**, **Campaign**, **Workbench** and *
 | Section | What it is for | Start here if you … | Quick start |
 |---|---|---|---|
 | **The journey** (**Chapters**) | The story, chapter by chapter: each step explains one idea next to a live circuit you can change and open. Each chapter uses only what the earlier ones built. | want to learn how a computer works, from the beginning or from the chapter you need. | [Quick start](journey.md#quick-start) |
-| **Campaign** | A map of levels where you build each part yourself, from the parts the levels before it unlocked, and the site checks your circuit. | learn best by doing, and like a puzzle with a check. | [Quick start](campaign.md#quick-start-your-first-level) |
+| **Campaign** | A map of levels where you build each part yourself, from the parts the levels before it unlocked, and the site checks your circuit. | learn best by doing, and like a puzzle with a check. | [Quick start](campaign.md#quick-start) |
 | **Workbench** | Every part in the library on one bench: try it, change its size, read its cost, truth table and Verilog, open it down to transistors. Also the statistics, the processor benchmarks and the out-of-order lab. | know which part you want to look at, or want to compare parts and processors. | [Quick start](workbench.md#quick-start) |
 | **Sandbox** | A circuit editor: place parts, draw wires, package your circuit as a chip and use it in the next one, up to whole computers with screens and keyboards. | want to design your own circuits. | [Quick start](sandbox.md#quick-start) |
 
@@ -26,7 +26,7 @@ Not sure where to begin? On the home page, **Where are you starting?** lets you 
 ## Quick starts
 
 - [The journey: read a step, change an input, open a block down to transistors, answer a question](journey.md#quick-start)
-- [The campaign: open the map and pass your first build level](campaign.md#quick-start-your-first-level)
+- [The campaign: open the map and pass your first build level](campaign.md#quick-start)
 - [The workbench: pick a part, set its size, read its cost and truth table, open it](workbench.md#quick-start)
 - [The sandbox: build a NAND gate and package it as your own chip](sandbox.md#quick-start)
 - [Everywhere: five things to know in every section](everywhere.md#quick-start-five-things-to-know)

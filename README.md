@@ -40,7 +40,7 @@ New to the site? The **[instruction manual](docs/manual/README.md)** has a quick
 four sections, then where every control is and how to do each task:
 
 - [The journey](docs/manual/journey.md#quick-start): read a step, set an input, open a gate down to its transistors, answer its question.
-- [The campaign](docs/manual/campaign.md#quick-start-your-first-level): open the map and pass your first build level.
+- [The campaign](docs/manual/campaign.md#quick-start): open the map and pass your first build level.
 - [The workbench](docs/manual/workbench.md#quick-start): pick a part, set its size, read its cost and truth table, open it.
 - [The sandbox](docs/manual/sandbox.md#quick-start): build a NAND gate, try it and package it as your own chip.
 - [What works everywhere](docs/manual/everywhere.md): search, view options, keys, My path, notes and review, backup, print, phone and offline.
