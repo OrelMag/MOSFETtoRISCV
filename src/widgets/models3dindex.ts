@@ -196,7 +196,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'williams', title: 'A store on a picture tube', category: 'machines', chapter: 'appendix-baby', step: 1,
     summary: 'The Manchester Baby\'s Williams tube: a raster of dots and dashes held as charge, read through a wire-mesh pick-up plate and rewritten before it leaks away.',
-    files: ['williams3d', 'williams3dview', 'williams3dparts'], factory: 'williams3d',
+    files: ['williams3d', 'williams3dview', 'williams3dkit', 'williams3dparts'], factory: 'williams3d',
     open: () => import('./williams3d').then((m) => m.williams3d()),
   },
   {
