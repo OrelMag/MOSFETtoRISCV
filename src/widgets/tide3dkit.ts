@@ -254,7 +254,7 @@ export function tideModel(s: TideState, detail: 'full' | 'flat' = 'full'): Model
   else items.push({ geo: S.paper, mat: MATS.paper(s.paper), at: [PEN_X - 1 + (PAPER_L + 1) / 2, (PAPER_Y0 + PAPER_Y1) / 2, PAPER_Z + 0.21], rot: UPRIGHT, name: 'paper band', group: 'paper', shadow: false,
     info: { note: td.kind === 'tide' ? 'a mark a day; the pen’s line is the predicted tide, each faint line one constituent’s share' : 'the pen’s line is the sum; each faint line is one crank’s term, in its colour' } });
   S.rollers.forEach((g, k) => items.push({ geo: g, mat: MATS.steel, name: k ? 'take-up drum' : 'supply roller', group: k ? 'drum' : 'supply' }, { geo: S.rollerMarks[k], mat: MATS.ink, name: k ? 'take-up drum' : 'supply roller', group: k ? 'drum' : 'supply' }));
-  items.push({ geo: S.fixed, mat: MATS.brass, name: 'fixed pulley', group: 'fixed', info: { dim: `${(2 * R_FIX * 10).toFixed(0)} mm across (drawn; about 50 mm on the machine)` } });
+  items.push({ geo: S.fixed, mat: MATS.brass, name: 'fixed pulley', group: 'fixed', info: { dim: `${(2 * R_FIX * 10).toFixed(0)} mm across (drawn, not measured)` } });
   items.push({ geo: S.forks, mat: MATS.iron, name: 'fork', group: 'fixed' });
   items.push({ geo: S.clamp, mat: MATS.brass, name: 'cord clamp', group: 'fixed', info: { note: 'the cord’s fixed end' } });
   for (let i = 0; i < N_CRANKS; i++) {

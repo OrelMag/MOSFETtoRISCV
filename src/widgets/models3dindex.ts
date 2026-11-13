@@ -154,7 +154,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'speaker', title: 'Loudspeaker and microphone', category: 'dsp', chapter: 'speech', step: 0,
     summary: 'A Dayton RS180-8 cut open: the DAC\'s held samples move the cone; run backwards, the coil makes the microphone\'s millivolts.',
-    files: ['speaker3d', 'speaker3dview', 'speaker3dparts'], factory: 'speaker3d',
+    files: ['speaker3d', 'speaker3dview', 'speaker3dparts', 'speaker3dkit'], factory: 'speaker3d',
     open: () => import('./speaker3d').then((m) => m.speaker3d()),
   },
   {

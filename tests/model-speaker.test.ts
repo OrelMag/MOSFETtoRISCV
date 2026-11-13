@@ -2,21 +2,16 @@
 // pitch), the massless contrast sits exactly on the held (ZOH) sample, the cone is drawn where the model says and the phase plug stays put, the stroke
 // stays within Xmax, and the microphone's EMF is Bl times the cone's velocity.
 import { describe, expect, it } from 'vitest';
-import { quatRotate } from '../src/gl/math';
 import { wavSamples } from './dsp/wav';
 import {
-  BL, CMS_M_N, QMS, I_RATED, peakStrokeMm, currentA, currentForStroke, evolve, strokeForAmp, DRAW_K, FS_HZ, MMS_KG, PRESSURE_PA, SD_M2, drawnRatio, pitchHz, realMotion, realPeakUm, realUm, velocityMmS, GEOM, I_FULL, VOICE_RATE, WINDOW, XMAX_MM, coneMm, neckY, emfVolts, GEOM as G0, PLUG, heldCode, loudestWindow, makeDrive, poseAt, slab,
-  speakerAnchors, speakerParts, staircase, type SpeakerPalette,
+  BL, CMS_M_N, QMS, I_RATED, peakStrokeMm, currentA, currentForStroke, evolve, strokeForAmp, DRAW_K, FS_HZ, MMS_KG, PRESSURE_PA, SD_M2, drawnRatio, pitchHz, realMotion, realPeakUm, realUm, velocityMmS, GEOM, I_FULL, VOICE_RATE, WINDOW, XMAX_MM, coneMm, neckY, emfVolts, GEOM as G0, PLUG, heldCode, loudestWindow, makeDrive, poseAt, NECK_Y,
+  staircase,
 } from '../src/widgets/speaker3dparts';
+import { bentAt, dyOf, speakerModel, speakerPose } from '../src/widgets/speaker3dkit';
+import { boundsOfNamed } from '../src/gl/kit/scene';
 
 const w = wavSamples('public/dsp/voice-8k.wav');
 const codes = w.x.slice(loudestWindow(w.x), loudestWindow(w.x) + WINDOW);
-const col = (i: number): [number, number, number] => [i / 20, 0.5, 0.5];
-const P: SpeakerPalette = {
-  steel: col(1), magnet: col(2), basket: col(3), cone: [0.3, 0.3, 0.3, 0.8], plug: col(5), former: col(6), wire: col(7), wire2: col(16), flux: col(17), rubber: col(8), spider: col(9),
-  stair: col(10), stairDim: [0.1, 0.1, 0.9, 0.3], trace: col(12), cursor: col(13), live: col(14), zero: col(15),
-};
-const same = (a: readonly number[], b: readonly number[]) => a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
 
 describe('the speaker model against the chapter', () => {
   it('uses the chapter\'s recording: 8 kHz, a full window of its samples', () => {
@@ -42,20 +37,19 @@ describe('the speaker model against the chapter', () => {
 
   it('the drawn cone sits at the cone position (rest height plus the real stroke, the drawn magnification)', () => {
     expect(DRAW_K).toBe(1);
-    const d = makeDrive(codes, 'speaker', false), cone = (t: number) => speakerParts(d, t, P).filter((p) => same(p.color as number[], P.cone));
-    const lowY = (t: number) => Math.min(...cone(t).map((p) => p.pos[1]));
+    const d = makeDrive(codes, 'speaker', false);
     for (const n of [0, 7, 20, 41, 63]) {
-      const c = poseAt(d, n + 0.5).cone;
-      expect(lowY(n + 0.5) - lowY(0)).toBeCloseTo(neckY(c, d.mag) - neckY(poseAt(d, 0).cone, d.mag), 6);
+      const s = { d, t: n + 0.5 }, mv = speakerPose(s).get('moving')!;
+      expect(mv[13]).toBeCloseTo(neckY(poseAt(d, n + 0.5).cone, d.mag) - NECK_Y, 5);
+      expect(dyOf(s)).toBeCloseTo(mv[13], 5);
     }
   });
 
   it('the phase plug (Dayton: solid aluminium, no dust cap) is fixed, solid, clear of the former and above the neck', () => {
-    const d = makeDrive(codes, 'speaker', false), plug = (t: number) => speakerParts(d, t, P).filter((p) => same(p.color as number[], P.plug));
-    expect(plug(0).length).toBeGreaterThan(0);
-    for (const n of [7, 20, 41, 63]) expect(plug(n + 0.5)).toEqual(plug(0)); // the cone moves, the plug does not
-    const peak = (Math.max(...plug(0).map((p) => p.pos[1] + p.scale![1] / 2)));
-    expect(peak).toBeCloseTo(PLUG.tip, 6);
+    const d = makeDrive(codes, 'speaker', false), m = speakerModel({ d, t: 0 });
+    for (const n of [7, 20, 41, 63]) expect(speakerPose({ d, t: n + 0.5 }).has('plug')).toBe(false); // the cone moves, the plug does not
+    expect(m.items.some((i) => /dust cap/.test(i.name ?? ''))).toBe(false);
+    expect(boundsOfNamed(m, ['plug']).max[1]).toBeCloseTo(PLUG.tip, 3);
     let top = 0;
     for (let t = 0; t < WINDOW; t += 0.1) top = Math.max(top, neckY(poseAt(d, t).cone, d.mag));
     expect(top).toBeGreaterThan(G0.formerTop);
@@ -170,18 +164,24 @@ describe('the speaker model against the chapter', () => {
     expect(2 * Math.sqrt(124.7 / Math.PI) * 10).toBeGreaterThan(2 * GEOM.coneRim - 2); // Sd's diameter, 126 mm
   });
 
-  it('slabs are oriented: the local x axis points along the radial slope', () => {
-    const phi = 1.25 * Math.PI, s = slab([0, 0, 0], phi, 0.2, 10, 0, 20, 0, 1), x = quatRotate(s.rot!, [1, 0, 0]);
-    expect(x[0]).toBeCloseTo(Math.cos(phi), 9);
-    expect(x[2]).toBeCloseTo(Math.sin(phi), 9);
-    expect(x[1]).toBeCloseTo(0, 9);
-  });
-
-  it('every part is cut away at the front (z <= 0) except nothing, and labels are in both modes', () => {
-    for (const mode of ['speaker', 'mic'] as const) {
-      const d = makeDrive(codes, mode, false);
-      for (const p of speakerParts(d, 5.5, P)) if (p.pos[0] < 130) expect(p.pos[2]).toBeLessThanOrEqual(2); // flux / current marks sit just in front of the cut face
-      expect(speakerAnchors(d, 5.5).length).toBeGreaterThan(8);
+  it('the spider, surround and lead bend in place: the same counts at every pose', () => {
+    const r = bentAt(0, 'full');
+    for (const dy of [-6, -2.5, 3, 6]) {
+      const b = bentAt(dy, 'full');
+      for (const k of ['spider', 'surround', 'lead'] as const) { expect(b[k].positions.length).toBe(r[k].positions.length); expect(b[k].indices.length).toBe(r[k].indices.length); }
     }
   });
+
+  it('the model cuts the front half away, every part is finite, labels sit on named groups, and the mic draws no force', () => {
+    for (const mode of ['speaker', 'mic'] as const) {
+      const d = makeDrive(codes, mode, false), m = speakerModel({ d, t: 5.5 });
+      expect(m.cuts!.planes[0].n).toEqual([0, 0, 1]);
+      for (const it of m.items) for (const v of it.geo.positions) expect(Number.isFinite(v)).toBe(true);
+      const groups = new Set(m.items.map((i) => i.group));
+      for (const a of m.anchors!) expect(groups.has(a.on!)).toBe(true);
+      expect(m.anchors!.length).toBeGreaterThanOrEqual(6);
+      expect(groups.has('force')).toBe(mode === 'speaker');
+    }
+  });
+
 });

@@ -25,3 +25,11 @@
 .sp-toner { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--text-2); margin: 6px 0; }
 .sp-tone { font: inherit; min-height: 28px; max-width: 100%; }
 @media (pointer: coarse) { .sp-tone { min-height: 40px; } }
+.sp-below { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 24px; margin-top: 8px; }
+@media (max-width: 900px) { .sp-below { grid-template-columns: minmax(0, 1fr); } }
+.sp-plot { display: block; width: 100%; height: auto; max-height: 150px; background: var(--surface-2); border-radius: 6px; }
+.sp-plot .sp-zero { stroke: var(--sp-cursor); stroke-width: 0.6; opacity: 0.5; }
+.sp-plot .sp-st { fill: none; stroke: var(--sp-stair); stroke-width: 1.6; }
+.sp-plot .sp-st.dim { opacity: 0.3; }
+.sp-plot .sp-tr { fill: none; stroke: var(--sp-trace); stroke-width: 2; }
+.sp-plot .sp-cur { stroke: var(--sp-cursor); stroke-width: 1; }
