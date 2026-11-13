@@ -471,6 +471,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Wafers, yield and cost", challenge: "quiz", stage: "widget" },
     { title: "The same CPU in relays and tubes", challenge: "quiz", stage: "widget" },
     { title: "The journey", challenge: "quiz", stage: "widget" },
+    { title: "The light that draws it", stage: "widget" },
   ] },
   { id: "fpga", num: 36, title: "From netlist to FPGA", blurb: "Look-up tables, covering a netlist with them, the logic cell and its carry chain, routing switches, block RAM, and our RISC-V computer placed and routed on a Tang Nano 9K, measured against our own estimates.", level: "Physical design", builds: ["routing","memory","adders","silicon"], recap: {"checks":3}, steps: [
     { title: "Hardware you can rewrite", stage: "widget" },
