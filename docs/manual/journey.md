@@ -92,7 +92,9 @@ That is the whole pattern of every chapter: read, try the circuit, open what you
 1. Click a step's dot under the chapter title, or **Back** / **Next** at the bottom of the text. At the last step,
    **Next** goes on to the next chapter.
 2. Keys: **]** next step, **[** previous step, **}** next chapter, **{** previous chapter.
-3. To jump anywhere, click the chapter title (or **Chapters** in the top bar): the menu lists every chapter with its
+3. A step that opens with *Optional: a deep dive. Nothing later relies on it.* can be skipped: no later step,
+   question or level needs it.
+4. To jump anywhere, click the chapter title (or **Chapters** in the top bar): the menu lists every chapter with its
    number of steps and how far you got, and has a search box at its top.
 
 ![The chapter menu: a search box, Print this chapter, then the chapters by section](img/journey/14-chapter-menu.png)
