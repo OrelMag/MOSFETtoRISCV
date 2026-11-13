@@ -17,7 +17,7 @@ export interface LayeredOptions {
   pinned?: string[];
   /** Nets (by driver end) forced to wires, or to pointers (false). */
   wires?: Record<string, boolean>;
-  /** Column per instance name, overriding the depth (relative, 0 = first). */
+  /** Columns to move a part by from its depth (negative: earlier); the columns are then counted from the first one used. */
   column?: Record<string, number>;
   /** Rows to move a part by after the layout settled (negative: up): out of the way of a wire that must pass it. */
   nudge?: Record<string, number>;
@@ -35,6 +35,12 @@ export interface LayeredOptions {
    * bit-sliced block may come out of order).
    */
   keepOrder?: boolean;
+  /**
+   * Draw a short forward net as a wire only when no other part stands in the rectangle between its driver and each sink (a
+   * wire the router would have to take through or round a part reads worse than its label). Off: as before, for the sites that
+   * were measured that way.
+   */
+  avoid?: boolean;
   /** Minimum row-to-row spacing of pins. */
   pinPitch?: number | [number, number];
   /**
@@ -100,8 +106,10 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
       if (rs.length) layer.set(n, Math.min(...rs) - 1);
     }
   }
-  const minL = Math.min(...names.map((n) => layer.get(n)!));
-  for (const n of names) layer.set(n, layer.get(n)! - minL + (opts.column?.[n] ?? 0));
+  for (const n of names) layer.set(n, layer.get(n)! + (opts.column?.[n] ?? 0));
+  // an override may move a part before the first column: the columns start again at 0
+  const minC = Math.min(...names.map((n) => layer.get(n)!));
+  for (const n of names) layer.set(n, layer.get(n)! - minC);
   const L = Math.max(...names.map((n) => layer.get(n)!)) + 1;
   const cols: string[][] = Array.from({ length: L }, () => []);
   for (const n of names) cols[layer.get(n)!].push(n);
@@ -210,11 +218,22 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
       const p = geom.get(n)!.ports[portOf(end)]?.pos ?? [0, 0];
       return [at.get(n)![0] + p[0], at.get(n)![1] + p[1]];
     };
+    // avoid: no part but the two ends overlaps the rectangle spanned by the two port positions (a little inside each edge)
+    const clear = (de: string, se: string, d: [number, number], q: [number, number]): boolean => {
+      if (!opts.avoid) return true;
+      if (q[0] <= d[0]) return false; // a wire back or straight down goes round a part
+      const x0 = Math.min(d[0], q[0]), x1 = Math.max(d[0], q[0]), y0 = Math.min(d[1], q[1]) - 0.5, y1 = Math.max(d[1], q[1]) + 0.5, own = new Set([inst(de), inst(se)]);
+      return instances.every((i) => {
+        if (own.has(i.name)) return true;
+        const g = geom.get(i.name)!, [ix, iy] = i.at!;
+        return ix + g.w <= x0 || ix >= x1 || iy + g.h <= y0 || iy >= y1;
+      });
+    };
     const outNets = nets.map((n) => {
       const o = opts.wires?.[n.ends[0]];
       const local = n.tags === true && n.ends.length - 1 < 5 && !CLOCK.test(n.name ?? '') && (() => {
         const d = endPos(n.ends[0]);
-        return n.ends.slice(1).every((e) => { const q = endPos(e); return q[0] >= d[0] - 2 && Math.abs(q[0] - d[0]) + Math.abs(q[1] - d[1]) <= 45; });
+        return n.ends.slice(1).every((e) => { const q = endPos(e); return q[0] >= d[0] - 2 && Math.abs(q[0] - d[0]) + Math.abs(q[1] - d[1]) <= 45 && clear(n.ends[0], e, d, q); });
       })();
       if (o === undefined && !local) return n;
       if (o === false) return { ...n, tags: true as const };
@@ -247,9 +266,34 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
     nl = next;
   }
   if (opts.aspect) nl = fold(nl, opts.aspect);
+  // avoid was judged before the fold moved whole bands: a wire clear then may cross a part now, so it is labels after all
+  if (opts.aspect && opts.avoid) nl = reclear(nl);
   const { pins, instances, nets: outNets } = nl;
   void byName;
   return { pins, instances, nets: outNets };
+
+  /** The avoid rule again, on the drawing as it now stands: a wire (not named in opts.wires) with a part between its ends is labels. */
+  function reclear(n0: ReturnType<typeof lay>): ReturnType<typeof lay> {
+    const at = new Map(n0.instances.map((i) => [i.name, i.at!]));
+    const pos = (end: string): [number, number] => {
+      const n = inst(end);
+      if (!n) return n0.pins[end] ?? [0, 0];
+      const p = geom.get(n)!.ports[portOf(end)]?.pos ?? [0, 0];
+      return [at.get(n)![0] + p[0], at.get(n)![1] + p[1]];
+    };
+    const blocked = (de: string, se: string): boolean => {
+      const d = pos(de), q = pos(se);
+      if (q[0] <= d[0]) return true;
+      const x0 = d[0], x1 = q[0], y0 = Math.min(d[1], q[1]) - 0.5, y1 = Math.max(d[1], q[1]) + 0.5, own = new Set([inst(de), inst(se)]);
+      return n0.instances.some((i) => {
+        if (own.has(i.name)) return false;
+        const g = geom.get(i.name)!, [ix, iy] = i.at!;
+        return !(ix + g.w <= x0 || ix >= x1 || iy + g.h <= y0 || iy >= y1);
+      });
+    };
+    const nets = n0.nets.map((n) => (n.tags || opts.wires?.[n.ends[0]] !== undefined || !n.ends.slice(1).some((e) => blocked(n.ends[0], e)) ? n : { ...n, tags: true as const }));
+    return { ...n0, nets };
+  }
 
   /**
    * A drawing far wider than `target` (w / h): its columns in 2–4 bands stacked top to bottom, as many as bring the whole
@@ -266,6 +310,7 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
       return { y0: Math.min(...ns.map((n) => at.get(n)![1])), y1: Math.max(...ns.map((n) => at.get(n)![1] + h(n))) };
     };
     const all = extent([...cols.keys()]), H1 = all.y1 - all.y0;
+    if (right / Math.max(H1, 1) < target / 1.35) return foldTall(nl, target, at, x0);
     if (L < 4 || right / Math.max(H1, 1) <= target * 1.35) return nl;
     // seams for R bands: per cut, the channel within a quarter band of the even split that the fewest edges cross
     const seamsFor = (R: number): number[] | null => {
@@ -310,6 +355,72 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
       for (const c of cs) for (const n of cols[c]) { band.set(n, k); const p = at.get(n)!; moved.set(n, [p[0] + dx, p[1] + dy]); }
       y += e.y1 - e.y0 + BAND_GAP;
     });
+    return finish(nl, moved, band, best.width, best.bands.length);
+  }
+
+  /**
+   * A drawing far taller than `target` (a column of many parts: a wide decoder's gates, a row of comparators): cut across
+   * at 2–4 heights no part straddles, each near an even split and crossed by the fewest nets, the strips set side by side
+   * left to right. A net reaching across a seam becomes labels, and so does a pin's net that serves a strip other than
+   * the first (an input) or the last (an output).
+   */
+  function foldTall(nl: ReturnType<typeof lay>, target: number, at: Map<string, [number, number]>, x0: number): ReturnType<typeof lay> {
+    const parts = nl.instances.map((i) => { const p = at.get(i.name)!; return { n: i.name, x0: p[0], x1: p[0] + w(i.name), y0: p[1], y1: p[1] + h(i.name) }; });
+    if (parts.length < 4) return nl;
+    const top = Math.min(...parts.map((p) => p.y0)), bottom = Math.max(...parts.map((p) => p.y1)), H = bottom - top;
+    const portY = (end: string): number | null => {
+      const n = inst(end); if (!n) return null;
+      return at.get(n)![1] + (geom.get(n)!.ports[portOf(end)]?.pos[1] ?? 0);
+    };
+    const spansY = nl.nets.map((n) => { const ys = n.ends.map(portY).filter((y): y is number => y !== null); return ys.length > 1 ? [Math.min(...ys), Math.max(...ys)] : null; })
+      .filter((s): s is number[] => !!s);
+    // a cut just below a part, where no part straddles it
+    const cands = [...new Set(parts.map((p) => p.y1 + 1))].filter((c) => c < bottom && !parts.some((p) => p.y0 < c && c < p.y1)).sort((a, b) => a - b);
+    const crossing = (c: number) => spansY.filter(([a, b]) => a < c && c < b).length;
+    // a seam may carry a label out of one strip and another into the next: room for the widest of each, as labelRoom does
+    const STRIP_GAP = Math.max(16, Math.ceil(2 * Math.max(0, ...nl.nets.map((n, k) => tagWidth(n.name ?? `n${k}`))) + 4));
+    const plan = (cuts: number[]) => {
+      const lims = [-Infinity, ...cuts, Infinity];
+      const strips = cuts.concat(Infinity).map((_, k) => parts.filter((p) => p.y0 >= lims[k] && p.y0 < lims[k + 1]));
+      if (strips.some((s) => !s.length)) return null;
+      const ext = strips.map((s) => ({ x0: Math.min(...s.map((p) => p.x0)), x1: Math.max(...s.map((p) => p.x1)), y0: Math.min(...s.map((p) => p.y0)), y1: Math.max(...s.map((p) => p.y1)) }));
+      const width = x0 + ext.reduce((a, e) => a + e.x1 - e.x0, 0) + STRIP_GAP * (strips.length - 1);
+      const height = Math.max(...ext.map((e) => e.y1 - e.y0));
+      return { strips, ext, width, height };
+    };
+    const right = Math.max(...parts.map((p) => p.x1));
+    let best: NonNullable<ReturnType<typeof plan>> | null = null, bestErr = Math.abs(Math.log(right / Math.max(H, 1) / target));
+    for (let R = 2; R <= 4; R++) {
+      const cuts: number[] = [];
+      for (let k = 1; k < R; k++) {
+        const ideal = top + (H * k) / R, slack = H / R / 4;
+        let pick = -1, cost = Infinity;
+        for (const c of cands) {
+          if (c <= (cuts.at(-1) ?? -Infinity) || Math.abs(c - ideal) > slack) continue;
+          const v = crossing(c) + Math.abs(c - ideal) / slack;
+          if (v < cost) { cost = v; pick = c; }
+        }
+        if (pick < 0) break;
+        cuts.push(pick);
+      }
+      if (cuts.length !== R - 1) continue;
+      const p = plan(cuts); if (!p) continue;
+      const err = Math.abs(Math.log(p.width / Math.max(p.height, 1) / target));
+      if (err < bestErr - 1e-9) { best = p; bestErr = err; }
+    }
+    if (!best) return nl;
+    const band = new Map<string, number>(), moved = new Map<string, [number, number]>();
+    let x = x0;
+    best.strips.forEach((s, k) => {
+      const e = best!.ext[k];
+      for (const p of s) { band.set(p.n, k); moved.set(p.n, [x + p.x0 - e.x0, 2 + p.y0 - e.y0]); }
+      x += e.x1 - e.x0 + STRIP_GAP;
+    });
+    return finish(nl, moved, band, best.width, best.strips.length, true);
+  }
+
+  /** The folded drawing's pins and nets: pins at the height of the ends they serve, a net across a seam as labels. */
+  function finish(nl: ReturnType<typeof lay>, moved: Map<string, [number, number]>, band: Map<string, number>, width: number, bands: number, sideBySide = false): ReturnType<typeof lay> {
     const instances = nl.instances.map((i) => ({ ...i, at: moved.get(i.name)! }));
     const portAt = (end: string): [number, number] | null => {
       const n = inst(end); if (!n) return null;
@@ -319,19 +430,26 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
     // pins: each at the height of the ends it serves, inputs at the left edge, outputs at the right, kept a pitch apart
     const pitches: [number, number] = Array.isArray(opts.pinPitch) ? opts.pinPitch : [opts.pinPitch ?? 2, opts.pinPitch ?? 2];
     const pins: Record<string, [number, number]> = {};
-    const outX = best.width + Math.max(6, Math.ceil(Math.max(0, ...ports.filter((p) => p.dir === 'out').map((p) => tagWidth(p.name))) + 12));
+    const outX = width + Math.max(6, Math.ceil(Math.max(0, ...ports.filter((p) => p.dir === 'out').map((p) => tagWidth(p.name))) + 12));
+    // pinOrder holds folded too: a level drawn as a chip compiles its ports in pin order, and a bench may bind them by position
+    const rank = (n: string) => opts.pinOrder?.indexOf(n) ?? -1;
     const place = (side: PortDef[], px: number, pitch: number) => {
       const want = side.map((p) => {
         const ys = nl.nets.filter((n) => n.ends.includes(p.name)).flatMap((n) => n.ends.map(portAt)).filter((q): q is [number, number] => !!q).map((q) => q[1]);
         return { p: p.name, y: ys.length ? ys.reduce((a, v) => a + v, 0) / ys.length : 2 };
-      }).sort((a, b) => a.y - b.y);
+      }).sort((a, b) => (rank(a.p) >= 0 && rank(b.p) >= 0 ? rank(a.p) - rank(b.p) : a.y - b.y));
       let yy = 2;
       for (const q of want) { const t = Math.max(yy, Math.round(q.y)); pins[q.p] = [px, t]; yy = t + pitch; }
     };
     place(ports.filter((p) => p.dir === 'in'), 0, pitches[0]);
     place(ports.filter((p) => p.dir === 'out'), outX, pitches[1]);
-    // a net across a seam is labels; within one band it keeps layered's choice
-    const bandOf = (end: string): number | 'pin' => { const n = inst(end); return n ? band.get(n)! : 'pin'; };
+    // a net across a seam is labels; within one band it keeps layered's choice. A pin stands beside the first band (an
+    // input) or the last (an output): folded side by side, a pin serving another strip is a label too.
+    const bandOf = (end: string): number | 'pin' => {
+      const n = inst(end); if (n) return band.get(n)!;
+      if (!sideBySide) return 'pin';
+      return ports.find((p) => p.name === end)?.dir === 'out' ? bands - 1 : 0;
+    };
     const nets = nl.nets.map((n) => {
       const bs = new Set(n.ends.map(bandOf).filter((b) => b !== 'pin'));
       if (bs.size <= 1 || opts.wires?.[n.ends[0]] === true) return n;

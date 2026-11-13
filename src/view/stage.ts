@@ -299,7 +299,7 @@ export class Stage {
   private ovRaf = 0;
   private moreMenu: HTMLElement;
   /** The bar's buttons fitBar may move into More, in that order, with what each does there. */
-  private shedGroups: { els: HTMLElement[]; items: { label: string; hint?: string; icon: string; on?: () => boolean; run: () => void }[] }[] = [];
+  private shedGroups: { els: HTMLElement[]; items: { label: string; hint?: string; icon: string; on?: () => boolean; off?: () => string | undefined; run: () => void }[] }[] = [];
   /** Fixed clock period in gate delays (null: every edge waits for the logic to settle). */
   private period: number | null = null;
   private nextEdge = 0;
@@ -448,7 +448,7 @@ export class Stage {
       if (!moreWrap.contains(e.target as Node)) this.toggleMore(false);
     }, { signal: this.life.signal });
     moreMenu.addEventListener('keydown', (e) => {
-      const items = [...moreMenu.querySelectorAll<HTMLElement>('button')];
+      const items = [...moreMenu.querySelectorAll<HTMLElement>('button:not(:disabled)')];
       const i = items.indexOf(document.activeElement as HTMLElement);
       if (e.key === 'Escape') {
         e.stopPropagation();
@@ -476,7 +476,7 @@ export class Stage {
       { els: [this.timingBtn], items: [{ label: 'Timing diagram', icon: 'wave', on: () => pressed(this.timingBtn), run: () => this.timingBtn.click() }] },
       { els: [this.probeBtn], items: [{ label: 'Probe mode (P)', icon: 'probe', on: () => pressed(this.probeBtn), run: () => this.probeBtn.click() }] },
       { els: [this.whyBtn], items: [{ label: 'Why? (W)', icon: 'why', on: () => pressed(this.whyBtn), run: () => this.whyBtn.click() }] },
-      { els: [this.ovBar.el], items: OVERLAY_KINDS.map((k) => ({ label: `Overlay: ${OVERLAY_LABEL[k]}`, hint: this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
+      { els: [this.ovBar.el], items: OVERLAY_KINDS.map((k) => ({ label: `Overlay: ${OVERLAY_LABEL[k]}`, off: () => this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
       // the lock last: its state (a phone starts locked) has to stay in sight, as a bare icon once the labels go
       { els: [lockBtn], items: [{ label: 'Move parts by dragging', hint: 'Off: a drag on a part pans', icon: 'unlock', on: () => settings.moveParts, run: () => settings.set('moveParts', !settings.moveParts) }] },
     ];
@@ -701,20 +701,27 @@ export class Stage {
     more.setAttribute('aria-expanded', String(open));
     if (!open) return;
     menu.replaceChildren();
+    let said = '';
     for (const g of this.shedGroups) {
       if (!g.els[0].classList.contains('shed') || g.els[0].hidden) continue;
       for (const it of g.items) {
         const on = it.on?.();
+        // asked when the menu opens: what applies depends on the open level (an overlay refused there is shown with why)
+        const why = it.off?.();
+        // the same reason under every refused overlay would fill a phone: said once, the rows after it greyed alone
+        const note = why ? (why === said ? '' : why) : it.hint;
+        if (why) said = why;
         menu.append(h('button', {
+          disabled: !!why,
           role: on === undefined ? 'menuitem' : 'menuitemcheckbox', ...(on === undefined ? {} : { 'aria-checked': String(on) }),
           onclick: () => {
             this.toggleMore(false);
             it.run();
           },
-        }, icon(it.icon, 16), h('span', null, h('b', null, it.label), it.hint ? h('small', null, it.hint) : null)));
+        }, icon(it.icon, 16), h('span', null, h('b', null, it.label), note ? h('small', null, note) : null)));
       }
     }
-    menu.querySelector<HTMLElement>('button')?.focus();
+    menu.querySelector<HTMLElement>('button:not(:disabled)')?.focus();
   }
 
   private syncPanesBtn(): void {
@@ -1496,7 +1503,8 @@ export class Stage {
       openCodex: (id) => go(`#/campaign/codex/${id}`),
       openChapter: go,
       // the table is of the level the menu is on (not the part clicked): disabled, with the reason, where it cannot be made
-      breakPart: { run: () => this.why.showParts(at, c), part: !!c, why: ablationRefusal(ctx.def) },
+      // (a clocked level has storage, which the card refuses after a flatten too costly to run as the menu opens)
+      breakPart: { run: () => this.why.showParts(at, c), part: !!c, why: ablationRefusal(ctx.def) ?? (ctx.def.ports.some((p) => p.clock) ? 'it has feedback (storage)' : null) },
     } };
   }
 
@@ -2547,6 +2555,9 @@ export class Stage {
   }
 
   private restartMeter(): void {
+    // Activity's and Energy's window starts again too: Reset sets the cycle count to 0 and Back restores an older one, while
+    // the toggle counts only grow, so the old window would divide one run's toggles by another's cycles
+    this.ovWin = null;
     if (!this.meter) return;
     this.meter.reset();
     this.meterFrom = this.cycles;
@@ -2781,7 +2792,8 @@ export class Stage {
   private ovRefusals(): Partial<Record<OverlayKind, string>> {
     const sim = this.sim, ctx = this.ctx;
     if (!sim || !ctx) return {};
-    const c = { level: sim.kind, engine: this.scene?.engine, sub: ctx.sim !== sim } as const;
+    // the level's own engine: an opened NAND is transistors inside a gate-level scene
+    const c = { level: ctx.sim.kind, engine: this.scene?.engine, sub: ctx.sim !== sim } as const;
     const out: Partial<Record<OverlayKind, string>> = {};
     for (const k of OVERLAY_KINDS) {
       const why = overlayRefusal(k, c);
@@ -2862,7 +2874,7 @@ export class Stage {
     if (!(sim instanceof GateSim)) return null;
     const ins = this.scene?.root.ports.filter((p) => p.dir === 'in') ?? [];
     const sig = ins.map((p) => sim.getInputBits(p.name).join('')).join('|');
-    if (!this.ovWin || this.ovWin.sim !== sim) {
+    if (!this.ovWin || this.ovWin.sim !== sim || this.cycles < this.ovWin.cycles) {
       if (!sim.toggles) sim.countToggles();
       this.ovWin = { sim, base: new Uint32Array(sim.toggles!), cycles: this.cycles, changes: 0, sig };
     } else if (sig !== this.ovWin.sig) {

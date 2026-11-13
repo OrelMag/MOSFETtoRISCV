@@ -24,37 +24,51 @@ export function dualCore(program: number[], dmemK = 5, imemPort = false, imemK =
   const key = imemPort ? 'mosfet_riscv_dualcore' : `${CORE.id}_x2${dmemK === 5 ? '' : `_d${dmemK}`}`;
   let d = cache.get(key);
   if (d) return d;
+  // Drawn with wires: the arbiter left of the cores and between them, so each grant runs straight into its core, each
+  // request loops back to it above or below its core; the address, write-data and write-enable selectors in the channel
+  // right of the cores (core 0's trunks left of core 1's, so the wires cross least), the memory after them, and the word
+  // read back to both cores over the top and under the bottom. Pointers: the clock, the outputs, grant 1 at the selectors.
   const cg = symbolGeom(CORE), DM = dataMemory(dmemK), dg = symbolGeom(DM), M2 = busMux2(32);
-  const xC = 20, xA = xC + cg.w + 24, xM = xA + 30, xD = xM + 14;
-  const y0 = 4, y1 = y0 + cg.h + 16;
+  const P = (n: string) => cg.ports[n].pos;
+  const xC = 20, xR = xC + cg.w, y0 = 4, y1 = y0 + cg.h + 18, xA = 4, yA = y0 + cg.h + 5;
+  const xM = xR + 18, xD = xM + 14, yM = y0 + cg.h + 2;
+  const yD = yM + 4, xRd = xD + dg.w + 2, xOut = xRd + 10, top = 1, bottom = y1 + cg.h + 4;
+  const out = (k: number) => [xOut, y0 + 4 * k + 4] as [number, number];
   d = {
     id: key, name: 'Dual-core RV32I (shared memory)', category: 'cpu',
     summary: 'Two identical cores, one data memory. The arbiter grants the memory port to one core per cycle; the other stalls. Each core reads its hart id (0 or 1) with csrr mhartid; amoswap.w and amoadd.w read and write memory in one indivisible access.',
     ports: [bit('clk', 'in', true), ...(imemPort ? [bus('instr0', 32, 'in'), bus('instr1', 32, 'in')] : []), bus('pc0', 32, 'out'), bus('pc1', 32, 'out'), bit('retire0', 'out'), bit('retire1', 'out'), bit('grant0', 'out'), bit('grant1', 'out')],
     symbol: { kind: 'box', label: '2 × RV32I' },
     netlist: () => ({
-      pins: { clk: [0, y1 - 6], instr0: [0, y0 + 10], instr1: [0, y1 + 10], pc0: [xD + dg.w + 12, y0 + 4], pc1: [xD + dg.w + 12, y0 + 8], retire0: [xD + dg.w + 12, y0 + 12], retire1: [xD + dg.w + 12, y0 + 16], grant0: [xD + dg.w + 12, y0 + 20], grant1: [xD + dg.w + 12, y0 + 24] },
+      pins: { clk: [0, yA + 12], instr0: [0, y0 + 2], instr1: [0, y1 + 2], pc0: out(0), pc1: out(1), retire0: out(2), retire1: out(3), grant0: out(4), grant1: out(5) },
       instances: [
-        { name: 'h0', def: constWord(32, 0), at: [4, y0 + 4], label: 'hart 0' },
-        { name: 'h1', def: constWord(32, 1), at: [4, y1 + 4], label: 'hart 1' },
+        { name: 'h0', def: constWord(32, 0), at: [4, y0 + P('hartid')[1] - 1], label: 'hart 0' },
+        { name: 'h1', def: constWord(32, 1), at: [4, y1 + P('hartid')[1] - 1], label: 'hart 1' },
         { name: 'core0', def: CORE, at: [xC, y0], label: 'core 0' },
         { name: 'core1', def: CORE, at: [xC, y1], label: 'core 1' },
-        { name: 'arb', def: ARBITER2, at: [xA, y0 + cg.h / 2 + 4], label: 'arbiter' },
-        { name: 'am', def: M2, at: [xM, y0 + cg.h / 2 - 12], label: 'address' },
-        { name: 'wm', def: M2, at: [xM, y0 + cg.h / 2 + 12], label: 'write data' },
-        { name: 'we', def: OR, at: [xM, y0 + cg.h / 2 + 34] },
-        { name: 'dm', def: DM, at: [xD, y0 + cg.h / 2 - 8], label: 'shared memory' },
+        { name: 'arb', def: ARBITER2, at: [xA, yA], label: 'arbiter' },
+        { name: 'am', def: M2, at: [xM, yM], label: 'address' },
+        { name: 'wm', def: M2, at: [xM, yM + 10], label: 'write data' },
+        { name: 'we', def: OR, at: [xM, yM + 20] },
+        { name: 'dm', def: DM, at: [xD, yD], label: 'shared memory' },
       ],
       nets: [
         { name: 'clk', ends: ['clk', 'core0.clk', 'core1.clk', 'arb.clk', 'dm.clk'], tags: true },
         { name: 'hart0', ends: ['h0.y', 'core0.hartid'] }, { name: 'hart1', ends: ['h1.y', 'core1.hartid'] },
-        { name: 'req0', ends: ['core0.memReq', 'arb.r0'], tags: true }, { name: 'req1', ends: ['core1.memReq', 'arb.r1'], tags: true },
-        { name: 'grant0', ends: ['arb.g0', 'core0.grant', 'grant0'], tags: true }, { name: 'grant1', ends: ['arb.g1', 'core1.grant', 'am.s', 'wm.s', 'grant1'], tags: true },
-        { name: 'addr0', ends: ['core0.memAddr', 'am.a'], tags: true }, { name: 'addr1', ends: ['core1.memAddr', 'am.b'], tags: true },
-        { name: 'wdata0', ends: ['core0.memWData', 'wm.a'], tags: true }, { name: 'wdata1', ends: ['core1.memWData', 'wm.b'], tags: true },
-        { name: 'we0', ends: ['core0.memWE', 'we.a'], tags: true }, { name: 'we1', ends: ['core1.memWE', 'we.b'], tags: true },
+        // the requests loop back to the arbiter, above core 1 and below core 0's outputs, then down its left side
+        { name: 'req0', ends: ['core0.memReq', 'arb.r0'], via: { 'arb.r0': [[xR + 2, y0 + P('memReq')[1]], [xR + 2, yA - 3], [xA - 2, yA - 3], [xA - 2, yA + 3]] } },
+        { name: 'req1', ends: ['core1.memReq', 'arb.r1'], via: { 'arb.r1': [[xR + 2, y1 + P('memReq')[1]], [xR + 2, bottom - 2], [xA - 2, bottom - 2], [xA - 2, yA + 5]] } },
+        { name: 'grant0', ends: ['arb.g0', 'core0.grant', 'grant0'], tags: ['grant0'], trunk: xC - 4 },
+        { name: 'grant1', ends: ['arb.g1', 'core1.grant', 'am.s', 'wm.s', 'grant1'], tags: ['am.s', 'wm.s', 'grant1'], trunk: xC - 3 },
+        { name: 'addr0', ends: ['core0.memAddr', 'am.a'], trunk: xR + 9 }, { name: 'addr1', ends: ['core1.memAddr', 'am.b'], trunk: xR + 11 },
+        { name: 'wdata0', ends: ['core0.memWData', 'wm.a'], trunk: xR + 7 }, { name: 'wdata1', ends: ['core1.memWData', 'wm.b'], trunk: xR + 12 },
+        { name: 'we0', ends: ['core0.memWE', 'we.a'], trunk: xR + 5 }, { name: 'we1', ends: ['core1.memWE', 'we.b'], trunk: xR + 13 },
         { name: 'addr', ends: ['am.y', 'dm.addr'] }, { name: 'wdata', ends: ['wm.y', 'dm.wd'] }, { name: 'we', ends: ['we.y', 'dm.we'] },
-        { name: 'rdata', ends: ['dm.rd', 'core0.memRData', 'core1.memRData'], tags: true },
+        // the word read comes back to both cores: over the top to core 0, under the bottom to core 1
+        { name: 'rdata', ends: ['dm.rd', 'core0.memRData', 'core1.memRData'], via: {
+          'core0.memRData': [[xRd, yD + dg.ports.rd.pos[1]], [xRd, top], [xC - 2, top], [xC - 2, y0 + P('memRData')[1]]],
+          'core1.memRData': [[xRd, yD + dg.ports.rd.pos[1]], [xRd, bottom], [xC - 2, bottom], [xC - 2, y1 + P('memRData')[1]]],
+        } },
         { name: 'pc0', ends: ['core0.pcOut', 'pc0'], tags: true }, { name: 'pc1', ends: ['core1.pcOut', 'pc1'], tags: true },
         { name: 'retire0', ends: ['core0.retire', 'retire0'], tags: true }, { name: 'retire1', ends: ['core1.retire', 'retire1'], tags: true },
         ...(imemPort ? [{ name: 'instr0', ends: ['instr0', 'core0.instr'], tags: true as const }, { name: 'instr1', ends: ['instr1', 'core1.instr'], tags: true as const }] : []),

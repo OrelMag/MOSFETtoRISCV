@@ -109,7 +109,7 @@ export const PATH_MINUTES: Record<string, number[]> = {
   "appendix-sap": [7,6,6,6,6,6,6,6,7,6,6],
   "appendix-runner": [5,5,5,5,5,5,5,5,5],
   "appendix-baby": [3,3,3,3,4,5,3,3,3,5,5,3],
-  "appendix-agc": [3,5,3,6,5,5,2,5],
+  "appendix-agc": [4,5,3,6,5,5,2,5],
 };
 
 /** Every skill, in journey order (learn/pathgen.ts computeSkills). */

@@ -137,7 +137,7 @@ export function cordicPipeline(s: CordicSpec): ComponentDef {
     return define({
       id: `cordic_pipe${tag(s)}`, name: `CORDIC, pipelined (${s.n} stages)`, category: 'arithmetic',
       summary: `A half-turn and ${s.n} stages with registers between them: one result every clock, ${s.n + 1} clocks after its input. No multiplier anywhere.`,
-      ports, symbol: { kind: 'box', label: 'CORDIC', w: 10 }, netlist: laid(b, { keepOrder: true }),
+      ports, symbol: { kind: 'box', label: 'CORDIC', w: 10 }, netlist: laid(b, { keepOrder: true, aspect: 1.6, avoid: true, room: true, gap: 16 }), // the stages in bands: a strip 401 × 40 before
     });
   });
 }

@@ -9,6 +9,7 @@ import { core6502 } from '../lib/m6502/core';
 import { FIB6502 } from '../m6502/sbprograms';
 import { type ChipDoc, type EndRef, type LabelDoc, type PartDoc, type PartRef, type PinDoc, type WireDoc } from './model';
 import { isError, partDef } from './parts';
+import { wirePointers, type WirePointersOptions } from './pointerwires';
 
 const NOTES_MAP = 'RAM $0000–$3FFF (2K, repeating: zero page, the stack in page 1), console $4000 (a store prints), LEDs $4001 (a store lights them), switches $4002 (a load reads them; the devices repeat every 4 bytes), ROM $8000–$FFFF (4K, repeating: the program at $F000, the vectors at $FFFA).';
 
@@ -78,8 +79,10 @@ export class Sheet {
     return this.port(id, port);
   }
 
-  doc(id: string, name: string, c: Partial<ChipDoc>): ChipDoc {
-    return { id, name, pins: this.pins, parts: this.parts, wires: this.wires, labels: this.labels, ...c };
+  /** The document; a pointer pair whose ends are close and a clear path joins them is drawn as a wire (pointerwires.ts), `wiring: false` keeps every pointer. */
+  doc(id: string, name: string, c: Partial<ChipDoc>, wiring: WirePointersOptions | false = {}): ChipDoc {
+    const d: ChipDoc = { id, name, pins: this.pins, parts: this.parts, wires: this.wires, labels: this.labels, ...c };
+    return wiring === false ? d : wirePointers(d, (p) => this.defs.get(p.id), wiring).doc;
   }
 }
 

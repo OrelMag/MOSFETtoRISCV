@@ -9,6 +9,7 @@ import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
 import { Builder } from './builder';
+import { laid } from './layered';
 import { busMux2 } from './combinational';
 import { define, merger, ones, splitter } from './define';
 import { fanout } from './fastadd';
@@ -181,7 +182,7 @@ export function gfMulGates(): ComponentDef {
       summary: 'Multiplies two bytes in GF(256), field polynomial 0x11D: the 64 bit products, each XORed into the output bits the reduction sends it to. What a Reed-Solomon decoder needs many of; an encoder only multiplies by constants.',
       ports: [bus('a', 8, 'in'), bus('b', 8, 'in'), bus('y', 8, 'out')], symbol: { kind: 'box', label: 'GF×' },
       spec: ([x, y]) => [gfMul(x, y)],
-      netlist: () => ({ pins: { a: [0, 10], b: [0, 40], y: [b.right, 30] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { aspect: 1.6, avoid: true, room: true }), // by depth: the column drawing ran 17 wires through gates
     });
   });
 }

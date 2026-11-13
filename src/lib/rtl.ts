@@ -5,7 +5,7 @@
 // D flip-flop and tie cells: the result is an ordinary netlist, simulated, counted, drawn and opened like any other.
 
 import { symbolGeom } from '../sim/geometry';
-import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
+import type { ComponentDef, InstanceDef, NetDef, Netlist, PortDef } from '../sim/types';
 import { constWord } from './alu';
 import { Builder } from './builder';
 import { layered } from './layered';
@@ -36,9 +36,27 @@ export const RTL_SPLITS: ComponentDef[] = [];
 
 /** The gates split() moves into next state / outputs; any other part (a CRC unit, a counter) stays a box where it was. */
 const PLAIN = new Set<ComponentDef>([NAND, NOT, AND, OR, NOR, XOR, XNOR, MUX2, TIE0, TIE1]);
+/** A signal's number standing for its name (fresh(): n<id>, a clash n<id>_<id>), and the words a gate gives the signal it drives. */
+const AUTO_NAME = /^n\d+(_\d+)*$/;
+const OP_WORD = new Map<ComponentDef, string>([[NAND, 'nand'], [NOT, 'not'], [AND, 'and'], [OR, 'or'], [NOR, 'nor'], [XOR, 'xor'], [XNOR, 'xnor'], [MUX2, 'mux']]);
+/** A boundary name made from its gate is at most this long: longer ones collide as pointer labels across the narrow gaps. */
+const NAME_MAX = 10;
 
 /** A block with at least this many gates of its own, flip-flops among them, is drawn as next state, state register and outputs. */
 export const SPLIT_MIN = 40;
+/** A state register of at most this many flip-flops is drawn as one column wired to its pins; a larger one in wrapped columns. */
+const STATE_COLUMN = 16;
+/** A split block is laid out by depth only when that keeps this share of its columns' scale at fit (the stage's canvas, ~1.1 : 1). */
+const FIT_KEEP = 0.5;
+/** A next-state block of more than UNIT_MAX gates opens to one block per register (splitNext); a group under UNIT_MIN joins the shared terms. */
+const UNIT_MAX = 80, UNIT_MIN = 6;
+/** The scale a drawing fits a 620 × 560 canvas at, from its parts and pins (relative: only compared). */
+const fitScale = (n: Netlist): number => {
+  let w = 1, h = 1;
+  for (const i of n.instances) { const g = symbolGeom(i.def); w = Math.max(w, i.at![0] + g.w); h = Math.max(h, i.at![1] + g.h); }
+  for (const p of Object.values(n.pins ?? {})) { w = Math.max(w, p[0]); h = Math.max(h, p[1]); }
+  return Math.min(620 / w, 560 / h);
+};
 
 const OUT_PORTS = (d: ComponentDef) => d.ports.filter((p) => p.dir === 'out').map((p) => p.name);
 const IN_PORTS = (d: ComponentDef) => d.ports.filter((p) => p.dir === 'in').map((p) => p.name);
@@ -258,6 +276,30 @@ export class Rtl {
     return { imp, exp };
   }
 
+  /**
+   * A signal nobody named that crosses a block's edge is a pin of that block: it gets a name from the gate driving it and
+   * that gate's named inputs, "and_busy_go" (else "and_busy") rather than "n958". Never cut short: a name longer than
+   * NAME_MAX and the design's longest (so no column gap, sized for two names, grows) is not used, and a signal with no
+   * such name keeps its number.
+   */
+  private nameBoundaries(imp: Set<Sig>[], exp: Set<Sig>[]): void {
+    const live = this.names.filter((_, i) => this.alias[i] === i), L = Math.min(NAME_MAX, Math.max(4, ...live.map((nm) => nm.length)));
+    const byOut = new Map<Sig, Gate>();
+    for (const g of this.gates) for (const o of g.out) byOut.set(this.root(o), g);
+    const edge = new Set<Sig>();
+    for (let k = 1; k < this.scopes.length; k++) for (const set of [imp[k], exp[k]]) for (const s of set) edge.add(this.root(s));
+    for (const s of [...edge].sort((a, b) => a - b)) {
+      if (!AUTO_NAME.test(this.names[s])) continue;
+      const g = byOut.get(s), op = g && OP_WORD.get(g.def);
+      if (!op) continue;
+      const ins = [...new Set(g!.ins.map((x) => this.names[this.root(x)]).filter((nm) => !AUTO_NAME.test(nm)))];
+      const nm = [ins, ins.slice(0, 1)].map((xs) => `${op}_${xs.join('_')}`).find((t) => ins.length && t.length <= L && !this.used.has(t));
+      if (!nm) continue;
+      this.used.add(nm);
+      this.names[s] = nm;
+    }
+  }
+
   /** d and q of each register of a split block, by register: ports of the three blocks line up in this order. */
   private regRank = new Map<Sig, number>();
 
@@ -286,24 +328,69 @@ export class Rtl {
       g.ins.forEach(walk);
     };
     for (const r of regs) walk(r.ins[0]);
-    const make = (role: 'next' | 'state' | 'out', name: string, label: string, gates: Gate[]) => {
-      if (!gates.length) return;
+    const make = (role: 'next' | 'state' | 'out', name: string, label: string, gates: Gate[], parent: Scope = sc): Scope | null => {
+      if (!gates.length) return null;
       // a name its parent does not use yet (a block may already have a 'state' of its own)
-      const taken = new Set(sc.kids.map((k) => this.scopes[k].name));
+      const taken = new Set(parent.kids.map((k) => this.scopes[k].name));
       let nm = name;
       for (let i = 2; taken.has(nm); i++) nm = `${name}${i}`;
-      const k: Scope = { id: this.scopes.length, name: nm, label, parent: sc.id, kids: [], idName: sc.id === 0 ? nm : `${sc.idName ?? sc.name}_${nm}`, role };
+      const k: Scope = { id: this.scopes.length, name: nm, label, parent: parent.id, kids: [], idName: parent.id === 0 ? nm : `${parent.idName ?? parent.name}_${nm}`, role };
       this.scopes.push(k);
-      sc.kids.push(k.id);
+      parent.kids.push(k.id);
       for (const g of gates) { g.scope = k.id; for (const o of g.out) this.drivers[this.root(o)].scope = k.id; }
+      return k;
     };
     // one or two output gates are not worth a box of their own (its label would not fit it): they join the logic
     const outs = mine.filter((g) => plain(g) && !next.has(g)), few = outs.length > 0 && outs.length <= 2;
-    make('next', 'next', few ? 'next state, outputs' : 'next state', mine.filter((g) => next.has(g) || (few && outs.includes(g))));
+    const nextGates = mine.filter((g) => next.has(g) || (few && outs.includes(g)));
+    const nx = make('next', 'next', few ? 'next state, outputs' : 'next state', nextGates);
+    if (nx && nextGates.length > UNIT_MAX) this.splitNext(nx, regs, next, make);
     make('state', 'state', 'state', regs);
     if (!few) make('out', 'out', 'outputs', outs);
     sc.split = true;
     regs.forEach((r, i) => { this.regRank.set(this.root(r.ins[0]), i); this.regRank.set(this.root(r.out[0]), i); });
+  }
+
+  /**
+   * A next-state block of more than UNIT_MAX gates as blocks a reader opens one at a time: the logic of each register (its
+   * bits together: cnt0 … cnt7 are one register, cnt), and the terms several registers share. A gate is in a register's
+   * block when only that register's next state reads it. Groups of fewer than UNIT_MIN gates join the shared block. Every
+   * gate keeps its inputs and name; only its box changes (as split() itself), so the leaves and nets are the flat ones.
+   */
+  private splitNext(nx: Scope, regs: Gate[], next: Set<Gate>, make: (role: 'next', name: string, label: string, gates: Gate[], parent: Scope) => Scope | null): void {
+    const byOut = new Map<Sig, Gate>();
+    for (const g of next) for (const o of g.out) byOut.set(this.root(o), g);
+    const stem = (r: Gate) => {
+      const s = this.names[this.root(r.out[0])].replace(/(\[\d+\]|_?\d+)$/, '').replace(/[^A-Za-z0-9_]/g, '_');
+      return !s || /^n$/.test(s) ? '' : s;
+    };
+    const owners = new Map<Gate, Set<string>>();
+    for (const r of regs) {
+      const st = stem(r), seen = new Set<Gate>();
+      const walk = (sig: Sig) => {
+        const g = byOut.get(this.root(sig));
+        if (!g || seen.has(g)) return;
+        seen.add(g);
+        if (!owners.has(g)) owners.set(g, new Set());
+        owners.get(g)!.add(st);
+        g.ins.forEach(walk);
+      };
+      walk(r.ins[0]);
+    }
+    const groups = new Map<string, Gate[]>();
+    const mine = this.gates.filter((g) => g.scope === nx.id);
+    for (const g of mine) {
+      const o = owners.get(g), key = o && o.size === 1 ? [...o][0] : '';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(g);
+    }
+    // small groups join the shared terms; a split into one block is no split
+    for (const [k, gs] of [...groups]) if (k && gs.length < UNIT_MIN) { groups.delete(k); groups.set('', [...(groups.get('') ?? []), ...gs]); }
+    if ([...groups.keys()].filter((k) => k).length < 2) return;
+    for (const [k, gs] of [...groups].sort(([a], [b]) => (a ? (b ? a.localeCompare(b) : -1) : 1))) {
+      if (k) make('next', `n_${k}`, `next ${k}`, gs, nx);
+      else make('next', 'shared', 'shared terms', gs, nx);
+    }
   }
 
   /**
@@ -353,8 +440,21 @@ export class Rtl {
     const R = x - gapW;
     const ports: PortDef[] = [];
     const pins: Record<string, [number, number]> = {};
-    importList.forEach((s, i) => { ports.push({ name: netName(s), width: 1, dir: 'in', ...(this.clocks.has(netName(s)) ? { side: 'bottom' as const, clock: true } : {}) }); pins[netName(s)] = [0, 2 + 2 * i]; });
-    exportList.forEach((s, i) => { ports.push({ name: netName(s), width: 1, dir: 'out' }); pins[netName(s)] = [R, 2 + 2 * i]; });
+    // a pin at the height of the port it feeds in the first column (an input) or comes from in the last (an output), so its
+    // wire runs straight; in that order, two units apart at least, the rest (a pointer) after them
+    const portY = (bl: Block, p: string) => instances[blocks.indexOf(bl)].at![1] + symbolGeom(bl.def).ports[p].pos[1];
+    const place = (list: Sig[], at: (s: Sig) => number | null, x: number) => {
+      const want = list.map((s, i) => ({ s, i, y: at(s) }));
+      const ord = [...want.filter((w) => w.y !== null).sort((a, b) => a.y! - b.y! || a.i - b.i), ...want.filter((w) => w.y === null)];
+      let y = 0;
+      for (const w of ord) { y = Math.max(y + 2, w.y ?? 0, 2); pins[netName(w.s)] = [x, y]; }
+    };
+    const firstIn = (s: Sig) => { for (const bl of blocks) if (bl.col === 0) for (const [p, x] of bl.ins) if (x === s) return portY(bl, p); return null; };
+    const lastOut = (s: Sig) => { for (const bl of blocks) if (bl.col === col - 1) for (const [p, x] of bl.outs) if (x === s) return portY(bl, p); return null; };
+    importList.forEach((s) => ports.push({ name: netName(s), width: 1, dir: 'in', ...(this.clocks.has(netName(s)) ? { side: 'bottom' as const, clock: true } : {}) }));
+    exportList.forEach((s) => ports.push({ name: netName(s), width: 1, dir: 'out' }));
+    place(importList, firstIn, 0);
+    place(exportList, lastOut, R);
     const drv = new Map<Sig, { end: string; col: number }>();
     for (const s of importList) drv.set(s, { end: netName(s), col: -1 });
     for (const bl of blocks) for (const [p, s] of bl.outs) drv.set(s, { end: `${bl.name}.${p}`, col: bl.col });
@@ -391,6 +491,7 @@ export class Rtl {
     if (this.pending.size) throw new Error(`${this.opt.id}: a register has no d`);
     if (!this.opt.noSplit) for (const sc of [...this.scopes]) this.split(sc);
     const { imp, exp } = this.plumbing();
+    this.nameBoundaries(imp, exp);
     const built = new Map<number, ComponentDef>();
     const rootOf = (s: Sig) => this.root(s);
 
@@ -492,10 +593,20 @@ export class Rtl {
       // a pin used as a driver is named after itself; a pass-through (in → out) is a net of two pins
       const nets: NetDef[] = b.nets();
       const instances: InstanceDef[] = b.instances;
-      // a small block of gates is laid out by logic depth, rows level with what they talk to, its short nets drawn as wires
-      // (lib/layered.ts); not one of boxes or wide buses, whose pointer names need wider channels than layered leaves
-      const small = !sc.role && !sc.kids.length && instances.length <= SPLIT_MIN && instances.every((i) => i.def.ports.length <= 8);
-      const lay = small ? layered(ports, b, { gap: 14, x0: gapW }) : null; // x0: room for a pin's pointer
+      // a block of gates is laid out by logic depth, rows level with what they talk to, its short nets drawn as wires where
+      // no other part stands between their ends (lib/layered.ts, avoid): a block of gates of any size, a split block's next state / outputs
+      // (drawn in columns with every net a label they read as nothing but pointers: 51 890 of 61 736 nets over the book's
+      // 521 blocks, 45 048 with this, folded to the canvas shape (aspect), none below half its scale at fit; with a large next
+      // state opened into per-register blocks, splitNext, 47 919 of 74 054 nets over 977 levels, 65 % against 84 %); not one of boxes or wide buses, whose pointer names
+      // need wider channels than layered leaves; nor a state register of more than STATE_COLUMN flip-flops, which share one
+      // logic depth and would stand in one column too tall to read at fit (Builder's wrapped columns hold them). Laid out when
+      // the level is first opened, not when the design is built. room: a split block's labels need it.
+      const small = !sc.kids.length && (sc.role !== 'state' || instances.length <= STATE_COLUMN) && instances.every((i) => i.def.ports.length <= 8);
+      const cols: Netlist = { pins, instances, nets };
+      let lay: Netlist | null = null;
+      // a split block, or one of more than SPLIT_MIN gates, keeps its columns when laying it out would shrink it at fit below
+      // FIT_KEEP of their scale: hundreds of gates laid out by depth run to a thousand units or more, every part a dot
+      const laid = () => (lay ??= ((l) => ((!sc.role && instances.length <= SPLIT_MIN) || fitScale(l) >= FIT_KEEP * fitScale(cols) ? l : cols))(layered(ports, b, { gap: 14, x0: gapW, avoid: true, aspect: 1.6, ...(sc.role ? { room: true } : {}) }))); // x0: room for a pin's pointer
       return define({
         id,
         name: isRoot ? this.opt.name : sc.role ? `${this.opt.name}: ${this.scopes[sc.parent].label || this.opt.name}, ${sc.label}` : `${this.opt.name}: ${sc.label}`,
@@ -503,7 +614,7 @@ export class Rtl {
         summary: isRoot ? this.opt.summary : `${sc.label} (a block of ${this.opt.name}).`,
         ports,
         symbol: { kind: 'box', label: isRoot ? (this.opt.label ?? this.opt.name) : sc.label, ...(isRoot && this.opt.boxW ? { w: this.opt.boxW } : {}) },
-        netlist: () => lay ?? { pins, instances, nets },
+        netlist: () => (small ? laid() : cols),
         ...(isRoot && this.opt.notes ? { notes: this.opt.notes } : {}),
       });
     };

@@ -242,7 +242,7 @@ export class BenchmarksPage implements Page {
         this.render();
       });
       const row = h('tr', { 'data-cpu': c.id },
-        h('td', { class: 'hw-name' }, chev, h('i', { class: `bm-fam ${familyOf(c.id)}` }), ch ? h('a', { href: `#/c/${ch}`, title: c.id }, c.name) : h('span', { title: c.id }, c.name)),
+        h('td', { class: 'hw-name' }, h('div', { class: 'bm-namecell' }, chev, h('i', { class: `bm-fam ${familyOf(c.id)}` }), ch ? h('a', { href: `#/c/${ch}`, title: c.id }, c.name) : h('span', { title: c.id }, c.name))),
         h('td', c.offChip ? { title: 'main memory is a DRAM chip outside the CPU: not counted' } : null, fmt(c.nands), c.offChip ? h('span', { class: 'hw-mhz' }, ' + DRAM') : ''),
         h('td', null, String(c.period), h('span', { class: 'hw-mhz' }, ` ${fmt(mhz(c.period))}`)),
         ...BENCHMARKS.map((b) => cell(b.id, this.value(c, b.id))),

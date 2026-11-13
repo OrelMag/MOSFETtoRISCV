@@ -4,7 +4,7 @@
 import { setPageTitle } from '../pagetitle';
 import { bench } from '../../chapters/types';
 import { libraryItems, suggestItems } from '../../lib/catalog';
-import { familyOf, resolveComponent } from '../../lib/resolve';
+import { families, familyOf, resolveComponent } from '../../lib/resolve';
 import { needsSwitchLevel } from '../../sim/harness';
 import type { ComponentDef } from '../../sim/types';
 import { netlistOf } from '../../sim/types';
@@ -92,6 +92,12 @@ export class WorkbenchPage implements Page {
   open(id: string, path?: string[], fromRoute = false): void {
     // A pick in the phone's drawer closes it, the circuit comes back into view.
     if (this.el?.classList.contains('lib-open')) this.showLibrary(false);
+    // a family's own id (#/workbench/rca, as its name reads) opens it at its default size, the address corrected
+    const fam = resolveComponent(id) ? undefined : families.find((f) => f.id === id);
+    if (fam) {
+      id = fam.key(Object.fromEntries(fam.params.map((p) => [p.name, p.initial])));
+      if (fromRoute) history.replaceState(history.state, '', `#/workbench/${id}`);
+    }
     const def = resolveComponent(id);
     setPageTitle(def ? def.name : 'Unknown component', 'Workbench');
     if (def && def.id === this.current && this.stage.target) {
@@ -180,7 +186,8 @@ export class WorkbenchPage implements Page {
     }
     if (!any) l.append(h('div', { class: 'lib-empty' }, `No component matches “${this.filter}”. `, h('button', { class: 'btn sm', onclick: () => { this.search.value = ''; this.filter = ''; this.renderList(); this.search.focus(); } }, 'Clear the search')));
     // the open part in view (a long list opens at the top otherwise)
-    if (!this.filter) l.querySelector<HTMLElement>('.lib-item.on')?.scrollIntoView({ block: 'nearest' });
+    // (after the frame: the list may not be in the page yet, and scrolling a detached row does nothing)
+    if (!this.filter) requestAnimationFrame(() => l.querySelector<HTMLElement>('.lib-item.on')?.scrollIntoView({ block: 'center' }));
   }
 
   /** The top bar's way back (ui/returnto.ts): the part on the bench. */
