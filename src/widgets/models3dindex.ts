@@ -88,7 +88,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'fgate', title: 'The floating gate', category: 'memory', chapter: 'flash', step: 1,
     summary: 'A NAND string of four flash cells: program a cell pulse by pulse, erase the block, read with the others at the pass voltage.',
-    files: ['fgate3d', 'fgate3dview', 'fgate3dparts'], factory: 'fgate3d', codex: ['ftl', 'boot'],
+    files: ['fgate3d', 'fgate3dview', 'fgate3dkit', 'fgate3dparts'], factory: 'fgate3d', codex: ['ftl', 'boot'],
     open: () => import('./fgate3d').then((m) => m.fgate3d()),
   },
   {
