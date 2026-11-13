@@ -31,8 +31,8 @@ export function diskView(): Widget {
   let guess: number | null = null;
 
   const panel = h('div', { class: 'panel dk3' });
-  let shownKey = '';
-  const look = () => ({ sel, phase: phaseAt(plan, t), r: radiusAt(plan, parked, t) });
+  let shownKey = '', tracks = true;
+  const look = () => ({ sel, phase: phaseAt(plan, t), r: radiusAt(plan, parked, t), tracks });
   const pose = () => ({ phi: t / TURN_MS, r: radiusAt(plan, parked, t) });
   const stage = studioStage({
     aria: 'A 3.5 inch hard disk in 3D: two mirror platters on a spindle, a stack of arms with four heads turning on a pivot, the voice coil between two magnets, the parking ramp and the flex cable; a board underneath',
@@ -46,7 +46,7 @@ export function diskView(): Widget {
   });
   /** Rebuild only when what the model shows changed (the wedge, the head lit); the platters and the arm move every frame. */
   function paint(): void {
-    const l = look(), key = JSON.stringify([l.sel, l.phase === 'transfer', l.phase !== 'idle' && l.phase !== 'done']), p = pose();
+    const l = look(), key = JSON.stringify([l.tracks, l.sel, l.phase === 'transfer', l.phase !== 'idle' && l.phase !== 'done']), p = pose();
     if (stage.isFlat()) diskMoves(p, 'flat');
     stage.move(diskMoves(p));
     if (key !== shownKey) { shownKey = key; stage.refresh(); }
@@ -58,7 +58,10 @@ export function diskView(): Widget {
   const keyT = [h('span', null, 'seek'), h('span', null, 'rotational latency'), h('span', null, 'transfer')];
   const key = h('div', { class: 'dk-key' }, h('span', { class: 'seek' }, h('b'), keyT[0]), h('span', { class: 'wait' }, h('b'), keyT[1]), h('span', { class: 'xfer' }, h('b'), keyT[2]));
   const verdict = h('p', { class: 'dk-verdict', 'aria-live': 'polite' }), queue = h('p', { class: 'dk-verdict' });
-  stage.chips.append(chip);
+  // the drawn tracks and wedges are an overlay on the mirror, not its material: the reader can take them off
+  const tracksBtn = h('button', { type: 'button', class: 'r3-chip dk-tracks on', 'aria-pressed': 'true', title: 'The drawn tracks and wedges over the top platter (nothing is printed on a real one)' }, 'Tracks and sectors') as HTMLButtonElement;
+  tracksBtn.addEventListener('click', () => { tracks = !tracks; tracksBtn.setAttribute('aria-pressed', String(tracks)); tracksBtn.classList.toggle('on', tracks); paint(); });
+  stage.chips.append(chip, tracksBtn);
 
   const busy = () => anim !== null;
   const done = () => !plan || t >= plan.t3 - 1e-9;

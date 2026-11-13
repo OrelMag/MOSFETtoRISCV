@@ -30,3 +30,6 @@
 /* the canvas takes the whole column; the readouts sit under it, side by side where there is room */
 .dk3 .r3 { grid-template-columns: minmax(0, 1fr); }
 .dk3 .r3-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 24px; align-items: start; }
+/* the overlay switch beside the status chip */
+.dk3 .dk-tracks { cursor: pointer; pointer-events: auto; font: inherit; font-size: 11px; opacity: 0.7; }
+.dk3 .dk-tracks.on { opacity: 1; }
