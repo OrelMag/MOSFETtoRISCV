@@ -1,0 +1,19 @@
+/* ---------- The Teletype Model 33's selector (widgets/teletype3dview.ts) ---------- */
+.m3d, .tt3 {
+  --tt-mark: light-dark(#1f9a63, #3ecb8a);
+  --tt-turn: light-dark(#c98a1a, #e8a93a);
+  --tt-space: light-dark(#b8454a, #e06a6e);
+}
+.tt-in { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+.tt-char { width: 2.4em; text-align: center; font: 600 15px var(--font-mono); min-height: 30px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.r3-sl.tt-err span { width: auto; }
+.r3-sl.tt-err output { width: 64px; font: 600 12.5px var(--font-mono); }
+.r3-sl.tt-err output.bad { color: var(--bad, #c0392b); }
+.tt-strip { display: block; width: 100%; max-width: 640px; height: auto; margin: 10px 0 0; }
+.tt-u.m { fill: var(--tt-mark); }
+.tt-u.s { fill: var(--tt-space); }
+.tt-l { font: 600 10px var(--font-mono); fill: var(--muted); text-anchor: middle; }
+.tt-s { stroke: var(--text); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.tt-s.bad { stroke: var(--bad, #c0392b); stroke-width: 2.5; stroke-dasharray: none; }
+.tt-now { stroke: var(--tt-turn); stroke-width: 2.5; }
+@media (pointer: coarse) { .tt-char { min-height: 40px; } }

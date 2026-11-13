@@ -146,6 +146,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./dipole3d').then((m) => m.dipole3d()),
   },
   {
+    id: 'teletype', title: 'The Teletype Model 33 selector', category: 'comms', chapter: 'exchange', step: 7,
+    summary: 'A start-stop receiver made of cams: the start edge releases a clutch and eight notched cams read the line mid-unit.',
+    files: ['teletype3d', 'teletype3dview', 'teletype3dkit'], factory: 'teletype3d', codex: ['uart'],
+    open: () => import('./teletype3d').then((m) => m.teletype3d()),
+  },
+  {
     id: 'strowger', title: 'The Strowger selector', category: 'comms', chapter: 'exchange', step: 3,
     summary: 'The stepping switch behind the exchange: dial a level, mark lines busy, hang up.',
     files: ['strowger3d', 'strowger3dview', 'strowger3dkit'], factory: 'strowger3d', codex: ['relay'],
