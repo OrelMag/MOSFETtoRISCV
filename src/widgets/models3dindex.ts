@@ -118,7 +118,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'tide', title: 'Kelvin\'s tide predictor', category: 'analogies', chapter: 'signals', step: 0,
     summary: 'Ten cranks turn the chapter\'s harmonics and one cord over their pulleys adds them on a pen: Fourier synthesis in brass.',
-    files: ['tide3d', 'tide3dview', 'tide3dparts'], factory: 'tide3d', codex: ['fourier'],
+    files: ['tide3d', 'tide3dview', 'tide3dparts', 'tide3dkit'], factory: 'tide3d', codex: ['fourier'],
     open: () => import('./tide3d').then((m) => m.tide3d()),
   },
   {

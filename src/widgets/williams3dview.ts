@@ -80,7 +80,7 @@ export function williamsView(words: number[] = Array.from({ length: LINES }, (_,
     aria: 'A Williams-Kilburn store tube in 3D in its screening box: an electron gun, deflection plates, the face carrying 32 by 32 patches of charge, the pick-up plate in front, the regenerator under it, and beside it the display tube and the other two store tubes',
     home: WILLIAMS_HOME,
     // home: the store tube alone, cut open; the screening box and the other three tubes come in the tour's last beat
-    homeFrame: ['tube', 'gun', 'plates', 'face', 'pickup'],
+    homeFrame: ['tube', 'gun', 'plates', 'face', 'pickup', 'regen'],
     hidden: ['box', 'display', 'stores'],
     knobs: { cut: 1 },
     limits: { minDist: 150, maxDist: 6000 },
