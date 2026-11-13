@@ -86,6 +86,9 @@ of this page covers every control.
   - **Statistics**: every part's cost in one table.
   - **Benchmarks**: the processors timed on the same programs.
   - **Lab**: design your own out-of-order core.
+
+  **Statistics**, **Benchmarks** and **Lab** each open as a page of their own, with the same four tabs across the top;
+  click **Parts** to come back to the circuit.
 - **Middle: the circuit**, with a bar above it and the controls below it.
   - **The bar above**, from left to right:
     - the part's name, and the path when you are inside it;
@@ -182,7 +185,8 @@ You can open any box on the screen and keep going down to transistors.
 - **Double-click** a part to step inside it. The path above the circuit shows where you are; click a name in it to go
   back to that level. **Esc** or **Up one level** goes up one level.
 - **Zoom in on a part** with the mouse wheel, a trackpad pinch, or **+**. Once a box is big enough, its inside opens
-  in place, live, without leaving the level. Zoom further and you step into it. Zoom out and it closes again.
+  in place, live, without leaving the level. Zoom out and it closes again. Keep zooming in and you step into it: the
+  address and the path above the circuit change. To come back up, press **Esc** or click a name in the path.
   This is the **Open blocks as you zoom** option. It is on by default, and so is **Opened blocks without colour**,
   which draws an opened box on the plain background so its inside reads clearly. Both are in View options, on the
   top bar.
@@ -220,7 +224,8 @@ On a touch screen, pinch with two fingers to zoom and open, and drag with one to
 
 1. In the **Overlay** menu on the bar, choose one of **Slack**, **Activity**, **Load**, **Unknown**, **Cost**,
    **Energy** or **Depth**. The whole circuit is coloured by it, with a key.
-   - **Slack** shows how far each part is from the slowest path: the critical path is the hottest colour.
+   - **Slack** shows how much later each part's slowest path could be before the whole part got slower: parts on the
+    critical path are red. The key in the corner explains the colours and counts the parts in each.
    - **Unknown** shows which wires still carry no known value.
    - The others colour by switching activity, load, cost, energy or logic depth.
 2. Press **O** to go to the next overlay, and **Shift O** to turn it off.
@@ -258,7 +263,9 @@ Right-click empty space for the same menus about the whole level.
 
 1. Drag a part or a wire to move it. Shift-click or drag a box around several parts to move them together. **Ctrl Z**
    undoes and **Ctrl Y** redoes. Your arrangement is kept for that part on this computer.
-2. **Layout** (the four arrows) unravels named pointers into wires, or puts this level back as it was drawn.
+2. **Layout** (the four arrows) opens a menu: **Undo** (Ctrl+Z) and **Reset layout**, which puts this level back as it
+   was first drawn (wire colours you picked stay). On a level drawn with named pointers it also offers to unravel
+   them into wires.
 3. **Lock the layout** (the padlock) stops drags from moving anything: a drag then moves the view.
 
 Moving parts changes only the drawing, never the circuit.
@@ -400,9 +407,9 @@ On a phone the page stacks up:
   clock cycle.
 - **The counter does not count.** Its **en** input is off. A clocked part runs by itself, but a counter only counts
   while **en** is on.
-- **A wire is grey, not lit.** It carries no known value yet (unknown, X), for example a register before its first
-  clock edge. **Overlay: Unknown** shows every such wire. **Reset** starts the circuit again.
 - **The circuit is too small or off screen.** Press **0** or click **Fit to screen**. **Hide the side panes** gives
   the circuit the whole width.
-- **I moved parts and want the original drawing back.** **Layout** puts the level back as drawn. **Ctrl Z** undoes
-  one move.
+- **I moved parts and want the original drawing back.** Click **Layout**, then **Reset layout**. **Ctrl Z** undoes one
+  move.
+- **I zoomed in, stepped into a block, and zooming out does not bring me back.** Zooming out closes opened blocks
+  but does not leave the level you stepped into. Press **Esc**, or click a name in the path above the circuit.

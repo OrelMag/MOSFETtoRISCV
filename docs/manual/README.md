@@ -19,7 +19,8 @@ You reach them from the top bar: **Chapters**, **Campaign**, **Workbench** and *
 | **Workbench** | Every part in the library on one bench: try it, change its size, read its cost, truth table and Verilog, open it down to transistors. Also the statistics, the processor benchmarks and the out-of-order lab. | know which part you want to look at, or want to compare parts and processors. | [Quick start](workbench.md#quick-start) |
 | **Sandbox** | A circuit editor: place parts, draw wires, package your circuit as a chip and use it in the next one, up to whole computers with screens and keyboards. | want to design your own circuits. | [Quick start](sandbox.md#quick-start) |
 
-Not sure where to begin? On the home page, **Where are you starting?** asks a few questions and suggests a place.
+Not sure where to begin? On the home page, **Where are you starting?** lets you pick the description closest to you
+(new to hardware and code, a programmer, …) and suggests where to begin; every chapter stays open whatever you pick.
 **My path** (top bar) keeps track of what you have done.
 
 ## Quick starts
