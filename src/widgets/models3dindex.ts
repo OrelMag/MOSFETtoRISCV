@@ -188,6 +188,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./mems3d').then((m) => m.mems3d()),
   },
   {
+    id: 'nand3d', title: '3D NAND string', category: 'memory', chapter: 'flash', step: 7,
+    summary: 'A block of Samsung\'s 32-layer V-NAND cut through a row of holes: each hole a string of 32 charge-trap cells, programmed and read by the chapter\'s rule.',
+    files: ['nand3d', 'nand3dview', 'nand3dkit'], factory: 'nand3d', codex: ['ftl'],
+    open: () => import('./nand3d').then((m) => m.nand3d()),
+  },
+  {
     id: 'cable', title: 'Twisted pair and coax', category: 'comms', chapter: 'wire', step: 6,
     summary: 'Why a pair is twisted: each half twist flips a loop\'s EMF so the pickup cancels; or swap in a coax.',
     files: ['cable3d', 'cable3dview', 'cable3dparts', 'cable3dkit'], factory: 'cable3d',

@@ -612,6 +612,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Never overwrite", challenge: "quiz", stage: "widget" },
     { title: "Garbage, wear and bad blocks", challenge: "quiz", stage: "widget" },
     { title: "Bit errors and ECC", challenge: "reach", stage: "scene" },
+    { title: "The string stood up", stage: "widget" },
   ] },
   { id: "bus", num: 50, title: "Buses and DMA", blurb: "A valid / ready handshake, five channels and an address decoder, two masters and an arbiter, a DMA engine that copies while the CPU runs, a computer that boots from flash into RAM, or from a deck of punched cards, and one with a DRAM, a screen and a keyboard on the same bus: every part in gates.", level: "Memory in depth", builds: ["io","cache","multicore","memctrl","flash"], recap: {"checks":4}, steps: [
     { title: "A handshake", challenge: "reach", stage: "scene" },
