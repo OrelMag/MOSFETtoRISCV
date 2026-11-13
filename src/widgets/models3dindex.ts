@@ -158,6 +158,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./speaker3d').then((m) => m.speaker3d()),
   },
   {
+    id: 'mems', title: 'MEMS microphone', category: 'dsp', chapter: 'converters', step: 7,
+    summary: 'An Infineon IM69D130 cut open: sound bows a membrane between two plates, and the chapter\'s sigma-delta loop and CIC turn it into bits and words.',
+    files: ['mems3d', 'mems3dview', 'mems3dkit'], factory: 'mems3d', codex: ['sigmadelta', 'cic'],
+    open: () => import('./mems3d').then((m) => m.mems3d()),
+  },
+  {
     id: 'cable', title: 'Twisted pair and coax', category: 'comms', chapter: 'wire', step: 6,
     summary: 'Why a pair is twisted: each half twist flips a loop\'s EMF so the pickup cancels; or swap in a coax.',
     files: ['cable3d', 'cable3dview', 'cable3dparts'], factory: 'cable3d',
