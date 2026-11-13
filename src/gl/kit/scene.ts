@@ -56,6 +56,8 @@ export interface Beat {
   explode?: number;
   /** The cut's position 0 (none) … 1 (fully open). */
   cut?: number;
+  /** false: no names in this beat (a view where they would only clutter, a field of copies). */
+  labels?: boolean;
 }
 
 export interface StudioAnchor extends Anchor {
@@ -75,7 +77,7 @@ export interface Model3 {
   floor?: number;
   lights?: GlowLight[];
   /** The model's look on the studio (phase 0's per-model data, and any model's): exposure, key-light direction. */
-  look?: { exposure?: number; keyDir?: Vec3 };
+  look?: { exposure?: number; keyDir?: Vec3; haze?: { colour: Colour; dist: number } };
 }
 
 export interface Knobs { explode: number; cut: number }
