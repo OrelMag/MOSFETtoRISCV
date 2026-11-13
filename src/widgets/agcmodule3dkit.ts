@@ -1,6 +1,6 @@
 // The AGC's Block II logic module on the studio renderer (DOM-free, tested). Four places in one scene, each a view:
 //   tray     the logic tray, its slots and modules, the four-bit arithmetic module A8 lifted out (the tray is drawn);
-//   module   one module laid flat, its potting cut away to the top board of sixty flatpacks (the other board under it);
+//   module   one module laid flat, its epoxy cut away to the top board of sixty flatpacks (the other board under it);
 //   package  one flatpack to drawing 1006321, its lid lifting off the die and the ten bond wires;
 //   gate     the die enlarged MAG times: the chip's two NOR gates, each three NPN transistors under one collector
 //            resistor with a base resistor on each input; the first gate's inputs a, b, c drive it (lib/agcnor.ts's rule).
@@ -24,6 +24,7 @@ const SRC = {
   scd: 'MIT / MSC drawing 1006321 rev G, Dual NOR Gate (Flat Pack), sheet 3 (klabs.org)',
   shirriff: 'K. Shirriff, "A computer built from NOR gates: inside the Apollo Guidance Computer" (righto.com, 2019)',
   chm: 'Computer History Museum, logic module record: 5/8 × 9 5/8 × 1 3/4 in',
+  hall: "E. C. Hall, MIT's Role in Project Apollo (1972), p. 129, as quoted in Wikipedia's Apollo Guidance Computer article",
   r700: 'R-700 vol. III (E. C. Hall, 1972) and MIT drawing 2005011: three NPNs, a collector resistor, a base resistor per input',
   drawn: 'drawn (typical): no drawing of it was read',
 };
@@ -161,7 +162,7 @@ function dieGeos(d: Detail): DieGeos {
 
 // ---------------------------------------------------------------- materials
 
-const potMat = M.make({ base: [0.36, 0.37, 0.39], metal: 0.1, rough: 0.6, label: 'potting (cast epoxy; its colour drawn)' });
+const potMat = M.make({ base: [0.36, 0.37, 0.39], metal: 0.1, rough: 0.6, label: 'cast epoxy (its colour drawn)' });
 const boardMat = M.make({ base: [0.74, 0.69, 0.55], metal: 0, rough: 0.55, label: 'multilayer board (layers drawn as one)' });
 const fpMat = M.make({ base: [0.07, 0.07, 0.08], metal: 0, rough: 0.35, coat: 0.4, label: 'flatpack body (glass and ceramic, black)' });
 const fpLit = M.glow(M.make({ base: [0.2, 0.14, 0.05], metal: 0, rough: 0.35, coat: 0.4, label: 'a flatpack of the four-bit adder' }), [1.0, 0.55, 0.1], 0.32);
@@ -188,7 +189,7 @@ export const AGC_HOME: Record<AgcView, OrbitView> = {
 };
 /** What each view shows in the flat drawing (it has no camera: it frames whatever it draws). */
 export const FLAT_GROUPS: Record<AgcView, string[]> = { tray: ['tray', 'lifted'], module: ['module', 'adder', 'package', 'lid'], package: ['package', 'lid'], gate: ['die'] };
-/** The potting's cut: everything above the top board's face, on the module laid flat. */
+/** The epoxy's cut: everything above the top board's face, on the module laid flat. */
 export const POT_CUT = BOARD_TOP + 0.05;
 
 export function agcModel(p: AgcPose, detail: Detail = 'full'): Model3 {
@@ -201,8 +202,8 @@ export function agcModel(p: AgcPose, detail: Detail = 'full'): Model3 {
   items.push({ geo: G.trayMods, mat: potMat, at: [0, Y0, 0], name: 'logic module', group: 'tray', cut: 'none', info: { dim: '5/8 × 9 5/8 × 1 3/4 in', source: SRC.chm, note: 'each one 120 flatpacks: 240 NOR gates' } });
   items.push({ geo: G.lifted, mat: potMat, at: [slotX(LIFTED), Y0 + 3 + MOD.h / 2 + 70, 0], name: `module A${LIFTED}: four bits of arithmetic`, group: 'lifted', cut: 'none', info: { source: SRC.shirriff, note: 'A8–A11 are four identical modules, four bits each of the adder and the central registers' } });
   items.push({ geo: G.liftPins, mat: leadMat, at: [slotX(LIFTED), Y0 + 3 + MOD.h / 2 + 70, 0], name: `module A${LIFTED}: four bits of arithmetic`, group: 'lifted', cut: 'none' });
-  // the module laid flat, potting cut away to the top board
-  items.push({ geo: G.potting, mat: potMat, at: MX, name: 'potting', group: 'module', info: { dim: `${(MOD.l / 25.4).toFixed(3)} × ${(MOD.h / 25.4).toFixed(2)} × ${(MOD.t / 25.4).toFixed(3)} in`, source: SRC.chm, note: 'the welded wiring between the boards is cast in epoxy; cut away here' } });
+  // the module laid flat, the epoxy cut away to the top board
+  items.push({ geo: G.potting, mat: potMat, at: MX, name: 'cast epoxy', group: 'module', info: { dim: `${(MOD.l / 25.4).toFixed(3)} × ${(MOD.h / 25.4).toFixed(2)} × ${(MOD.t / 25.4).toFixed(3)} in`, source: `size: ${SRC.chm}; epoxy: ${SRC.hall}`, note: 'the wiring between the boards cast in epoxy; cut away here' } });
   for (const s of [1, -1]) items.push({ geo: G.board, mat: boardMat, at: [MX[0], s * TOP_B, MX[2]], name: s > 0 ? 'top board: 60 flatpacks' : 'bottom board: 60 more', group: 'module', cut: 'none', info: { source: SRC.shirriff, note: '"two boards with 60 chips each, for a total of 240 NOR gates"; its layer count is not drawn' } });
   items.push({ geo: G.bodies, mat: fpMat, at: MX, name: 'flatpack: two NOR gates', group: 'module', cut: 'none', info: { dim: '0.275 × 0.190 × 0.070 in', source: SRC.scd } });
   items.push({ geo: G.adder, mat: adderOn ? fpLit : fpMat, at: MX, name: adderOn ? `the four-bit adder: ${ADDER_PACKAGES} flatpacks` : 'flatpack: two NOR gates', group: 'adder', cut: 'none', info: adderOn ? { source: 'lib/agcnor.ts NOR_ADD4', note: `${ADDER_GATES} NOR gates at two a package; the rest of the board is the register and its gating (drawn as the first ${ADDER_PACKAGES})` } : { dim: '0.275 × 0.190 × 0.070 in', source: SRC.scd } });
@@ -264,7 +265,7 @@ function anchors(p: AgcPose): StudioAnchor[] {
     ];
     case 'module': return [
       { text: `${PER_BOARD} flatpacks a board`, p: [MX[0] - MOD.l / 2 + 20, BOARD_TOP, MX[2] - MOD.h / 2 + 2], side: 'l', n: up, gutter: 'l' },
-      { text: 'potting', p: [MX[0] + MOD.l / 2, MOD.t / 2, MX[2]], side: 'r', n: up, gutter: 'r', minor: true },
+      { text: 'cast epoxy', p: [MX[0] + MOD.l / 2, MOD.t / 2, MX[2]], side: 'r', n: up, gutter: 'r', minor: true },
       { text: 'connector', p: [MX[0], 0, MX[2] - MOD.h / 2 - 5], side: 'b', n: up, minor: true },
       ...(p.adder ? [{ text: `adder: ${ADDER_PACKAGES} flatpacks`, p: [MX[0] + packageAt(ADDER_PACKAGES - 1).u, BOARD_TOP + FP.h, MX[2] + packageAt(ADDER_PACKAGES - 1).v] as Vec3, side: 't' as const, n: up, gutter: 'r' as const }] : []),
     ];
@@ -292,7 +293,7 @@ function anchors(p: AgcPose): StudioAnchor[] {
 function beats(): Beat[] {
   return [
     { title: 'The logic tray', text: `The AGC's logic is ${SLOTS} modules standing side by side in one tray. Module A${LIFTED}, lifted out, is four bits of the adder and the central registers; A8–A11 are four of the same.`, view: AGC_HOME.tray, cut: 0, explode: 0, show: ['tray', 'lifted'] },
-    { title: 'Two boards of sixty', text: `Cut the potting away and a module is ${PER_BOARD} identical flatpacks welded to a board, and ${PER_BOARD} more on a second board under it: ${PACKAGES} packages, ${MODULE_GATES} NOR gates.`, view: AGC_HOME.module, cut: 1, explode: 0, show: ['module', 'adder', 'package', 'lid'] },
+    { title: 'Two boards of sixty', text: `Cut the epoxy away and a module is ${PER_BOARD} identical flatpacks welded to a board, and ${PER_BOARD} more on a second board under it: ${PACKAGES} packages, ${MODULE_GATES} NOR gates.`, view: AGC_HOME.module, cut: 1, explode: 0, show: ['module', 'adder', 'package', 'lid'] },
     { title: 'Where the adder is', text: `Step 2's four-bit adder is ${ADDER_GATES} NOR gates: ${ADDER_PACKAGES} of these packages, two gates each. Every block of the computer is counted the same way.`, view: AGC_HOME.module, cut: 1, explode: 0, show: ['adder', 'module'] },
     { title: 'One flatpack', text: 'A quarter of an inch long, ten gold leads at a twentieth of an inch, a stripe at the pin 1 end. Its lid lifted: the die, and ten bond wires.', view: AGC_HOME.package, cut: 1, explode: 1, show: ['package', 'lid'] },
     { title: 'One gate', text: 'The die, forty times life: each gate three transistors, their collectors joined under one collector resistor, a base resistor on each input. Any input at 1 turns its transistor on and pulls the output to ground: a NOR.', view: AGC_HOME.gate, cut: 0, explode: 0, show: ['die'] },

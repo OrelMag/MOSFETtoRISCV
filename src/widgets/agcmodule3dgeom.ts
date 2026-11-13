@@ -10,7 +10,7 @@
 // each input (R-700, drawing 2005011: lib/agcnor.ts). The module: "two boards with 60 chips each, for a total of 240 NOR
 // gates"; the arithmetic modules sit in slots A8–A11 of the logic tray (Shirriff). Its outline, 5/8 × 9 5/8 × 1 3/4 in, is
 // the Computer History Museum's record of one logic module [S]. The board's layers, the packages' spacing on it, the
-// connector, the potting's colour and the tray around it are drawn.
+// connector, the epoxy's colour and the tray around it are drawn.
 
 import { stats } from '../sim/stats';
 import { NOR_ADD4, NOR_REG4 } from '../lib/agcnor';
