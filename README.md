@@ -28,11 +28,11 @@ turn, Cutaway and Explode to open them, a Tour through their views, names on eve
 with its size and source, full screen and a saved image. Each says what is to scale and what is exaggerated, and a printed
 chapter keeps them as figures.
 
-Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journey-->94<!--/n--> chapters,
-<!--n:onramps-->2<!--/n--> on-ramps for newcomers, <!--n:prologue-->3<!--/n--> prologue chapters and <!--n:appendices-->6<!--/n--> appendices), the **[campaign](https://switchtocpu.com/#/campaign)**
-(<!--n:levels-->182<!--/n--> levels: build it to unlock it, or fix it), the **[workbench](https://switchtocpu.com/#/workbench/rca4)**
-(any component on its own, with statistics, benchmarks and the out-of-order lab) and the
-**[sandbox](https://switchtocpu.com/#/sandbox)** (your own circuits, up to whole computers).
+Four ways in, as the top bar names them: **[Chapters](https://switchtocpu.com/#/c/map/0)**, the journey (<!--n:journey-->94<!--/n--> chapters,
+<!--n:onramps-->2<!--/n--> on-ramps for newcomers, <!--n:prologue-->3<!--/n--> prologue chapters and <!--n:appendices-->6<!--/n--> appendices), **[Campaign](https://switchtocpu.com/#/campaign)**
+(<!--n:levels-->182<!--/n--> levels: build it to unlock it, or fix it), **[Workbench](https://switchtocpu.com/#/workbench/rca4)**
+(any component on its own, with statistics, benchmarks and the out-of-order lab) and
+**[Sandbox](https://switchtocpu.com/#/sandbox)** (your own circuits, up to whole computers).
 
 ## Manual
 
