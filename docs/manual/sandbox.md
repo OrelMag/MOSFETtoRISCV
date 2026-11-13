@@ -1,5 +1,7 @@
 # The sandbox
 
+[← Back to the manual](README.md)
+
 ## What it is for
 
 The sandbox is a free circuit editor. You place parts, wire them, run the circuit, and package what you built as a chip
@@ -75,7 +77,7 @@ inside (see [Look inside a part](#look-inside-a-part)).
 - **Tabs and toolbar** (second row): your open chips as tabs, **New chip** (and the arrow beside it for other kinds of
   chip), the save state (**Saved**), **File**, undo / redo, zoom out / in, **Fit to screen**, the section tool, **Cut**,
   **I/O**, **Examples**, **Package**, **Timing**, **Tests**, **Play**, the inspector, the keys sheet (**?**) and the
-  bookmark. On a narrow window the least used of these move into **More**.
+  bookmark (**Bookmark this chip in My notes**: see [What works everywhere](everywhere.md)). On a narrow window the least used of these move into **More**.
 - **Left**: the project switcher (**Project: Main project**), the parts search, **Purist** (only NAND and the parts
   built from it), and the parts list in groups.
 - **Middle**: the canvas. A line of hints along its bottom edge names the basic gestures.
@@ -95,15 +97,15 @@ inside (see [Look inside a part](#look-inside-a-part)).
 3. Drag a part to move it. Drag on empty canvas to select several with a rubber band; **Shift** + click adds to the
    selection.
 4. **Delete** or **Backspace** deletes the selection. **R** turns it a quarter turn, **F** flips it left to right.
-5. Click the ☆ beside a part in the list to pin it to **Favorites** at the top of the list.
+5. Click the ☆ beside a part in the list (**Add to favorites**) to mark it as a favourite.
 
 ### Wire parts together
 
 1. Press on a pin's knob (on the side its wire leaves from) or on a part's port, and drag to another port. Release on
    the target.
 2. To make corners, click on empty canvas while drawing; **Backspace** removes the last corner, **Esc** cancels.
-3. To branch, end a new wire on an existing wire, or **Ctrl** / **Alt** + drag from a wire.
-4. Drag a wire to reshape it; double-click a corner to remove it. Right-click a wire for **Add a bend here**.
+3. To branch, end a new wire on an existing wire, or hold **Ctrl** (or **Alt**) and drag from a wire.
+4. Drag a wire to reshape it; double-click a corner to take it out (the wire is routed again without it).
 5. **Cut** (**K**) lets you drag a line across wires to cut them.
 
 ### Use pointers (named wires)
@@ -111,9 +113,11 @@ inside (see [Look inside a part](#look-inside-a-part)).
 A pointer is a wire by name: every pointer with the same name is the same wire, so you can connect distant places
 without drawing a long wire.
 
-1. Press **L** (or click **Pointer** in **Basics**) and place it on a port.
-2. Give it a name (**F2**), and place another pointer with the same name where the signal should arrive.
-3. Click a selected pointer to jump to the next one with that name.
+1. Press **L** (or click **Pointer** in **Basics**), then click on the canvas where it goes. A box asks for its name
+   (*Every pointer with this name is the same wire*): type it and press **Enter**.
+2. Place another pointer with the same name where the signal should arrive, and wire each one to its port.
+3. Click a pointer to select it: its properties list every pointer of that name (for example **2 named "net"**). Click
+   it again, or **Next**, to jump to the next one.
 
 ### Rename, undo and redo
 
@@ -123,13 +127,20 @@ without drawing a long wire.
 
 ### Use the right-click menu
 
-Right-click a part, a wire or empty canvas to see what you can do with it: start a wire from a pin, **Rename**, **Look
-inside**, **Inspect**, **Measure**, **Explain**, **Flip**, **Rotate**, **Group in a section**, **Duplicate**, **Copy**,
-**Cut**, **Delete**, each with its key. On a touch screen, press and hold.
+Right-click a part, a wire or empty canvas to see what you can do with it. On a part: start a wire from one of its pins,
+**Rename**, **Look inside**, **Inspect**, **Measure**, **Explain**, **Take it elsewhere**, **Flip**, **Rotate clockwise**,
+**Rotate anticlockwise**, **Group in a section**, **Duplicate**, **Copy**, **Cut** and **Delete**, each with its key. On
+a touch screen, press and hold.
+
+Three rows open a further menu:
+
+- **Measure**: **Slack through here** and **Power** (each says when it does not apply, as for a single gate).
+- **Explain**: the part's **Truth table**, its codex entry, the chapter that teaches it, and **Where it is used**.
+- **Take it elsewhere**: **Copy into a new chip**, **Copy Verilog**, **Save an image as SVG** or **PNG**, and **Share link…**.
 
 ![The right-click menu of a NAND gate](img/sandbox/16-part-menu.png)
 
-### Pins and buses
+### Use pins and buses
 
 - **Input** and **Output** are 1-bit pins. **Input bus** and **Output bus** carry several bits: pick the width on the
   part (the **8-bit ▾** tag) before placing it, or in its properties afterwards.
@@ -141,6 +152,7 @@ inside**, **Inspect**, **Measure**, **Explain**, **Flip**, **Rotate**, **Group i
 ### Run a circuit
 
 - A circuit without a clock simply follows its inputs: change an input and the outputs follow.
+- **I/O** in the toolbar shows or hides the bar of the chip's pins above the run bar: click an input there to change it.
 - A chip with a **Clock** pin runs on the run bar: **Run** starts it (or **Ctrl Enter**), **Step** (or **.**) does one
   clock cycle, the speed box sets cycles per second, **Reset** powers it on again.
 - **Cycle** runs one whole clock cycle at a time (fast); **Gate delay** steps one gate delay at a time, so you can watch
@@ -150,13 +162,26 @@ inside**, **Inspect**, **Measure**, **Explain**, **Flip**, **Rotate**, **Group i
 
 ### Look inside a part
 
-1. Double-click any library part (or right-click ▸ **Look inside**). Its circuit opens beside yours, with live values,
+1. Double-click any library part (or the right-click menu’s **Look inside**). Its circuit opens beside yours, with live values,
    driven by your circuit.
 2. Double-click a part inside it to go one level deeper; the path is shown at the top (**INSIDE**). You can go all the
    way down to transistors.
 3. **Why?** traces the selected wire's value back to what caused it. **Close** (or **Esc**) goes back.
 
 ![Looking inside a NAND: its four transistors, live](img/sandbox/17-look-inside.png)
+
+### Inspect a part: its cost, truth table and Verilog
+
+1. Select a part on the canvas (or nothing, for the chip itself).
+2. Click the inspector button in the toolbar (**Inspect the selected part, or this chip**). A drawer opens on the right
+   with three tabs:
+   - **Info**: what the part is, its cost in transistors and NAND gates, its worst-case delay, its pins and their
+     values, and **Open on workbench**;
+   - **Truth table**;
+   - **HDL**: the part as Verilog.
+3. Close it with its **×**.
+
+![The inspector open on a NAND gate: Info, Truth table and HDL tabs, its cost and pins](img/sandbox/60-inspector.png)
 
 ### Package a chip and edit its face
 
@@ -203,9 +228,9 @@ Each of these keeps its own editor beside the canvas: the drawing is made from i
 so. **Detach as drawn chip** turns it into an ordinary drawn chip; **Hide table** (**Hide machine**, **Hide text**)
 folds the editor away.
 
-#### A truth-table chip
+#### Make a truth-table chip
 
-1. **New chip ▾** ▸ **Truth table**. It starts with inputs **a**, **b**, **c** and output **y** (a majority function).
+1. **New chip ▾** › **Truth table**. It starts with inputs **a**, **b**, **c** and output **y** (a majority function).
 2. Click a cell in the **y** column to cycle it 0 → 1 → – (don't care), or type 0, 1 or - in it. The **Karnaugh map**,
    the **Minimized** equation and its cost in NAND gates follow at once, and so does the circuit.
 3. Or type an expression after **y =** (for example `a·b`) and click **Fill**.
@@ -213,9 +238,9 @@ folds the editor away.
 
 ![A truth-table chip: the table, its Karnaugh map, the minimized equation and the drawn circuit](img/sandbox/45-truth-table.png)
 
-#### A state-machine chip
+#### Make a state-machine chip
 
-1. **New chip ▾** ▸ **State machine**. It starts with three states, input **x** and output **y**; the chip also gets
+1. **New chip ▾** › **State machine**. It starts with three states, input **x** and output **y**; the chip also gets
    **rst** and **clk**.
 2. Click **+ State**, then click in the diagram to add a state. A drag from a state's rim to another state adds an arc (or use
    **Arc**); double-click empty space for a new state, a state to rename it; right-click for more.
@@ -224,25 +249,25 @@ folds the editor away.
 
 ![A state-machine chip: the diagram, the encodings and the circuit built from them](img/sandbox/46-state-machine.png)
 
-#### A Verilog chip
+#### Make a Verilog chip
 
-1. **New chip ▾** ▸ **Verilog chip**. A small module opens in the text pane on the left.
+1. **New chip ▾** › **Verilog chip**. A small module opens in the text pane on the left.
 2. Edit the text. It is synthesized a moment after you stop typing (or click **Synthesize**), and the drawing on the
    right is replaced; **synthesized** and **No problems.** show it worked, with the cells used underneath.
 3. Every module becomes a chip; the ports are the chip's pins.
 
 ![A Verilog chip: the module text and the circuit drawn from it](img/sandbox/47-verilog.png)
 
-### The parts list
+### Find a part in the parts list
 
 The groups are **Basics**, **My chips** (once you package one), **Inputs & outputs** (pins, buttons, clocks, switches,
-keys, keyboard, and under **Special I/O** the puzzle ports, card reader, counters, random source and timer), **Sources**,
-**Transistors**, **Switch level** (strong and weak transistors, resistors, pull-ups, capacitors, transmission gates,
-tri-state parts), **Relays and tubes**, **Constants**, **Displays**, **ASCII**, **Wiring**, **Memory**, **Processor
+and under **Special I/O** the key, the keyboard, the puzzle ports and the card reader), **Sources** (cycle counter, random source, timer),
+**Transistors**, **Switch level** (resistors, pull-ups and pull-downs, capacitors, transmission gates,
+tri-state parts), **Relays and tubes**, **Constants**, **Displays** (with the console and the screen), **Wiring**, **Memory**, **Processor
 cores**, **Communication** and **Library** (every gate, adder, register and larger block of the site). Type in **Search…**
 to find a part by name. Tick **Purist** to see only NAND and what you have built from it.
 
-### Memory: ROM and RAM
+### Program a ROM and use RAM
 
 - In **Memory**, **ROM (words)** is a lookup table written as hex words; **Program ROM (RV32)** holds a RISC-V program;
   **RAM** is read-write memory. Their size and contents are in the properties.
@@ -254,14 +279,13 @@ to find a part by name. Tick **Purist** to see only NAND and what you have built
 
 ![The program editor with the instruction builder open](img/sandbox/25-instruction-builder.png)
 
-### Displays, keys, console, screen and switches
+### Show results and take input: displays, keys, console, screen and switches
 
-- **Displays** has **LED**, **LED bank**, **7-segment**, **Hex digit**, **Value**, **Buzzer** and **Halt** (stops
-  **Run** when its input is 1).
-- **Inputs & outputs** has **Switches** (a bank of toggles), **Key** (1 while a chosen key is held) and **Keyboard** (typed
-  keys wait in order).
-- **ASCII** has **Console** (prints a character at each clock edge) and **Screen** (a pixel screen you write by x, y and
-  colour).
+- **Displays** has **LED**, **LED bank**, **7-segment**, **Hex digit**, **Value**, **Buzzer**, **Halt** (stops
+  **Run** when its input is 1), **Console** (prints a character at each clock edge) and **Screen** (a pixel screen you
+  write by x, y and colour).
+- **Inputs & outputs** has **Switches** (a bank of toggles), and under **Special I/O** **Key** (1 while a chosen key is
+  held) and **Keyboard** (typed keys wait in order).
 - When a chip has a console, screen or switch bank, even deep inside, the **Screens** drawer shows them all live, with
   **Clear** and **PNG**.
 
@@ -279,7 +303,7 @@ to find a part by name. Tick **Purist** to see only NAND and what you have built
 
 ### Run a program with the CPU drawer
 
-When a chip holds a complete CPU and its program ROM (try **Examples** ▸ **Computer: RISC-V with a screen and a
+When a chip holds a complete CPU and its program ROM (try **Examples** › **Computer: RISC-V with a screen and a
 console**), the **CPU** drawer opens on the right on a wide window (on a narrow one, click **CPU** in the toolbar).
 
 1. **Run to halt** runs the program to its end; **Step** runs one instruction; **Slow** runs at the rate beside it.
@@ -290,7 +314,7 @@ console**), the **CPU** drawer opens on the right on a wide window (on a narrow 
    circuit and says **matches golden model** while the two agree, or names the first difference.
 4. **Edit…** opens the program editor; **Custom…** lets you add your own instructions to the core.
 
-### The Memory and Screens drawers
+### Watch memories and screens in the drawers
 
 The tabs at the top of the drawer area switch between **CPU**, **Memory** (the contents of every RAM and register file in
 the chip, live: pick one at the top) and **Screens**. Each opens by itself on a wide window when the chip has something
@@ -301,10 +325,10 @@ to show.
 ### Probe wires and use the timing panel
 
 The timing panel draws chosen wires over time, gate delay by gate delay, like a logic analyser. To try it, open
-**Examples** ▸ **4-bit counter on a 7-segment display** (it starts counting by itself).
+**Examples** › **4-bit counter on a 7-segment display** (it starts counting by itself).
 
-1. **Timing ▾** ▸ **Timing panel**. A panel opens under the canvas; it records only while it is open.
-2. **Timing ▾** ▸ **Probe mode** (or **P**), then click the wires you want to watch. Each gets a coloured flag with its
+1. **Timing ▾** › **Timing panel**. A panel opens under the canvas; it records only while it is open.
+2. **Timing ▾** › **Probe mode** (or **P**), then click the wires you want to watch. Each gets a coloured flag with its
    name on the canvas and a lane in the panel; a bus shows its value in each stretch of time. **Esc** leaves probe mode.
 3. Let it run, or press **.** to step. In the panel, a click sets cursor A, **Shift** + click cursor B; the wheel or a
    pinch zooms, a drag pans. **Live** follows the newest time.
@@ -312,7 +336,7 @@ The timing panel draws chosen wires over time, gate delay by gate delay, like a 
 
 ![The timing panel with the clock, the counter's output cnt.q and the font ROM's output](img/sandbox/44-timing-panel.png)
 
-**Timing ▾** ▸ **Fault brush** (**B**) breaks a wire, so you can see what depends on it.
+**Timing ▾** › **Fault brush** (**B**) breaks a wire, so you can see what depends on it.
 
 ### Write test tables
 
@@ -324,18 +348,18 @@ The timing panel draws chosen wires over time, gate delay by gate delay, like a 
 
 ![The Tests pane](img/sandbox/18-tests.png)
 
-### Challenges and puzzles
+### Take on a challenge or a puzzle
 
 Both are optional, and every one has an answer you can look at.
 
-#### A challenge: build a chip, check it
+#### Build a chip for a challenge and check it
 
-1. **Play ▾** ▸ **Challenges**. The list opens on the right, grouped by topic, each group with its rule (for example
+1. **Play ▾** › **Challenges**. The list opens on the right, grouped by topic, each group with its rule (for example
    **NAND only**) and your count of solved ones.
 
    ![The Challenges list](img/sandbox/30-challenges-drawer.png)
 
-2. Click one, for example **NOT from NAND**. A new chip opens with its pins already placed (**a** and **y**), the parts
+2. Click **Start** beside one, for example **NOT from NAND**. A new chip opens with its pins already placed (**a** and **y**), the parts
    list limited to what the rule allows (**Purist** is ticked), and a strip under the canvas with the task, **Check**,
    **Show answer** and **Do it for me**.
 3. Build something, and click **Check**. If it is wrong you see **Not yet**, the input combinations that fail, and the
@@ -349,16 +373,17 @@ Both are optional, and every one has an answer you can look at.
 
    ![A passing Check, with the score against par](img/sandbox/33-check-passes.png)
 
-#### A puzzle: write a program
+#### Write a program for a puzzle
 
-1. **Play ▾** ▸ **Puzzles**. Each puzzle turns streams of input words into output words (**Echo**, **Countdown**,
+1. **Play ▾** › **Puzzles**. Each puzzle turns streams of input words into output words (**Echo**, **Countdown**,
    **Multiply**, **Sort**, …).
 
    ![The Puzzles list](img/sandbox/34-puzzles-drawer.png)
 
-2. Click one, for example **Echo**, choose the CPU that will run it (a ready-wired 4-bit, RV16 or RV32I computer) and click **Start**.
+2. Click **Start** beside one, for example **Echo**, and choose the computer that will run it (a ready-wired 4-bit, RV16
+   or RV32I computer).
 3. The puzzle opens as a chip with its computer, and a strip under the canvas: the task, how the program reads input and
-   writes output, the tests, **Check**, **Show answer**, **Do it for me**, and a chart of cycles against NAND gates with
+   writes output, the tests, **Check**, **Show answer**, **Do it for me**, **Start over…**, and a chart of cycles against NAND gates with
    the reference CPUs on it.
 
    ![A puzzle open: the computer, the CPU drawer and the puzzle strip](img/sandbox/36-puzzle-strip.png)
@@ -369,7 +394,7 @@ Both are optional, and every one has an answer you can look at.
 
    ![The puzzle checked: every test ticked, cycles, NANDs and program words](img/sandbox/37-puzzle-checked.png)
 
-### Sections and comments
+### Label your circuit with sections and comments
 
 - Select some parts and press **G** (or the section button in the toolbar) to put a titled frame around them. Drag the
   frame's border or title to move it with what is inside; double-click the title to rename it. **Delete** removes only
@@ -377,12 +402,12 @@ Both are optional, and every one has an answer you can look at.
 - Press **T** to place a comment: free text on the canvas, saved with the chip, never part of the circuit. Double-click
   it to edit.
 
-### The minimap
+### Find your way with the minimap
 
 Press **M** to show or hide the minimap at the bottom right of the canvas. It hides itself while the whole chip is in
 view. Drag its frame to pan, or click to jump.
 
-### Projects and folders
+### Organise chips in projects and folders
 
 - **Project: Main project** above the parts list switches between projects: separate sets of chips. Its menu has **New
   project**, **Duplicate**, **Rename…**, **Export this project**, **Import a file as a new project** and **Delete this
@@ -391,7 +416,7 @@ view. Drag its frame to pan, or click to jump.
 
 ![The project menu](img/sandbox/15-project-menu.png)
 
-### Export, import, share
+### Save, share and export your chips
 
 **File ▾** has:
 
@@ -404,21 +429,25 @@ view. Drag its frame to pan, or click to jump.
 - **Export Verilog**, **Export Verilog for FPGA…** (a .zip ready for a Tang Nano 9K board) and **Export for Digital
   (.dig)…**.
 - **Export image (SVG)** and **Export image (PNG)**.
-- **Instruction sets…** (your own instruction sets), **Memory map…** (on a chip with a bus), **Manage chips…** and
-  **Delete local data…**.
+- **Instruction sets…** (your own instruction sets) and **Memory map…** (on a chip with a bus).
+- **Manage chips…**: a table of your chips with their size, which chips use them and their folder; each row has **Open**,
+  **Duplicate** and **Delete**, and there are **New folder** and **Export all** buttons.
+- **Delete local data…**: a dialog says that everything you make lives only in this browser and that deleting cannot be
+  undone. It offers to delete your chips, favourites and sandbox preferences, or **Everything** (all progress and
+  settings too), with **Export all chips**, **Cancel** and **Delete and reload**.
 
 #### Save a chip to a file and bring it back
 
-1. Open the chip, then **File ▾** ▸ **Export this chip…**. Your browser saves a file named after the chip, ending in
+1. Open the chip, then **File ▾** › **Export this chip…**. Your browser saves a file named after the chip, ending in
    `.chip.json`, holding the chip and every chip inside it.
-2. To bring it back (on another computer, or after clearing the browser), **File ▾** ▸ **Import…** and pick the file, or
-   drop it on the canvas. A summary says what was added. Nothing is overwritten: a chip identical to one you have is
-   listed under **Already here** and not added twice.
+2. To bring it back (on another computer, or after clearing the browser), **File ▾** › **Import…** and pick the file, or
+   drop it on the canvas. A summary says what was added, and **Ctrl Z** undoes the import. Nothing is overwritten: a chip
+   identical to one you have is listed under **Already here** and not added twice; a different chip that has the same id
+   as one of yours comes in under a new id, listed under **Renamed**. **OK** closes the summary.
 
 #### Send a circuit as a link
 
-1. Open the chip, then **File ▾** ▸ **Share link…**. The link is made and copied to the clipboard (**Copied to the
-   clipboard.**); **Copy** copies it again.
+1. Open the chip, then **File ▾** › **Share link…**. A dialog shows the link; **Copy** copies it to the clipboard.
 2. Send it. Whoever opens it gets a copy of the chip and the chips inside it, and chooses whether to import it. The
    circuit travels inside the link itself: nothing is uploaded.
 
@@ -427,32 +456,32 @@ view. Drag its frame to pan, or click to jump.
 What it is: the chip as synthesizable Verilog with a top module and pin constraints for a Sipeed Tang Nano 9K board,
 ready for Gowin EDA, or for Yosys and nextpnr.
 
-1. Open the chip (try **Examples** ▸ **4-bit counter on a 7-segment display**).
-2. **File ▾** ▸ **Export Verilog for FPGA…**. The dialog says how many modules it writes, which sandbox parts (displays,
+1. Open the chip (try **Examples** › **4-bit counter on a 7-segment display**).
+2. **File ▾** › **Export Verilog for FPGA…**. The dialog says how many modules it writes, which sandbox parts (displays,
    switches) become ports of the top module, and which files the .zip holds.
 3. Click **Download .zip**. Its README.txt says how to synthesize it. The pins are an example: check them against your
    board before programming it.
 
 ![The Export Verilog for FPGA dialog](img/sandbox/51-fpga-export.png)
 
-#### Your own instruction sets
+#### Write your own instruction set
 
 What it is: an instruction set written as a table (each instruction's name, operands and bit pattern), so a ROM can be
 programmed in your own assembly language for a CPU you built.
 
-1. **File ▾** ▸ **Instruction sets…**. On the left are read-only **Presets** (among them the 4-bit CPU and the PDP-8),
+1. **File ▾** › **Instruction sets…**. On the left are read-only **Presets** (among them the 4-bit CPU and the PDP-8),
    and under **This sandbox** your own.
 2. Pick a preset and click **Copy to edit**, or click **New**.
 3. Edit the table on the **Instructions** tab (an encoding is written bit by bit: 0 and 1 fixed, a letter for an
    operand's bits); **Design** paints the patterns on a bit grid; the **Check** tab shows whether the table has
    problems (a tick when it has none).
 
-#### Your own instructions for the RISC-V core
+#### Add your own instructions to the RISC-V core
 
 What it is: up to three new instructions added to the single-cycle RISC-V core, each defined by the control signals it
 sets; the core, the assembler and the reference model all learn them.
 
-1. Open a chip with an RV32I core and its CPU drawer (for example **Examples** ▸ **Computer: RISC-V with a screen and a
+1. Open a chip with an RV32I core and its CPU drawer (for example **Examples** › **Computer: RISC-V with a screen and a
    console**), and click **Custom…** in the drawer.
 2. Under **Add one, starting from**, click a starting point, for example **lwx: rd ← mem[rs1 + rs2]**.
 3. Set its **Mnemonic**, **Format** and the signals (**write rd**, **ALU A**, **ALU B**, **ALU op**, **write memory**,
@@ -461,12 +490,12 @@ sets; the core, the assembler and the reference model all learn them.
 
 ![Custom instructions: lwx, its signals, the data path it uses and the generated reference model](img/sandbox/52-custom-instructions.png)
 
-#### The memory map
+#### Rearrange the memory map
 
 What it is: where each memory and device answers on a bus, as a map you can rearrange; the decoder is rebuilt from it.
-It needs a chip with a bus: open **Examples** ▸ **System on a bus** first.
+It needs a chip with a bus: open **Examples** › **System on a bus** first.
 
-1. **File ▾** ▸ **Memory map…**. The map shows the 16 windows of 256 MiB the bus decodes (on address bits 31 to 28) and
+1. **File ▾** › **Memory map…**. The map shows the 16 windows of 256 MiB the bus decodes (on address bits 31 to 28) and
    what sits in each.
 2. Drag a new region (**RAM**, **Flash**, **DRAM**, **Screen**, **Keys + timer**) from **Drag onto the map** onto a
    free window. To move a region, drag it, or Tab to it and press ↑ ↓ (**Delete** removes it). Click a region to see its
@@ -533,5 +562,7 @@ fingers to pan; the wheel or a pinch to zoom; right-click (or press and hold on 
   the view to the space that is left.
 - **A key does nothing.** Keys go to the canvas only while you are not typing in a field; click the canvas first. A key
   that a **Key** part listens to drives that part instead while the chip is open.
-- **I lost my work.** Chips are saved in this browser as you go (**Saved** in the toolbar). Use **File ▾** ▸ **Export
+- **I lost my work.** Chips are saved in this browser as you go (**Saved** in the toolbar). Use **File ▾** › **Export
   all chips…** to keep a copy elsewhere, and **Ctrl Z** to undo a mistake.
+
+Next: [What works everywhere](everywhere.md)

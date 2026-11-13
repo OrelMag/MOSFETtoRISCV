@@ -1,6 +1,6 @@
 # The workbench
 
-[← Manual](README.md)
+[← Back to the manual](README.md)
 
 ## What it is for
 
@@ -79,7 +79,7 @@ of this page covers every control.
 ![The workbench screen](img/workbench/02-workbench.png)
 
 - **Top bar.** **My path**, **Chapters**, **Campaign**, **Workbench** and **Sandbox** take you to the other
-  sections. The search button (Ctrl K) is on the right. **HEX / BIN / DEC** sets how values are written everywhere on
+  sections. The search button (**Ctrl K**) is on the right. **HEX / BIN / DEC** sets how values are written everywhere on
   the page. **Slow motion** draws every change as it travels, one gate delay at a time. Then View options and the
   theme switch.
 - **Left pane: four tabs.**
@@ -91,11 +91,13 @@ of this page covers every control.
 
   **Statistics**, **Benchmarks** and **Lab** each open as a page of their own, with the same four tabs across the top;
   click **Parts** to come back to the circuit.
-- **Middle: the circuit**, with a bar above it and the controls below it.
+- **Middle: the circuit**, with a bar above it and the controls below it. A badge at its top left says what level of
+  detail you are looking at (for example **LEVEL: GATES & BLOCKS**), and a line along its bottom recalls the mouse
+  gestures (double-click to open, drag to move, right-click for layout, wheel or pinch to zoom).
   - **The bar above**, from left to right:
     - the part's name, and the path when you are inside it;
     - **Open in Sandbox** (the chip icon);
-    - **Share** (the picture icon);
+    - **Share this view** (the picture icon);
     - **Layout** (the four arrows);
     - **Lock the layout** (the padlock);
     - **Probe** (P);
@@ -193,7 +195,7 @@ You can open any box on the screen and keep going down to transistors.
   which draws an opened box on the plain background so its inside reads clearly. Both are in View options, on the
   top bar.
 
-![Zooming in: the two full adders open in place](img/workbench/10-zoom-opens-block.png)
+![Zoomed in on fa1: its nine NAND gates show inside the box, live](img/workbench/10-zoom-opens-block.png)
 
 On a touch screen, pinch with two fingers to zoom and open, and drag with one to move the view.
 
@@ -224,7 +226,7 @@ On a touch screen, pinch with two fingers to zoom and open, and drag with one to
 
 ### Colour the circuit by a quantity (Overlay)
 
-1. In the **Overlay** menu on the bar, choose one of **Slack**, **Activity**, **Load**, **Unknown**, **Cost**,
+1. In the **Overlay: off** drop-down on the bar, choose one of **Slack**, **Activity**, **Load**, **Unknown**, **Cost**,
    **Energy** or **Depth**. The whole circuit is coloured by it, with a key.
    - **Slack** shows how much later each part's slowest path could be before the whole part got slower: parts on the
     critical path are red. The key in the corner explains the colours and counts the parts in each.
@@ -236,7 +238,7 @@ On a touch screen, pinch with two fingers to zoom and open, and drag with one to
 
 ### Use a part's menu (right-click)
 
-Right-click a part (or select it and press the Menu key, or Shift F10) for everything about it:
+Right-click a part (or select it and press the **Menu** key, or **Shift F10**) for everything about it:
 - **Look inside**: the same as a double-click.
 - **Inspect**: its datasheet and cost in the inspector.
 - **Measure ▸**
@@ -265,22 +267,22 @@ Right-click empty space for the same menus about the whole level.
 
 1. Drag a part or a wire to move it. Shift-click or drag a box around several parts to move them together. **Ctrl Z**
    undoes and **Ctrl Y** redoes. Your arrangement is kept for that part on this computer.
-2. **Layout** (the four arrows) opens a menu: **Undo** (Ctrl+Z) and **Reset layout**, which puts this level back as it
-   was first drawn (wire colours you picked stay). On a level drawn with named pointers it also offers to unravel
-   them into wires.
+2. **Layout** (the four arrows) opens a menu. Before you have moved anything it only explains how to move parts; once
+   you have, it offers **Undo** (**Ctrl Z**) and **Reset layout**, which puts this level back as it was first drawn
+   (wire colours you picked stay).
 3. **Lock the layout** (the padlock) stops drags from moving anything: a drag then moves the view.
 
 Moving parts changes only the drawing, never the circuit.
 
 ### Save an image or share a link
 
-1. Click **Share** (the picture icon) on the bar.
+1. Click **Share this view** (the picture icon) on the bar.
    - **Image as SVG**: this level, whole, as drawn in your current theme.
    - **Image as PNG**: the same at 2× resolution.
    - **Copy link to this view**: a link that reopens this part with the same opened level, inputs, probes and clock
      cycles.
 
-![The Share menu](img/workbench/15-share-menu.png)
+![The Share this view menu](img/workbench/15-share-menu.png)
 
 ### Open a copy in the Sandbox
 
@@ -293,7 +295,8 @@ Under **Info**:
 - **Transistors**, **NAND gates**, **NAND delays (worst path)** and **levels of boxes inside** are counted from the
   part's own circuit.
 - Each pin with its direction and current value.
-- **Power (estimate)**: the energy it switches, measured on the running circuit or on random inputs.
+- **Power (estimate)**: the energy it switches, measured on the running circuit or on random inputs. **Supply voltage**
+  sets the voltage it is worked out at, and **Restart** counts again from now.
 - **In relays and tubes**: what the same part would take built from relays or vacuum tubes (devices, worst path,
   power, size, mass), with **Where the numbers come from**.
 - **Where it is used**: the parts that place it, how many times, and its copies in the chapters' processors.
@@ -324,18 +327,24 @@ Click **Statistics** in the left pane. **Hardware statistics** lists every part:
 - levels;
 - boxes inside.
 
-Use the tabs to see it built in **CMOS**, **Relays** or **Tubes**. Click a column heading to sort by it (click
-**Transistors**, and the largest parts come first).
+Use the tabs to see it built in **CMOS**, **Relays** or **Tubes**. Click a column heading to sort by it; the table
+starts sorted by **NAND gates**. Click a name to open that part on the workbench. Click a category above the table
+(**Logic gate**, **Arithmetic**, **Memory**, …) to hide its parts, and again to show them; **Group sizes** puts a part's sizes on one row, and
+**Show splitters, mergers and wire parts** adds the wiring parts.
 
 ![Hardware statistics](img/workbench/20-statistics.png)
 
 ### Compare the processors (Benchmarks)
 
 Click **Benchmarks**.
-- **Speed against cost** plots every processor in the site against the same programs: Fibonacci, insertion sort,
-  matrix multiply, CRC-32 and more.
-- The switches above it choose what is measured: **Cost**, **Energy**, **Time**, **Cycles**, **CPI**.
-- The table below gives each processor's NAND gates, clock period and its result on each program.
+- **Speed against cost** plots every processor in the site: its mean time on the same programs (Fibonacci, insertion
+  sort, matrix multiply, CRC-32 and more) against its size in NAND gates. Down and left is better.
+- The **Cost** and **Energy** switches above it change what the plot shows.
+- The table below gives each processor's NAND gates, clock period and its result on each program. **Show** above it
+  chooses the result: **Time**, **Cycles**, **CPI**, **Energy** or **Energy / instr.** Open a row for its cache misses,
+  stalls and energy.
+- **CPUs**, beside **Show**, has a button for each family (**Single-cycle**, **Multicycle**, **Pipelined**, **Two-wide**):
+  click one to hide its processors from the table, and again to bring them back.
 
 ![Benchmarks: speed against cost](img/workbench/21-benchmarks.png)
 
@@ -346,16 +355,20 @@ Click **Lab**.
    resolve** or **No return stack**.
 2. Change the knobs:
    - fetch and commit width;
-   - the execution ports (**+ add a port**);
+   - the execution ports: each port (**P0**, **P1**, …) has buttons for the units it holds (**ALU**, **BR**, **LD/ST**,
+     **MUL**, **DIV**); **×** removes a port and **+ add a port** adds one;
    - issue order and port binding;
    - the reorder buffer, issue queue and store queue;
    - the predictor, the BTB and the return stack;
    - when to recover;
    - latencies;
    - the divider.
-3. Run it on **The benchmark set**, on one program, or on your own assembly or Python. Read the cycles per
-   instruction and what each lost slot waited for.
-4. **Keep for comparison** keeps a design beside the next one.
+3. Run it on **The benchmark set**, on one program, or on your own assembly or Python.
+4. Read the results: the CPI and IPC, mispredictions per 1000 instructions and, where the gate-level core can be built
+   that way, its NAND gates and clock period. **Where the commit slots went** shows what each lost slot waited for,
+   **Per program** gives each program's cycles and CPI next to our core's, and the **Timeline** shows each instruction
+   going through the stages (hover a row for why it waited).
+5. **Keep for comparison** keeps a design beside the next one.
 
 ![The out-of-order lab](img/workbench/22-lab.png)
 
@@ -419,3 +432,5 @@ On a phone the page stacks up:
   move.
 - **I zoomed in, stepped into a block, and zooming out does not bring me back.** Zooming out closes opened blocks
   but does not leave the level you stepped into. Press **Esc**, or click a name in the path above the circuit.
+
+Next: [The sandbox](sandbox.md)

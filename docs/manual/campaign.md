@@ -1,5 +1,7 @@
 # The campaign
 
+[← Back to the manual](README.md)
+
 ## What it is for
 
 The campaign is a game of levels. Each level asks you to build one block of a processor from the blocks you have
@@ -122,12 +124,14 @@ Your circuit and your progress are saved in this browser as you go. To carry the
   ![Act P unfolded: optional relay, tube and card levels in dashed boxes](img/campaign/12-act-p.png)
 
 - **The side panel.** It is on the right and shows the level you clicked.
-  - On a fresh start it shows **Start here**, with a **Begin** button and a summary of every act.
+  - On a fresh start it shows **Start here**, with a **Begin** button and a summary of every act. Once you have
+    started, it says **Welcome back**, with a **Continue: …** button for the next level to play.
   - For a level, it shows:
     - **Why you need it**, and **Goes into**: the chain of later levels that use this block.
-    - **The problem**, **Without it** (what you would do instead) and **What it costs**: the par and the
-      alternatives, measured.
-    - **Used later in**, **Builds on** and **Pitfalls**.
+    - **The problem** and **What it costs**: the par and the alternatives, measured.
+    - **Used later in** (the levels that place this block) and, for some levels, **Builds on**.
+    - **More: without it, alternatives, pitfalls**, folded: what you would do instead, and the usual mistakes.
+    - **The task**, **Success criteria**, **Grading**, **Tips** and **Codex**, as on the level screen.
     - **Go deeper**: the chapters of the journey that teach the same thing.
   - The level's buttons are at the bottom: **Play**, **Show answer** and **Skip** for a build level, **Done
     reading** for a lesson. A drill or a program is played in the panel itself.
@@ -171,12 +175,13 @@ Your circuit and your progress are saved in this browser as you go. To carry the
 ### The CPU
 
 **The CPU** (in the header's switch) shows the processor the campaign builds, block by block:
-- next PC, PC and the instruction ROM;
+- next PC, its +1, PC and the instruction ROM;
 - control, the registers and the immediate generator;
 - the ALU, branch, the data RAM and I/O;
-- the pipeline registers, the hazard and forwarding units, and the CSRs and traps.
+- the pipeline registers (F/D, D/E, E/M, M/W), the hazard and forwarding units, the CSRs and traps, and the result.
 
-Click a block to see what it does and which levels build it. Blocks you have built light up. The text under the
+Click a block: under the diagram it says what the block does, **Built in:** the level that builds it, and how many of
+the levels leading to it you have done. Blocks you have built light up. The text under the
 diagram explains the loop the processor runs, and why the acts come in this order.
 
 ![The CPU view: the pipelined processor's blocks in a diagram, with the explanation below](img/campaign/28-the-cpu.png)
@@ -209,8 +214,8 @@ one at a time, so you can watch the case that fails.
 1. The table lists the cases. A red ✕ marks a wrong output, with the value it wanted (**want 1**).
 2. Move through the cases with **First test**, **Previous test**, **Next test** and the play button (**Play the
    tests on the circuit**, which stops at a failing one). Drag the scrub bar to jump.
-3. **previous failure** and **next failure** jump between the failing cases. The speed menu (**5/s**) sets the play
-   rate.
+3. **previous failure** and **next failure** jump between the failing cases. The speed menu (**5/s** at first)
+   sets the play rate.
 4. While the player is open, the canvas shows your circuit at the selected case's inputs. If you fix something, the
    current row is recomputed on your edited circuit at once, and **edited since: check again** reminds you to Check.
 5. To close the player:
@@ -258,7 +263,7 @@ The challenge strip has the same help as buttons:
 - **Walk me through it** starts the walkthrough.
 - **Show answer** opens the walkthrough at its last step, with **Use this answer** and **Build it myself** at the bottom.
 - **Do it for me** asks *Replace your circuit with the answer?* Click **Replace** to put the reference answer in your
-  chip, or **Cancel**. **Undo** (Ctrl+Z) brings your own circuit back.
+  chip, or **Cancel**. **Undo** (**Ctrl Z**) brings your own circuit back.
 
 ### Follow the walkthrough or build along
 
@@ -375,7 +380,7 @@ level it breaks; point at the small circle on its box's left edge to see which. 
    they are your clues. A FIND IT level never passes Check, because the drawing is already right.
 2. Work out which net would give exactly those failures. Probe wires, step through the failing cases, or use the
    **Timing** panel to see which bit never moves.
-3. Press **B**, or click **Accuse** beside Check. The banner says: *click the wire you think is stuck, then say at
+3. Press **B**, or click **Accuse** beside Check. A note says: *click the wire you think is stuck, then say at
    what* (**B** or **Esc** to stop).
 4. Click the wire, then choose **It is stuck at 0 here** or **… at 1**. Each wrong accusation costs a star, so par is
    0 wrong.
@@ -407,8 +412,8 @@ you finish or skip the level that teaches it. With **Unlock all**, every entry s
 1. Click **Codex** in the header.
 2. The left column lists the entries **By act** or **By kind**. Narrow them with **All**, **Components**, **Laws**,
    **Tools**, **Tricks** and **Concepts**, or type in the search box above.
-3. The front page has **Start reading**, the recently discovered entries, what the next level will add, and your
-   progress per act.
+3. The front page has **Start reading**, a link to the analogy index, the entries **Recently discovered** (once you
+   have some), **Next to discover** (what the next level will add) and your progress **By act**.
 4. Click an entry to read it. An entry has:
    - a summary, and the level that unlocks it;
    - **Read in**: the chapters that teach it;
@@ -439,7 +444,7 @@ The 3D models link, at the top of the codex's left column, lists every machine a
 On an open model:
 
 1. Drag to orbit, and right-drag or Shift-drag to pan (two fingers on a touch screen). To zoom, click the model and
-   then scroll (or Ctrl + scroll, or pinch). Double-click to reset the view.
+   then scroll (or **Ctrl** + scroll, or pinch). Double-click to reset the view.
 2. Move the sliders under the model to drive it. Each model has its own; here they are the gate and drain voltages,
    the width W and the length L.
 3. **Cutaway** slices the model open, and **Explode** pulls its parts apart.
@@ -496,12 +501,13 @@ The [sandbox page](sandbox.md) lists every mouse and touch gesture.
 ## If something looks wrong
 
 - **"… is locked" appears instead of the level.** A link took you to a level whose requirements you have not
-  finished. The card names the level to do first: click it, or **Back to the map**, or tick **Unlock all**.
+  finished. The card lists the levels to finish or skip first: click one, or **Back to the map**, or tick
+  **Unlock all** on the map.
 - **Check says Not yet, and an output reads X.** Either nothing drives that output to a 0 or a 1 yet, or two parts
-  drive it against each other; the message under Check says which. Wire the output to a part, and check that no
-  input it depends on is left open.
+  drive it against each other. Wire the output to a part, and check that no input it depends on is left open.
 - **You clicked a part, but nothing was placed.** A part lands where you next click on the canvas. While the test
-  player is open the canvas is smaller, so close the player with its **✕** first, or click higher up.
+  player is open it takes the lower part of the canvas, and a click on the player places nothing: click higher up,
+  or close the player with its **✕** first.
 - **Your circuit vanished after Show answer.** It is still there: Show answer opens the walkthrough on a separate
   copy. Click **Leave the walkthrough** to get back to it. After **Do it for me**, press
   **Ctrl Z** (Undo) instead.
@@ -509,3 +515,5 @@ The [sandbox page](sandbox.md) lists every mouse and touch gesture.
   count as solved. Click the level, click **Un-skip**, and play it.
 - **Your progress is missing on another computer or browser.** Progress lives in the browser it was made in. Use
   **Export campaign** there and **Import campaign** here.
+
+Next: [The workbench](workbench.md)

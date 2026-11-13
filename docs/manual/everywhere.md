@@ -1,5 +1,7 @@
 # What works everywhere
 
+[← Back to the manual](README.md)
+
 These tools are in every section of **From Switch to CPU**: the chapters, the campaign, the workbench and the sandbox. Most of
 them start from the top bar, which is the same on every page. Use this page to find a control you have seen but not tried,
 or to find out whether something you want to do is possible.
@@ -17,6 +19,7 @@ sharing, printing, backups, phones, offline use and the desktop program.
 - [Bookmark a place and write a note](#bookmark-a-place-and-write-a-note)
 - [Review what you have read](#review-what-you-have-read)
 - [Use a 3D model](#use-a-3d-model)
+- [Make room for the circuit](#make-room-for-the-circuit)
 - [Share a circuit as an image or a link](#share-a-circuit-as-an-image-or-a-link)
 - [Print a chapter or save it as a PDF](#print-a-chapter-or-save-it-as-a-pdf)
 - [Back up your progress and move it to another browser](#back-up-your-progress-and-move-it-to-another-browser)
@@ -46,17 +49,17 @@ can take on the current page.
 1. Press **Ctrl K** (on a Mac, **⌘ K**), or **/**, or click the magnifying glass in the top bar.
    A search box opens with the most useful results for the page you are on.
 2. Type a few words, for example `full adder`.
-   The results are grouped: chapters and steps first, then workbench parts, campaign levels and codex entries. A level
+   The results are grouped: workbench parts, chapters and steps, campaign levels and codex entries. A level
    or codex entry you have not reached yet is listed and marked **locked**.
-3. Use **↑** and **↓** to move, and **Enter** to open the highlighted result.
+3. Use **↑** and **↓** to move, and **Enter** to open the highlighted result. **Shift Enter** opens it in a new tab.
 
-![The search box with "full adder" typed: chapter steps, workbench parts and campaign levels, grouped](img/everywhere/01-search.png)
+![The search box with "full adder" typed: workbench parts, chapter steps and campaign levels, grouped](img/everywhere/01-search.png)
 
 **Search one kind of thing.** Press **Tab** in the search box to step through the scope chips (**All**, **Chapters**,
-**Workbench**, **Campaign**, **Codex**, **Actions**, **Notes** and more). Only that kind of result is listed.
+**Workbench**, **Campaign**, **Codex**, **Actions** and **Notes**). Only that kind of result is listed.
 
 **Run an action.** Start the query with `>` to list actions instead of places, for example `>print` for
-**Print this chapter**. On a chapter step the actions include **Next step**, **Share this view**, **Open in Sandbox**,
+**Print this chapter**. On a chapter step the actions include **Next step**, **Copy link to this view**, **Open in Sandbox**,
 **Probe mode (P)**, **Why? (W)**, view switches such as **Flowing bits** and **Larger text**, and backup actions such as
 **Export all progress**. Each switch shows whether it is on or off.
 
@@ -216,8 +219,8 @@ visited are asked.
 
 ## Use a 3D model
 
-Many chapters have a 3D model of a real part: a transistor, a vacuum tube, a relay, a disk, a sensor. Every model sits on
-the same stage, with the same controls.
+Many chapters have a 3D model of a real part: a transistor, a vacuum tube, a relay, a disk, a sensor. Every model has
+the same controls.
 
 ![The ENIAC decade ring on the 3D stage: names in the margins, corner buttons, the model's own controls and the tour](img/everywhere/13-model-stage.png)
 
@@ -250,9 +253,19 @@ parts apart). Many also have their own controls, such as the transistor's **Gate
 **Take the tour.** Click **Tour ›** for a guided walk through the model, one part at a time, with a caption for each.
 Then **Next ›** moves on and **‹ Back** goes back a stop; at the last stop **Done** ends the tour.
 
+## Make room for the circuit
+
+The circuit's toolbar, above every circuit in a chapter step and in the workbench, has three buttons for this:
+
+- **Fit to screen** (four corners) fits the whole circuit in view again after you have zoomed or moved it. With the circuit
+  focused, **0** does the same.
+- **Hide the side panes** (the last button) gives the circuit the full width of the window, hiding the chapter text and the
+  inspector. Click it again to bring them back.
+- With the circuit focused, **F** folds every panel and the inspector, and brings them back when you press it again.
+
 ## Share a circuit as an image or a link
 
-On any circuit (a chapter step or the workbench), click **Share** in the circuit's toolbar.
+On any circuit (a chapter step or the workbench), click **Share this view** (the picture icon) in the circuit's toolbar. When the toolbar has no room for it, the same three rows are in **More tools**.
 
 ![The Share menu: Image as SVG, Image as PNG and Copy link to this view](img/everywhere/12-share.png)
 
@@ -373,8 +386,13 @@ These work on every page. Press **?** for the full list of the page you are on.
 
 On a circuit, once it has the focus (press **S**): **F** folds every panel, **P** probes wires, **W** asks *Why?* of a wire,
 **Esc** or **Backspace** goes up one level, the arrow keys move a cursor between parts and pins, **Space** toggles the input
-under the cursor, **Enter** toggles an input, opens a part or reads out an output, **Ctrl Enter** runs or pauses the clock,
-and **Ctrl Z** / **Ctrl Y** undo and redo moving parts.
+under the cursor, **Home** and **End** move the cursor to the first input and the first output, **Enter** toggles an input,
+opens a part or reads out an output, **Ctrl Enter** runs or pauses the clock,
+**Ctrl Z** / **Ctrl Y** undo and redo moving parts, **.** runs one clock cycle (Pulse), **>** one gate delay (Step) and **,**
+goes back a step, **+**, **−** and **0** zoom in, zoom out and fit, **O** shows the next overlay (slack, activity, load and
+more; **Shift O** turns it off), and **Shift F10** (or the menu key) opens the menu of the selected wire or part.
+
+In a CPU panel's program listing, once it has the focus, **↑** and **↓** pick a line and **F9** sets a breakpoint on it.
 
 | Gesture | Mouse | Touch |
 |---|---|---|
@@ -387,25 +405,27 @@ and **Ctrl Z** / **Ctrl Y** undo and redo moving parts.
 
 ## If something looks wrong
 
-**The mouse wheel scrolls the page instead of zooming a 3D model.** That is on purpose, so a model never traps your
-scrolling. Click the model first, then scroll; or hold **Ctrl** while scrolling. **Esc** gives the wheel back to the page.
+- **The mouse wheel scrolls the page instead of zooming a 3D model.** That is on purpose, so a model never traps your
+  scrolling. Click the model first, then scroll; or hold **Ctrl** while scrolling. **Esc** gives the wheel back to the page.
 
-**Dragging moves the view, not the part.** **Move parts by dragging** is off (it starts off on touch screens), or the lock in
-the circuit's toolbar is closed. Click the lock, or turn the option on under **View options** › **Behaviour**.
+- **Dragging moves the view, not the part.** **Move parts by dragging** is off (it starts off on touch screens), or the lock in
+  the circuit's toolbar is closed. Click the lock, or turn the option on under **View options** › **Behaviour**.
 
-**A block opened when I only meant to zoom.** **Open blocks as you zoom** is on by default. Zoom back out to close it, press
-**Esc** to go up a level, or turn the option off under **View options** › **Behaviour** to open blocks only by
-double-clicking.
+- **A block opened when I only meant to zoom.** **Open blocks as you zoom** is on by default. Zoom back out to close it, press
+  **Esc** to go up a level, or turn the option off under **View options** › **Behaviour** to open blocks only by
+  double-clicking.
 
-**Letter keys do things while I type or dictate.** Turn off **Single-key shortcuts** under **View options** ›
-**Behaviour**. Keys never act while you type in a text field.
+- **Letter keys do things while I type or dictate.** Turn off **Single-key shortcuts** under **View options** ›
+  **Behaviour**. Keys never act while you type in a text field.
 
-**My progress is gone.** Progress lives in one browser. A private window, another browser or another computer starts
-empty, and clearing the browser's site data deletes it. If you exported a backup, use **Import progress…** at the bottom of
-the home page. Export one now and then.
+- **My progress is gone.** Progress lives in one browser. A private window, another browser or another computer starts
+  empty, and clearing the browser's site data deletes it. If you exported a backup, use **Import progress…** at the bottom of
+  the home page. Export one now and then.
 
-**The colours are hard to tell apart.** Open **View options** and pick **Colour-blind safe** or **High contrast** under
-**Wire colours**, or the **Monochrome** palette, which uses line styles instead of hue.
+- **The colours are hard to tell apart.** Open **View options** and pick **Colour-blind safe** or **High contrast** under
+  **Wire colours**, or the **Monochrome** palette, which uses line styles instead of hue.
 
-**Everything moves too much.** Turn on **Reduce motion** under **View options** › **Look**, or pick the **Plain** preset.
-**Slow motion** still plays when you ask for it.
+- **Everything moves too much.** Turn on **Reduce motion** under **View options** › **Look**, or pick the **Plain** preset.
+  **Slow motion** still plays when you ask for it.
+
+Back to [the manual](README.md)
