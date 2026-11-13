@@ -198,6 +198,9 @@ export function mergeSettings(local: unknown, incoming: unknown): Record<string,
   out.openActs = { ...(isObj(b.openActs) ? b.openActs : {}), ...(isObj(a.openActs) ? a.openActs : {}) };
   if (isObj(a.last)) out.last = a.last;
   else if (isObj(b.last)) out.last = b.last;
+  // lensV (settings.ts) goes with the lensPlain kept
+  const lp = 'lensPlain' in a ? a : b;
+  if ('lensV' in lp) out.lensV = lp.lensV; else delete out.lensV;
   return out;
 }
 

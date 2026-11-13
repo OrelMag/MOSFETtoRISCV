@@ -1,4 +1,4 @@
-// Open blocks as you zoom on a touch screen (DESIGN.md item 6): the setting works there and starts off; a pinch opens a box
+// Open blocks as you zoom on a touch screen (DESIGN.md item 6): the setting works there and starts on, as with a mouse; a pinch opens a box
 // as the wheel does (smoke: the touch routes).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,10 +11,12 @@ describe('the setting on a touch screen', () => {
     settings.set('zoomOpen', null);
     vi.unstubAllGlobals();
   });
-  it('starts off (null) on a coarse pointer, as with a mouse in this phase', () => {
+  it('starts on (null) on a coarse pointer, as with a mouse', () => {
     coarse(true);
     settings.set('zoomOpen', null);
-    expect(settings.zoomOpen).toBe(false);
+    expect(settings.zoomOpen).toBe(true);
+    coarse(false);
+    expect(settings.zoomOpen).toBe(true);
   });
   it('a stored on works on a coarse pointer, and off stays off', () => {
     coarse(true);
