@@ -48,17 +48,17 @@ can take on the current page.
 1. Press **Ctrl K** (on a Mac, **⌘ K**), or **/**, or click the magnifying glass in the top bar.
    A search box opens with the most useful results for the page you are on.
 2. Type a few words, for example `full adder`.
-   The results are grouped: chapters and steps first, then workbench parts, campaign levels and codex entries. A level
+   The results are grouped: workbench parts, chapters and steps, campaign levels and codex entries. A level
    or codex entry you have not reached yet is listed and marked **locked**.
 3. Use **↑** and **↓** to move, and **Enter** to open the highlighted result.
 
 ![The search box with "full adder" typed: chapter steps, workbench parts and campaign levels, grouped](img/everywhere/01-search.png)
 
 **Search one kind of thing.** Press **Tab** in the search box to step through the scope chips (**All**, **Chapters**,
-**Workbench**, **Campaign**, **Codex**, **Actions**, **Notes** and more). Only that kind of result is listed.
+**Workbench**, **Campaign**, **Codex**, **Actions** and **Notes**). Only that kind of result is listed.
 
 **Run an action.** Start the query with `>` to list actions instead of places, for example `>print` for
-**Print this chapter**. On a chapter step the actions include **Next step**, **Share this view**, **Open in Sandbox**,
+**Print this chapter**. On a chapter step the actions include **Next step**, **Copy link to this view**, **Open in Sandbox**,
 **Probe mode (P)**, **Why? (W)**, view switches such as **Flowing bits** and **Larger text**, and backup actions such as
 **Export all progress**. Each switch shows whether it is on or off.
 
@@ -254,7 +254,7 @@ Then **Next ›** moves on and **‹ Back** goes back a stop; at the last stop *
 
 ## Share a circuit as an image or a link
 
-On any circuit (a chapter step or the workbench), click **Share** in the circuit's toolbar.
+On any circuit (a chapter step or the workbench), click **Share this view** (the picture icon) in the circuit's toolbar. When the toolbar has no room for it, the same three rows are in **More tools**.
 
 ![The Share menu: Image as SVG, Image as PNG and Copy link to this view](img/everywhere/12-share.png)
 
