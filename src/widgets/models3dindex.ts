@@ -88,7 +88,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'package', title: 'A package, opened up', category: 'devices', chapter: 'wire', step: 8,
     summary: 'Die, pads, bond wires, lead frame and board, with the ground bounce that more ground wires divide.',
-    files: ['package3d', 'package3dview', 'package3dparts'], factory: 'package3d',
+    files: ['package3d', 'package3dview', 'package3dkit'], factory: 'package3d',
     open: () => import('./package3d').then((m) => m.package3d()),
   },
   {
@@ -118,7 +118,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'press', title: 'Hollerith\'s pin press', category: 'machines', chapter: 'cards', step: 1,
     summary: 'The census card under the press: pins reach mercury through the holes and the dials count.',
-    files: ['press3d', 'press3dview', 'press3dparts'], factory: 'press3d', codex: ['hollerith'],
+    files: ['press3d', 'press3dview', 'press3dkit', 'press3dgeom'], factory: 'press3d', codex: ['hollerith'],
     open: () => import('./press3d').then((m) => m.press3d()),
   },
   {
@@ -214,7 +214,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'quartz', title: 'The quartz crystal oscillator', category: 'devices', chapter: 'clocks', step: 3,
     summary: 'A 32 768 Hz tuning fork bending in antiphase, its Pierce loop, and fifteen divide-by-two stages down to 1 Hz.',
-    files: ['quartz3d', 'quartz3dview', 'quartz3dparts'], factory: 'quartz3d', codex: ['clock', 'counter', 'cdc'],
+    files: ['quartz3d', 'quartz3dview', 'quartz3dkit', 'quartz3dgeom'], factory: 'quartz3d', codex: ['clock', 'counter', 'cdc'],
     open: () => import('./quartz3d').then((m) => m.quartz3d()),
   },
   {
@@ -232,7 +232,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'rope', title: 'Core rope', category: 'machines', chapter: 'appendix-agc', step: 6,
     summary: 'Cores of an Apollo rope module: a sense wire threads a core for a 1 and passes it for a 0; inhibit, set and reset wires read one core at a time.',
-    files: ['rope3d', 'rope3dview', 'rope3dparts'], factory: 'rope3d', codex: ['corerope'],
+    files: ['rope3d', 'rope3dview', 'rope3dkit', 'rope3dgeom'], factory: 'rope3d', codex: ['corerope'],
     open: () => import('./rope3d').then((m) => m.rope3d()),
   },
   {
@@ -256,7 +256,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'sensordie', title: 'A sensor die, rolling and global', category: 'devices', chapter: 'sensors', step: 5,
     summary: 'The IMX183 array to scale with row drivers, column ADCs and readout, capturing a propeller with a rolling or a global shutter.',
-    files: ['sensordie3d', 'sensordie3dview', 'sensordie3dparts'], factory: 'sensorDie3d',
+    files: ['sensordie3d', 'sensordie3dview', 'sensordie3dkit', 'sensordie3dgeom'], factory: 'sensorDie3d',
     open: () => import('./sensordie3d').then((m) => m.sensorDie3d()),
   },
   {
@@ -274,13 +274,13 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'pixel4t', title: 'A CMOS pixel, cut open', category: 'devices', chapter: 'sensors', step: 2,
     summary: 'A 2.4 µm back-illuminated 4T pixel: each colour stops at its own depth, electrons fill the photodiode, a CDS read runs.',
-    files: ['pixel4t3d', 'pixel4t3dview', 'pixel4t3dparts'], factory: 'pixel4t3d', codex: ['aps', 'cds', 'qe', 'fullwell'],
+    files: ['pixel4t3d', 'pixel4t3dview', 'pixel4t3dkit', 'pixel4t3dgeom'], factory: 'pixel4t3d', codex: ['aps', 'cds', 'qe', 'fullwell'],
     open: () => import('./pixel4t3d').then((m) => m.pixel4t3d()),
   },
   {
     id: 'sensorstack', title: 'Four pixels, cut open', category: 'devices', chapter: 'sensors', step: 0,
     summary: 'A Bayer quad in cross-section, front- or back-side lit: rays traced through microlens, filter and metal to their absorption depth.',
-    files: ['sensorstack3d', 'sensorstack3dview', 'sensorstack3dparts', 'sensorstackoptics'], factory: 'sensorStack3d',
+    files: ['sensorstack3d', 'sensorstack3dview', 'sensorstack3dkit', 'sensorstack3dgeom', 'sensorstackoptics'], factory: 'sensorStack3d',
     open: () => import('./sensorstack3d').then((m) => m.sensorStack3d()),
   },
 ];

@@ -1,4 +1,4 @@
-// A 2 × 2 Bayer quad of an image sensor in cross-section, as parts (DOM-free, tested): microlenses, the colour filter
+// A 2 × 2 Bayer quad of an image sensor in cross-section: the optics and the layout (DOM-free, tested; drawn by sensorstack3dkit.ts): microlenses, the colour filter
 // array, the metal interconnect and the photodiodes, front-side illuminated (the metal between the light and the silicon)
 // or back-side illuminated (the wafer thinned, the light entering from the back, the metal below). The front row is cut
 // through its middle, and a fan of rays at the chosen angle is traced across that cut: refraction (Snell) at the
@@ -9,9 +9,7 @@
 // Lengths are in µm (the drawing: K units a µm). The optics (silicon's absorption and index, the filters' transmission)
 // come in as a StackOptics, so the drawing and its tests use the chapter's model.
 
-import type { RGB, RGBA } from '../gl/instances';
-import type { Vec3 } from '../gl/math';
-import { box, rod, type Anchor, type Part } from '../gl/parts';
+import type { RGB } from '../gl/instances';
 import { bayerAt, IMX183, STACK_BSI, STACK_FSI, type Cfa } from '../phys/imagesensor';
 
 export type Illum = 'fsi' | 'bsi';
@@ -335,11 +333,6 @@ export function angleCurve(s: StackSpec, o: StackOptics, nm: number, angles: rea
 /** Drawing units a µm. */
 export const K = 10;
 
-export interface StackPalette {
-  lens: RGBA; R: RGBA; G: RGBA; B: RGBA; oxide: RGBA; metal: RGB; si: RGB; diode: RGB; dti: RGB; beol: RGBA; warn: RGB; dim: RGB;
-  pplus: RGB; arc: RGBA;
-}
-
 export interface StackPose { spec: StackSpec; nm: number; angle: number; row: 0 | 1; trace: TraceResult }
 
 /** Visible light's colour (approximate, after Bruton): for the rays and the absorption marks. */
@@ -366,105 +359,6 @@ export const DIODE_DEPTH = 0.65, PPLUS = 0.12;
 export function diodeSpan(s: StackSpec): [number, number] {
   const d = DIODE_DEPTH * s.si;
   return s.illum === 'fsi' ? [-PPLUS - d, -PPLUS] : [-s.si + PPLUS, -s.si + PPLUS + d];
-}
-
-export function stackParts(q: StackPose, C: StackPalette): Part[] {
-  const s = q.spec, P = s.pitch, out: Part[] = [], H = stackHeight(s), { rc, h } = q.trace;
-  const X = (x: number) => x * K, Y = (y: number) => y * K;
-  // Rows: row 1 behind (z ∈ [−P, 0]), the cut row in front, drawn to its middle (z ∈ [0, P/2]).
-  const zr = (r: 0 | 1): [number, number] => (r === q.row ? [0, P / 2] : [-P, 0]);
-  const rows: (0 | 1)[] = [q.row, (1 - q.row) as 0 | 1];
-  const cfaCol = (c: Cfa): RGBA => C[c];
-  for (const r of rows) {
-    const [za, zb] = zr(r);
-    for (let px = 0; px < 2; px++) {
-      const xa = (px - 1) * P, xb = px * P;
-      // Layers above the silicon.
-      let y = H;
-      for (const L of s.layers) {
-        const col = L.kind === 'cfa' ? cfaCol(BAYER[r][px]) : L.kind === 'beol' ? C.beol : C.oxide;
-        out.push(box(col, X(xa), X(xb), Y(y - L.t), Y(y), X(za), X(zb)));
-        y -= L.t;
-      }
-      // The lens: columns following the spherical cap, centred on the pixel (the cut row's centre is the cut plane).
-      const cx = (xa + xb) / 2, cz = r === q.row ? P / 2 : -P / 2, G = r === q.row ? LENS_GRID_CUT : LENS_GRID, nz = r === q.row ? G / 2 : G;
-      for (let i = 0; i < G; i++) for (let j = 0; j < nz; j++) {
-        const x0 = xa + (i * P) / G, x1 = x0 + P / G, z0 = za + (j * P) / G, z1 = z0 + P / G;
-        // The cut row's last column of cells is cut at the plane: its height is the profile there, not at the cell's middle.
-        const zm = r === q.row && j === nz - 1 ? z1 : (z0 + z1) / 2;
-        const rr = Math.hypot((x0 + x1) / 2 - cx, zm - cz), hh = Math.sqrt(Math.max(0, rc * rc - rr * rr)) - (rc - h);
-        if (hh > 0.005) out.push(box(C.lens, X(x0), X(x1), Y(H), Y(H + hh), X(z0), X(z1)));
-      }
-      // Silicon, the photodiode (the n region the pixel collects into) on the metal side under its p+ pinning layer, the
-      // substrate below for FSI.
-      const siTop = 0, siBot = -s.si, [d0, d1] = diodeSpan(s), inset = s.dti ? 0.08 * P : 0.12 * P;
-      const pTop = s.illum === 'fsi' ? siTop : d0, pBot = pTop - PPLUS;
-      out.push(box(C.si, X(xa), X(xb), Y(siBot), Y(siTop), X(za), X(zb)));
-      // On the cut face the diode and its pinning layer stand just proud of the silicon around them, so they show.
-      const zFront = X(zb) + (r === q.row ? 0.08 : -0.01);
-      out.push(box(C.diode, X(xa + inset), X(xb - inset), Y(d0), Y(d1), X(za) + 0.01, zFront));
-      out.push(box(C.pplus, X(xa + inset), X(xb - inset), Y(pBot), Y(pTop), X(za) + 0.01, zFront + 0.02));
-      if (s.arc) out.push(box(C.arc, X(xa), X(xb), Y(siTop), Y(siTop + Math.max(s.arc.d, 0.04)), X(za), X(zb)));
-      if (s.illum === 'fsi') out.push(box(C.si, X(xa), X(xb), Y(siBot - 0.8), Y(siBot), X(za), X(zb)));
-      if (s.beolBelow > 0) {
-        out.push(box(C.beol, X(xa), X(xb), Y(siBot - s.beolBelow), Y(siBot), X(za), X(zb)));
-        for (const [y0, y1, w] of [[0.3, 0.5, 0.5], [1.0, 1.25, 0.6], [1.75, 2.05, 0.4]]) {
-          out.push(box(C.metal, X(cx - (w * P) / 2), X(cx + (w * P) / 2), Y(siBot - y1), Y(siBot - y0), X(za), X(zb), 0.6));
-        }
-        out.push(box(C.si, X(xa), X(xb), Y(siBot - s.beolBelow - 1.2), Y(siBot - s.beolBelow), X(za), X(zb))); // the logic wafer it is bonded to
-      }
-    }
-    // Metal lines across the cut, and the DTI walls.
-    for (const m of s.metal) {
-      const x0 = Math.max(-P, m.x0), x1 = Math.min(P, m.x1);
-      if (x1 > x0) out.push(box(C.metal, X(x0), X(x1), Y(m.y0), Y(m.y1), X(za), X(zb), 0.6));
-    }
-    if (s.dti) for (const x of [-P, 0, P]) out.push(box(C.dti, X(Math.max(-P, x - 0.05)), X(Math.min(P, x + 0.05)), Y(-s.si), Y(0), X(za), X(zb)));
-  }
-  // The rays, on the cut plane: a colour of their own, ending in a mark where they are absorbed (warn: in the wrong pixel).
-  const zc = X(P / 2) + 0.4, light = wavelengthRgb(q.nm);
-  // A ray the filter takes (most of its power absorbed there) is drawn only down to the filter's middle.
-  let cfaMid = H;
-  for (const L of s.layers) { if (L.kind === 'cfa') { cfaMid -= L.t / 2; break; } cfaMid -= L.t; }
-  for (const r of q.trace.rays) {
-    const col: RGB = r.fate === 'metal' || r.fate === 'filter' ? C.dim : light, yStop = r.fate === 'filter' ? cfaMid : -Infinity;
-    for (const path of r.paths) for (let k = 1; k < path.length; k++) {
-      let [p0, p1] = [path[k - 1], path[k]];
-      if (p0[1] <= yStop) break;
-      if (p1[1] < yStop) { const f = (p0[1] - yStop) / (p0[1] - p1[1]); p1 = [p0[0] + f * (p1[0] - p0[0]), yStop]; }
-      const a: Vec3 = [X(p0[0]), Y(p0[1]), zc], b: Vec3 = [X(p1[0]), Y(p1[1]), zc];
-      if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-6) continue;
-      out.push({ ...rod(col, a, b, 0.18), emissive: r.fate === 'metal' || r.fate === 'filter' ? undefined : [col[0] * 0.6, col[1] * 0.6, col[2] * 0.6] });
-    }
-    const [ex, ey] = r.end, mark = r.fate === 'cross' ? C.warn : r.fate === 'metal' ? C.warn : light;
-    if (r.fate !== 'filter') out.push({ ...box(mark, X(ex) - 0.7, X(ex) + 0.7, Y(ey) - 0.7, Y(ey) + 0.7, zc - 0.7, zc + 0.7), emissive: [mark[0] * 0.5, mark[1] * 0.5, mark[2] * 0.5] });
-  }
-  // The absorption depth 1/α: a thin glowing line across the cut silicon (at the far side when deeper than the silicon).
-  const dY = -Math.min(q.trace.depth, s.si);
-  out.push({ ...box([light[0], light[1], light[2], 0.55], X(-P), X(P), Y(dY) - 0.15, Y(dY) + 0.15, X(P / 2) + 0.05, X(P / 2) + 0.25), emissive: [light[0] * 0.5, light[1] * 0.5, light[2] * 0.5] });
-  // The diffraction-limited spot at the lens' focus, centred under each lens (where the rays above converge at 0°): what
-  // a geometric ray cannot show, the light is never focused narrower than this.
-  const spot = Math.min(spotSize(s, rc, q.nm), P), fy = -s.focus;
-  for (const c of [-P / 2, P / 2]) out.push({ ...box(C.warn, X(c - spot / 2), X(c + spot / 2), Y(fy) - 0.25, Y(fy) + 0.25, zc + 0.3, zc + 0.6), emissive: [C.warn[0] * 0.4, C.warn[1] * 0.4, C.warn[2] * 0.4] });
-  return out;
-}
-
-export function stackAnchors(q: StackPose): Anchor[] {
-  const s = q.spec, P = s.pitch, H = stackHeight(s), front: Vec3 = [0, 0, 1], up: Vec3 = [0, 1, 0], zc = (P / 2) * K;
-  const yOf = (kind: Layer['kind']) => { let y = H; for (const l of s.layers) { if (l.kind === kind) return y - l.t / 2; y -= l.t; } return 0; };
-  const a: Anchor[] = [
-    { text: 'microlens', p: [-P * 0.5 * K, (H + q.trace.h) * K, 0], side: 't', n: up },
-    { text: 'colour filters', p: [-P * K, yOf('cfa') * K, zc], side: 'l', n: front },
-    { text: s.illum === 'fsi' ? 'metal, three levels' : 'metal grid', p: [P * K, (s.illum === 'fsi' ? 1.2 : yOf('cfa') - 0.2) * K, zc], side: 'r', n: front },
-    { text: 'photodiode', p: [-P * K, ((diodeSpan(s)[0] + diodeSpan(s)[1]) / 2) * K, zc], side: 'l', n: front },
-    { text: 'p+ pinning layer', p: [-P * K, (s.illum === 'fsi' ? -PPLUS / 2 : -s.si + PPLUS / 2) * K, zc], side: 'l', n: front, minor: true },
-    { text: `1/α = ${fmtUm(q.trace.depth)} at ${q.nm} nm`, p: [P * K, -Math.min(q.trace.depth, s.si) * K, zc], side: 'r', n: front, minor: true },
-    { text: `diffraction spot ${fmtUm(spotSize(s, q.trace.rc, q.nm))}`, p: [(P / 2 + Math.min(spotSize(s, q.trace.rc, q.nm), P) / 2) * K, -s.focus * K, zc], side: 'r', n: front, minor: true },
-  ];
-  if (s.arc) a.push({ text: 'anti-reflection film', p: [P * K, s.arc.d * K * 0.5, zc], side: 'r', n: front, minor: true });
-  if (s.dti) a.push({ text: 'deep trench isolation', p: [0, -s.si * K, zc], side: 'b', n: front, minor: true });
-  if (s.beolBelow > 0) a.push({ text: 'metal, below the silicon', p: [P * K, (-s.si - s.beolBelow / 2) * K, zc], side: 'r', n: front, minor: true });
-  return a;
 }
 
 export const fmtUm = (u: number): string => (u >= 100 ? `${Math.round(u)} µm` : u >= 10 ? `${u.toFixed(0)} µm` : u >= 1 ? `${u.toFixed(1)} µm` : `${Math.round(u * 1000)} nm`);

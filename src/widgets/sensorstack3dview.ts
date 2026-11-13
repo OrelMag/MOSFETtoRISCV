@@ -1,49 +1,37 @@
 // An image sensor's optical stack in 3D (loaded on demand, modelhost.ts): a 2 × 2 Bayer quad cut through its front row,
-// front- or back-side illuminated, with rays traced at the learner's angle and wavelength (sensorstack3dparts.ts). The
+// front- or back-side illuminated, with rays traced at the learner's angle and wavelength, on the studio renderer (sensorstack3dkit.ts). The
 // optics are the chapter's: silicon's absorption depth and the filters from phys/imagesensor.ts.
 
 import '../styles/sensorstack3d.css';
 import { h, s as svg } from '../ui/dom';
 import type { Widget } from '../view/stage';
-import type { OrbitView } from '../gl/camera';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
-import { angleCurve, BAYER, FATES, K, fmtUm, lensHeight, PITCHES, pctOf, siReflectance, spotSize, tenths, stackAnchors, stackHeight, stackParts, stackSpec, traceStack, type Illum, type StackOptics, type StackPalette, type StackPose, type StackSpec } from './sensorstack3dparts';
+import { studioStage } from './studiostage';
+import { stackModel, stackView, type StackPose } from './sensorstack3dkit';
+import { angleCurve, BAYER, FATES, K, fmtUm, PITCHES, pctOf, siReflectance, spotSize, tenths, stackHeight, stackSpec, traceStack, type Illum, type StackOptics } from './sensorstack3dgeom';
 import { STACK_OPTICS } from './sensorstackoptics';
 
 const NAMES = { R: 'red', G: 'green', B: 'blue' } as const;
 /** The angles the angular response is drawn at, degrees. */
 const CURVE_ANGLES = Array.from({ length: 16 }, (_, i) => i * 2);
 
-/** A drawing framed whole: from the lens' top to the bottom of what hangs below the silicon (BSI: its metal and the
- *  logic wafer), wider for the wider pixel. */
-function viewOf(s: StackSpec, rc: number): OrbitView {
-  const top = stackHeight(s) + lensHeight(s, rc), bot = -s.si - (s.beolBelow > 0 ? s.beolBelow + 1.2 : 0.8);
-  const span = Math.max(top - bot, 2.2 * s.pitch) * K;
-  return { target: [0, ((top + bot) / 2) * K, -s.pitch * K * 0.3], yaw: 0.55, pitch: 0.3, dist: 2.0 * span };
-}
-
 export function sensorStackView(optics: StackOptics = STACK_OPTICS): Widget {
   let illum: Illum = 'fsi', nm = 540, angle = 0, row: 0 | 1 = 0, pitch: number = PITCHES[0], ar = true;
   const spec = (il = illum) => stackSpec(il, { pitch, ar });
-  const frame = () => { const sp = spec(); return viewOf(sp, traceStack(sp, optics, 550, 0, 0, 1).rc); };
-  const panel = h('div', { class: 'panel' });
-  const stage = modelStage(panel, {
-    look: LOOKS.silicon,
-    aria: 'Four pixels of an image sensor in 3D, cut through the front row: microlenses, red, green and blue filters, metal, and the silicon photodiodes, with light rays traced through them',
-    camera: frame(),
-    limits: { minDist: 35, maxDist: 600 },
-    note: 'To scale, with representative layer thicknesses, not one product’s. 2.4 µm is the chapter’s IMX183 over its 3 µm of collecting silicon; 1.0 µm is a phone pixel, its BSI silicon 2.7 µm as TechInsights measured on early 1.0 µm pixels with deep trench isolation (R. Fontaine, “The State-of-the-Art of Smartphone Imagers”, IISW 2019). FSI at 1.0 µm is drawn for comparison only: no one made it. Its stack, 3.7 µm from lens to silicon, is far taller than the pixel is wide, so tilted 15° the focal spot lands on the metal at the pixel’s edge; Lee et al. (“SNR Performance Comparison of 1.4 µm Pixel: FSI, Light-guide, and BSI”, IISW 2011) measured FSI losing over 20 % to its metal already at 1.4 µm, and BSI’s response at oblique light far better for its low stack. FSI products of that size added light guides over the diode, not drawn. Geometric rays in the cut’s plane: the orange bar is the diffraction-limited spot (2.44 λ N) the lens cannot beat, so at 1 µm the sharp edges seen here are blurred over the pixel. Reflection at the silicon is Fresnel’s at normal incidence, through a quarter-wave film when the anti-reflection coating is on; the reflection off the metal behind BSI’s silicon, which gives near-infrared a second pass, is not traced. The diode’s n region is drawn on the metal side, under its p+ pinning layer, about two thirds of the silicon deep; charge made below it still diffuses to it, so the whole silicon counts. A ray counts in the pixel where it reaches its mean absorption depth; the filters’ curves are illustrative; no microlens shift towards the sensor’s corners.',
-    draw: () => paint(),
-  });
-  const palette = (): StackPalette => ({
-    lens: stage.rgba('--ss-lens', 0.6), R: stage.rgba('--ss-r', 0.85), G: stage.rgba('--ss-g', 0.85), B: stage.rgba('--ss-b', 0.85),
-    oxide: stage.rgba('--m3-oxide', 0.3), metal: stage.rgb('--m3-metal'), si: stage.rgb('--m3-si'), diode: stage.rgb('--m3-n'),
-    dti: stage.rgb('--ss-dti'), beol: stage.rgba('--m3-oxide', 0.22), warn: stage.rgb('--ss-warn'), dim: stage.rgb('--ss-dim'),
-    pplus: stage.rgb('--ss-pplus'), arc: stage.rgba('--ss-arc', 0.8),
-  });
+  const frame = () => { const sp = spec(); return stackView(sp, traceStack(sp, optics, 550, 0, 0, 1).rc); };
+  const panel = h('div', { class: 'panel ss3' });
   const pose = (): StackPose => { const sp = spec(); return { spec: sp, nm, angle, row, trace: traceStack(sp, optics, nm, angle, row, 9) }; };
-  function paint(): void { const q = pose(); stage.paint(stackParts(q, palette()), stackAnchors(q)); readout(q); }
+  let shown: StackPose = pose();
+  const stage = studioStage({
+    aria: 'Four pixels of an image sensor in 3D, cut through the front row: microlenses, red, green and blue filters, metal, and the silicon photodiodes, with light rays traced through them',
+    home: frame(),
+    fit: false,
+    aspect: 1.25,
+    limits: { minDist: 25, maxDist: 600, maxPan: 60 },
+    scaleBar: (len) => fmtUm(len / K),
+    note: 'To scale, with representative layer thicknesses, not one product’s. 2.4 µm is the chapter’s IMX183 over its 3 µm of collecting silicon; 1.0 µm is a phone pixel, its BSI silicon 2.7 µm as TechInsights measured on early 1.0 µm pixels with deep trench isolation (R. Fontaine, “The State-of-the-Art of Smartphone Imagers”, IISW 2019). FSI at 1.0 µm is drawn for comparison only: no one made it. Its stack, 3.7 µm from lens to silicon, is far taller than the pixel is wide, so tilted 15° the focal spot lands on the metal at the pixel’s edge; Lee et al. (“SNR Performance Comparison of 1.4 µm Pixel: FSI, Light-guide, and BSI”, IISW 2011) measured FSI losing over 20 % to its metal already at 1.4 µm, and BSI’s response at oblique light far better for its low stack. FSI products of that size added light guides over the diode, not drawn. Geometric rays in the cut’s plane: the orange bar is the diffraction-limited spot (2.44 λ N) the lens cannot beat, so at 1 µm the sharp edges seen here are blurred over the pixel. Reflection at the silicon is Fresnel’s at normal incidence, through a quarter-wave film when the anti-reflection coating is on; the reflection off the metal behind BSI’s silicon, which gives near-infrared a second pass, is not traced. The diode’s n region is drawn on the metal side, under its p+ pinning layer, about two thirds of the silicon deep; charge made below it still diffuses to it, so the whole silicon counts. A ray counts in the pixel where it reaches its mean absorption depth; the filters’ curves are illustrative; no microlens shift towards the sensor’s corners.',
+    build: (detail) => stackModel(shown, detail),
+  });
+  function paint(): void { shown = pose(); stage.refresh(); readout(shown); }
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
   stage.chips.append(chip);
@@ -104,8 +92,8 @@ export function sensorStackView(optics: StackOptics = STACK_OPTICS): Widget {
     });
     return h('div', { class: 'seg', role: 'group', 'aria-label': label }, ...btns);
   };
-  const illumSeg = seg('Illumination', [['fsi', 'Front-side (FSI)'], ['bsi', 'Back-side (BSI)']], () => illum, (v) => { illum = v as Illum; stage.setView(frame()); });
-  const pitchSeg = seg('Pixel pitch', PITCHES.map((p): [string, string] => [String(p), `${p.toFixed(1)} µm${p === PITCHES[0] ? ' (IMX183)' : ''}`]), () => String(pitch), (v) => { pitch = Number(v); stage.setView(frame()); });
+  const illumSeg = seg('Illumination', [['fsi', 'Front-side (FSI)'], ['bsi', 'Back-side (BSI)']], () => illum, (v) => { illum = v as Illum; stage.goTo(frame()); });
+  const pitchSeg = seg('Pixel pitch', PITCHES.map((p): [string, string] => [String(p), `${p.toFixed(1)} µm${p === PITCHES[0] ? ' (IMX183)' : ''}`]), () => String(pitch), (v) => { pitch = Number(v); stage.goTo(frame()); });
   const arSeg = seg('Anti-reflection coating', [['1', 'AR coating'], ['0', 'Bare silicon']], () => (ar ? '1' : '0'), (v) => { ar = v === '1'; });
   const rowSeg = seg('Row cut', [['0', 'Cut red · green'], ['1', 'Cut green · blue']], () => String(row), (v) => { row = Number(v) as 0 | 1; });
   const slider = (label: string, min: number, max: number, step: number, v: number, on: (x: number) => void) => {
@@ -117,16 +105,17 @@ export function sensorStackView(optics: StackOptics = STACK_OPTICS): Widget {
   const angSl = slider('Angle of the light from the normal, degrees', -30, 30, 1, angle, (x) => { angle = x; });
   const nmSl = slider('Wavelength, nanometres', 400, 1000, 10, nm, (x) => { nm = x; });
 
+  stage.slot.append(
+    h('div', { class: 'r3-ctl' }, illumSeg, pitchSeg, arSeg, rowSeg),
+    h('div', { class: 'r3-ctl' },
+      h('label', { class: 'r3-sl ss-sl' }, h('span', null, 'Angle'), angSl, angOut),
+      h('label', { class: 'r3-sl ss-sl' }, h('span', null, 'Wavelength'), nmSl, nmOut)),
+    live);
   panel.append(
     h('h3', { class: 'm3-title' }, 'Four pixels, cut open'),
     h('p', { class: 'm3-sub' }, `A Bayer quad (${K} drawing units a µm), cut through the middle of its front row, at the chapter’s 2.4 µm or a phone’s 1.0 µm. Each pixel has a microlens over a colour filter; below, the light must reach the photodiode in the silicon. Front-side illuminated, it passes between three levels of metal first; back-side illuminated, the wafer is thinned and turned over, so the light enters through the back and the metal is below, out of the way. Tilt the light as a lens does towards the corners of a sensor, and change its wavelength: blue is absorbed in the first few hundred nanometres of silicon, red only microns down, near-infrared mostly not at all. Take the coating off and silicon, with an index near 4, reflects a fifth of the light back.`),
     h('div', { class: 'r3' },
-      h('div', { class: 'r3-main' },
-        h('div', { class: 'r3-ctl' }, illumSeg, pitchSeg, arSeg, rowSeg,
-          h('label', { class: 'r3-sl ss-sl' }, h('span', null, 'Angle'), angSl, angOut),
-          h('label', { class: 'r3-sl ss-sl' }, h('span', null, 'Wavelength'), nmSl, nmOut),
-          h('div', { class: 'r3-btns' }, stage.resetBtn)),
-        stage.el, stage.hint, live),
+      h('div', { class: 'r3-main' }, stage.el),
       h('div', { class: 'r3-side' }, h('h4', null, 'Where the light goes ', h('span', { class: 'r3-badge' }, 'traced')), kv, curve)));
   paint();
   return { el: panel, destroy() { stage.destroy(); } };

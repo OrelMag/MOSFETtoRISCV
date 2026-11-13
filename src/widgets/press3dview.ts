@@ -8,9 +8,9 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { FIELDS, STACK, censusPeople, newCounts, relayDial, tallyCard, type Wiring } from '../cards/census';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
-import { N, POSITIONS, closedOf, holesOf, pressAnchors, pressParts, type PressPalette, type PressPose } from './press3dparts';
+import { studioStage } from './studiostage';
+import { PRESS_HOME, pressModel } from './press3dkit';
+import { N, POSITIONS, closedOf, holesOf, type PressPose } from './press3dgeom';
 
 const DOWN_MS = 450, HOLD_MS = 150;
 const PRE = 8; // cards already counted when the page opens
@@ -24,21 +24,17 @@ export function pressView(): Widget {
   for (idx = 0; idx < PRE; idx++) count(people[idx]);
   function count(p: readonly number[]): void { tallyCard(counts, p); if (relayDial(p, wiring)) relayCount++; }
 
-  const panel = h('div', { class: 'panel' });
-  const stage = modelStage(panel, {
-    look: LOOKS.machine,
-    aria: 'Hollerith’s pin press in 3D: a head of spring pins above a census card, mercury cups below it and a row of counting dials',
-    camera: { target: [12, 28, 6], yaw: 0.5, pitch: 0.3, dist: 172 },
-    limits: { minDist: 60, maxDist: 360 },
-    note: 'Only the census card’s ten positions are drawn, far fewer than a real card had; the stroke is a drawing, not a model of the forces; the pin box slides on posts where the real press swung on a hand lever; and the wiring under the table is drawn only where it meets the relays.',
-    draw: () => paint(),
-  });
-  const palette = (): PressPalette => ({
-    frame: stage.rgb('--m3-si'), metal: stage.rgb('--m3-metal'), card: stage.rgb('--pr-card'), hg: stage.rgb('--pr-hg'), live: stage.rgb('--m3-charge'),
-    cup: stage.rgb('--pr-cup'), coil: stage.rgb('--pr-coil'), face: stage.rgb('--pr-face'), hand: stage.rgb('--pr-hand'), brass: stage.rgb('--pr-brass'), pad: stage.rgb('--pr-pad'),
-  });
+  const panel = h('div', { class: 'panel pr3' });
   const pose = (): PressPose => ({ s, holes: holesOf(people[idx]), counts: POSITIONS.map((q) => counts[q.field][q.opt]), wiring, relayCount });
-  function paint(): void { const p = pose(); stage.paint(pressParts(p, palette()), pressAnchors(p)); }
+  const stage = studioStage({
+    aria: 'Hollerith’s pin press in 3D: a box of spring pins above a census card, mercury cups below it and a row of counting dials',
+    home: PRESS_HOME,
+    homeFrame: ['card', 'cups', 'dials', 'pin box'],
+    limits: { minDist: 25, maxDist: 360, maxPan: 60 },
+    note: 'A drawing of the mechanism, not a measured press: only the census card’s ten positions (a real card had 288), drawn thicker than card; the pin box slides on posts where the real press swung on a hinge worked by a hand lever; the stroke is a drawing, not a model of the forces; the wiring under the table is drawn only where it meets the relays. The real press had 40 dials of 100 divisions with two hands each (U.S. Census Bureau; The Henry Ford). The card’s size is not stated: the sources disagree (3¼ × 6⅝ in, 3¼ × 7⅜ in, 3 × 5½ in).',
+    build: (detail) => pressModel(pose(), detail),
+  });
+  function paint(): void { stage.refresh(); }
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), note = h('p', { class: 'r3-hint' });
   stage.chips.append(chip);
@@ -104,14 +100,13 @@ export function pressView(): Widget {
   });
   restart.addEventListener('click', () => { counts = newCounts(); relayCount = 0; idx = 0; armed = true; s = 0; anim = null; repaint(); });
 
+  stage.slot.append(h('div', { class: 'r3-ctl' }, h('label', { class: 'r3-sl pr-stroke' }, h('span', null, 'Press'), slider, out),
+    h('div', { class: 'r3-btns' }, press, feed, wire, restart)), note);
   panel.append(
     h('h3', { class: 'm3-title' }, 'The press itself'),
     h('p', { class: 'm3-sub' }, 'The same sixty census cards and the same tally as the widget above, one position for every option of every field. The pin box lowers an identical spring pin over each position. Where the card has no hole the pin stops on it and rides up into the box against its spring; where it has one the pin goes through to the mercury cup below, and the circuit it closes energizes that dial’s magnet, which steps the long hand one of a hundred divisions (the short hand turns once per 10 000). Two of the cups also feed relays, married and born abroad: their contacts in series step the eleventh dial for married AND born abroad, in parallel for married OR born abroad. Adding the two single dials instead counts a married immigrant twice; compare them in the table. The card is counted once, as the head reaches the bottom of the stroke: lowered only part way, nothing closes.'),
     h('div', { class: 'r3' },
-      h('div', { class: 'r3-main' },
-        h('div', { class: 'r3-ctl' }, h('label', { class: 'r3-sl pr-stroke' }, h('span', null, 'Press'), slider, out),
-          h('div', { class: 'r3-btns' }, press, feed, wire, restart, stage.resetBtn)),
-        stage.el, stage.hint, note),
+      h('div', { class: 'r3-main' }, stage.el),
       h('div', { class: 'r3-side' }, h('h4', null, 'This press ', h('span', { class: 'r3-badge' }, 'model')), kv)));
   readout();
   paint();

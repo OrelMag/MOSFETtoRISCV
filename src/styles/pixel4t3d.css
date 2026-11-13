@@ -29,3 +29,4 @@
 .m3d .px-f.r[aria-pressed="true"] { border-color: var(--px-r); color: var(--px-r); }
 .px4t .r3-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 24px; align-items: start; }
 @container (max-width: 560px) { .px4t .r3-stage { aspect-ratio: 1 / 1; } }
+.px4t .r3 { grid-template-columns: minmax(0, 1fr); }

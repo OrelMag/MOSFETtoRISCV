@@ -1,4 +1,4 @@
-// Core rope, the Apollo Guidance Computer's read-only memory (Block II), as parts (DOM-free, tested). What the drawing
+// Core rope, the Apollo Guidance Computer's read-only memory (Block II): the rules and the close-up's geometry (DOM-free, tested; drawn by rope3dkit.ts). What the drawing
 // shows and where each number comes from:
 //
 //   R-700 vol. III (E. C. Hall, MIT Instrumentation Laboratory, 1972), sec. 3.5.2, printed pp. 92-93:
@@ -26,9 +26,7 @@
 // sense wires, 3 of the 8 inhibit pairs (the 3 low address bits of 8 cores) and one set and one reset wire.
 // The contents are an example pattern, not a mission program.
 
-import type { RGB, RGBA } from '../gl/instances';
 import type { Vec3 } from '../gl/math';
-import { box, cyl, rod, type Anchor, type Part } from '../gl/parts';
 
 /** 1 unit = 0.25 mm. */
 export const UNIT_MM = 0.25;
@@ -76,11 +74,10 @@ export function senseWord(strand: number, addr: number): number {
 // ---------------------------------------------------------------- the close-up's geometry
 
 /** Spread apart in the close-up (the module's real pitch is MODULE_PITCH). */
-export const PITCH = 2.2 * OD;
+export const PITCH = 1.5 * OD;
 export const coreX = (c: number): number => (c - (CORES - 1) / 2) * PITCH;
 /** Cores' axis: along x, at this height and depth. */
 export const CY = 30, CZ = 0;
-const RING_R = (OD + ID) / 4, TUBE_R = (OD - ID) / 4;
 /** The wires' slots in the hole: one angle each, on a circle well inside it. */
 export type WireId = { kind: 'sense'; strand: number; bit: number } | { kind: 'inhibit'; k: number; h: number } | { kind: 'set' } | { kind: 'reset' };
 export const WIRES: readonly WireId[] = [
@@ -89,8 +86,8 @@ export const WIRES: readonly WireId[] = [
   { kind: 'set' }, { kind: 'reset' },
 ];
 const SLOT_R = 0.62 * (ID / 2), OUT_R = OD / 2 + 2.2, GAP = 3;
-const slotAngle = (i: number): number => (i / WIRES.length) * 2 * Math.PI;
-const at = (x: number, r: number, a: number): Vec3 => [x, CY + r * Math.sin(a), CZ + r * Math.cos(a)];
+export const slotAngle = (i: number): number => (i / WIRES.length) * 2 * Math.PI;
+export const at = (x: number, r: number, a: number): Vec3 => [x, CY + r * Math.sin(a), CZ + r * Math.cos(a)];
 /** Does a wire thread core c? Set and reset thread every core. */
 export function wireThreads(w: WireId, c: number): boolean {
   return w.kind === 'sense' ? threads(w.strand, w.bit, c) : w.kind === 'inhibit' ? inhibitThreads(w.k, w.h, c) : true;
@@ -123,7 +120,7 @@ export const HOLE_R = ID / 2, CORE_R = OD / 2, SLOT = SLOT_R, OUTSIDE = OUT_R;
 export const MODULE_PITCH = 8 / UNIT_MM;
 /** The module sits beside the close-up. */
 export const MOD_X = 0, MOD_Z = -1100;
-const modW = LAYER_COLS * MODULE_PITCH, modD = LAYER_ROWS * MODULE_PITCH;
+export const modW = LAYER_COLS * MODULE_PITCH, modD = LAYER_ROWS * MODULE_PITCH;
 export const MODULE_BOX = { x0: MOD_X - modW / 2 - 40, x1: MOD_X + modW / 2 + 40, z0: MOD_Z - modD / 2 - 90, z1: MOD_Z + modD / 2 + 90 };
 /** Core centres of the module, layer by layer. */
 export function moduleCores(): Vec3[] {
@@ -133,12 +130,9 @@ export function moduleCores(): Vec3[] {
   return out;
 }
 
-// ---------------------------------------------------------------- parts
+// ---------------------------------------------------------------- what carries current
 
 export interface RopePose { strand: number; addr: number; phase: RopePhase; /** the module drawn (the zoomed-out view) */ module: boolean }
-export interface RopePalette { ribbon: RGB; bobbin: RGB; copper: RGB; inhibit: RGB; set: RGB; reset: RGB; live: RGB; board: RGB; res: RGB; diode: RGB; lamp: RGB; lampOff: RGB; sel: RGB }
-const lit = (c: RGB, k = 0.55): RGB => [c[0] * k, c[1] * k, c[2] * k];
-const SIDES = 16;
 
 /** Is wire i carrying current in this pose? */
 export function wireLive(i: number, p: RopePose): boolean {
@@ -148,78 +142,4 @@ export function wireLive(i: number, p: RopePose): boolean {
   if (w.kind === 'inhibit') return p.phase === 'set' && inhibitDriven(p.addr).some((d) => d.k === w.k && d.h === w.h);
   // a sense wire pulses when the switching core is one it threads, and it is on the strand passed to the amplifiers
   return p.phase === 'reset' && w.strand === p.strand && threads(w.strand, w.bit, p.addr);
-}
-
-export function ropeParts(p: RopePose, P: RopePalette): Part[] {
-  const out: Part[] = [];
-  // the board under the close-up
-  out.push(box(P.board, coreX(0) - PITCH, coreX(CORES - 1) + PITCH, -4, 0, -OD * 1.6, OD * 1.6));
-  // the cores: a ring of permalloy ribbon on its bobbin, its axis along x; the switching one glows
-  const sw = new Set(switching(p.phase, p.addr));
-  for (let c = 0; c < CORES; c++) {
-    const on = sw.has(c), col = on ? P.live : c === p.addr ? P.sel : P.ribbon;
-    for (let i = 0; i < SIDES; i++) {
-      const a0 = (i / SIDES) * 2 * Math.PI, a1 = ((i + 1) / SIDES) * 2 * Math.PI;
-      for (const dx of [-LEN / 2 + TUBE_R, LEN / 2 - TUBE_R]) {
-        const seg = rod(col, at(coreX(c) + dx, RING_R, a0), at(coreX(c) + dx, RING_R, a1), TUBE_R, 0.5);
-        if (on) seg.emissive = lit(P.live, 0.4);
-        out.push(seg);
-      }
-    }
-    // the bobbin's bore (steel), a thin sleeve inside the ribbon
-    out.push(rod(P.bobbin, [coreX(c) - LEN / 2, CY, CZ], [coreX(c) + LEN / 2, CY, CZ], 0.2));
-    // a post holding the core over the board
-    out.push(cyl(P.bobbin, coreX(c), CZ - OD / 2 - 6, 0, CY, 0.8));
-  }
-  // the wires
-  WIRES.forEach((w, i) => {
-    const live = wireLive(i, p), base = w.kind === 'sense' ? P.copper : w.kind === 'inhibit' ? P.inhibit : w.kind === 'set' ? P.set : P.reset;
-    const pts = wirePath(i), dim = w.kind === 'sense' && w.strand !== p.strand;
-    const c: RGB | RGBA = live ? P.live : dim ? [base[0], base[1], base[2], 0.35] : base;
-    for (let j = 1; j < pts.length; j++) {
-      const seg = rod(c, pts[j - 1], pts[j], live ? 0.55 : 0.35, 0.3);
-      if (live) seg.emissive = lit(P.live, 0.5);
-      out.push(seg);
-    }
-  });
-  // the sense amplifiers' lamps, one per bit of the strand passed through: lit by a pulse in the reset phase
-  for (let b = 0; b < BITS; b++) {
-    const on = p.phase === 'reset' && threads(p.strand, b, p.addr), x = coreX(CORES - 1) + PITCH * 0.75 + 14, z = (b - (BITS - 1) / 2) * 8;
-    out.push(box(P.board, x - 3, x + 3, 0, 6, z - 3, z + 3), { ...box(on ? P.live : P.lampOff, x - 2, x + 2, 6, 9, z - 2, z + 2), emissive: on ? lit(P.live, 0.8) : undefined });
-  }
-  if (p.module) out.push(...moduleParts(P));
-  return out;
-}
-
-/** The module: two layers of 32 x 8 cores on a board, the cordwood selection resistors and diodes along both sides. */
-export function moduleParts(P: RopePalette): Part[] {
-  const out: Part[] = [], B = MODULE_BOX;
-  out.push(box(P.board, B.x0, B.x1, -6, 0, B.z0, B.z1));
-  // the close-up's eight cores: the top layer's first eight of its front row
-  moduleCores().forEach((q, i) => out.push(rod(i >= LAYER_COLS * LAYER_ROWS && i < LAYER_COLS * LAYER_ROWS + CORES ? P.sel : P.ribbon, [q[0] - LEN / 2, q[1], q[2]], [q[0] + LEN / 2, q[1], q[2]], OD / 2, 0.4)));
-  for (const side of [-1, 1]) {
-    const z = MOD_Z + side * (modD / 2 + 50);
-    for (let i = 0; i < 64; i++) {
-      const x = B.x0 + 30 + i * ((B.x1 - B.x0 - 60) / 63);
-      out.push(cyl(i % 3 === 2 ? P.diode : P.res, x, z, 0, 40, 3));
-    }
-  }
-  return out;
-}
-
-export function ropeAnchors(p: RopePose, narrow = false): Anchor[] {
-  const up: Vec3 = [0, 1, 0];
-  const through = WIRES.findIndex((w) => w.kind === 'sense' && w.strand === p.strand && threads(w.strand, w.bit, 4));
-  const around = WIRES.findIndex((w) => w.kind === 'sense' && w.strand === p.strand && !threads(w.strand, w.bit, 3));
-  const a: Anchor[] = [
-    { text: 'core: permalloy ribbon on a steel bobbin, 0.249 in', p: at(coreX(6), CORE_R, Math.PI * 0.35), side: 't', n: up },
-    { text: 'sense wire through the core: 1', p: at(coreX(4) + LEN, SLOT_R, slotAngle(Math.max(0, through))), side: 'b', n: up },
-    { text: 'sense wire round the core: 0', p: at(coreX(3), OUT_R, slotAngle(Math.max(0, around))), side: 'r', n: up, minor: narrow },
-  ];
-  if (!narrow) a.push(
-    { text: 'inhibit wires (address)', p: wirePath(WIRES.findIndex((w) => w.kind === 'inhibit'))[0], side: 'l', n: up },
-    { text: 'sense amplifiers', p: [coreX(CORES - 1) + PITCH * 0.75 + 14, 9, 0], side: 'r', n: up },
-  );
-  if (p.module) a.push({ text: 'a module: 512 cores, 2 layers of 32 × 8', p: [MOD_X, 60, MOD_Z], side: 't', n: up }, { text: 'the eight cores of the close-up', p: moduleCores()[LAYER_COLS * LAYER_ROWS + 3], side: 'b', n: up });
-  return a;
 }

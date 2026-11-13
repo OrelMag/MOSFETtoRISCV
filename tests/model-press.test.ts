@@ -2,11 +2,13 @@
 // widget counts, a partial one closes nothing, and the drawing shows the same circuits.
 import { describe, expect, it } from 'vitest';
 import { FIELDS, STACK, censusPeople, newCounts, relayDial, relayInputs, tallyCard } from '../src/cards/census';
-import { CARD_TOP, HG_TOP, N, PIN_LEN, POSITIONS, RELAY_POS, closedOf, handAngles, headY, holesOf, pinTip, pinTop, pressParts, reaches, springLen, type PressPalette } from '../src/widgets/press3dparts';
+import { CARD_TOP, HG_TOP, N, PIN_LEN, POSITIONS, RELAY_POS, closedOf, handAngles, headY, holesOf, pinTip, pinTop, reaches, springLen, type PressPose } from '../src/widgets/press3dgeom';
+import { pressModel } from '../src/widgets/press3dkit';
 
 const people = censusPeople();
-const col = (i: number): [number, number, number] => [i / 20, 0.5, 0.5];
-const P: PressPalette = { frame: col(1), metal: col(2), card: col(3), hg: col(4), live: col(5), cup: col(6), face: col(7), hand: col(8), brass: col(9), pad: col(10), coil: col(11) };
+const pose = (s: number, holes: boolean[], wiring: 'and' | 'or' = 'and'): PressPose => ({ s, holes, counts: POSITIONS.map(() => 0), wiring, relayCount: 0 });
+/** The lit parts of the drawing (a material with its own light), outside the relays and inside them. */
+const litOf = (p: PressPose) => pressModel(p).items.filter((i) => i.mat.emit);
 
 describe('the pin press against the census', () => {
   it('has a position for every option of the census card', () => {
@@ -41,7 +43,8 @@ describe('the pin press against the census', () => {
     expect(counts.map((c) => c.reduce((a, b) => a + b))).toEqual(FIELDS.map(() => STACK));
   });
   it('the drawing lights nothing before the bottom, and at the bottom a cup, a pin, a dial and its magnet per closed circuit', () => {
-    const lit = (s: number, holes: boolean[], wiring: 'and' | 'or' = 'and') => pressParts({ s, holes, counts: POSITIONS.map(() => 0), wiring, relayCount: 0 }, P).filter((x) => x.color === P.live).length;
+    // per closed position: its mercury, its pin, its dial's face and its magnet's coil
+    const lit = (s: number, holes: boolean[], wiring: 'and' | 'or' = 'and') => litOf(pose(s, holes, wiring)).filter((i) => i.group !== 'relays').length;
     // A card that energizes neither relay: exactly the four parts per closed position.
     const plain = people.find((p) => !relayInputs(p).some(Boolean))!;
     expect(lit(1, holesOf(plain))).toBe(4 * FIELDS.length);
@@ -88,10 +91,12 @@ describe('the relays: AND in series, OR in parallel', () => {
     for (const p of people) for (const w of ['and', 'or'] as const) {
       const [a, b] = relayInputs(p);
       expect(relayDial(p, w)).toBe(w === 'and' ? a && b : a || b);
-      const parts = pressParts({ s: 1, holes: holesOf(p), counts: POSITIONS.map(() => 0), wiring: w, relayCount: 0 }, P);
-      const relays = parts.filter((x) => x.color === P.live && x.pos[0] > 30).length;
-      if (!a && !b) expect(relays).toBe(0);
-      else expect(relays > (a ? 2 : 0) + (b ? 2 : 0) + 4).toBe(relayDial(p, w));
+      const lit = litOf(pose(1, holesOf(p), w)), relays = lit.filter((i) => i.group === 'relays');
+      if (!a && !b) expect(relays).toHaveLength(0);
+      // each energized relay lights its feed wire and its coil; the contact circuit and the eleventh dial light only when it conducts
+      expect(relays.filter((i) => i.name === 'wire from its cup' || i.name?.startsWith('relay:')).length).toBe((a ? 2 : 0) + (b ? 2 : 0));
+      expect(relays.some((i) => i.name?.startsWith('contacts in'))).toBe(relayDial(p, w));
+      expect(lit.some((i) => i.name?.endsWith('abroad dial'))).toBe(relayDial(p, w));
     }
   });
   it('adding two dials double-counts what the parallel contacts count once', () => {
@@ -99,5 +104,28 @@ describe('the relays: AND in series, OR in parallel', () => {
     const or = people.filter((p) => relayDial(p, 'or')).length, sum = people.filter((p) => relayInputs(p)[0]).length + people.filter((p) => relayInputs(p)[1]).length;
     expect(both).toBeGreaterThan(0);
     expect(sum - or).toBe(both);
+  });
+});
+
+describe('the studio drawing', () => {
+  const p = people[0], m = pressModel(pose(0, holesOf(p)));
+  it('the card is open at every punched position and solid at every other', () => {
+    const card = m.items.find((i) => i.name === 'card')!.geo, P = card.positions, I = card.indices;
+    const covered = (x: number, z: number) => {
+      for (let t = 0; t < I.length; t += 3) {
+        const a = [P[3 * I[t]], P[3 * I[t] + 2]], b = [P[3 * I[t + 1]], P[3 * I[t + 1] + 2]], c = [P[3 * I[t + 2]], P[3 * I[t + 2] + 2]];
+        const s = (u: number[], v: number[]) => (v[0] - u[0]) * (z - u[1]) - (v[1] - u[1]) * (x - u[0]);
+        const d1 = s(a, b), d2 = s(b, c), d3 = s(c, a);
+        if ((d1 >= 0 && d2 >= 0 && d3 >= 0) || (d1 <= 0 && d2 <= 0 && d3 <= 0)) if (Math.abs(d1) + Math.abs(d2) + Math.abs(d3) > 1e-9) return true;
+      }
+      return false;
+    };
+    holesOf(p).forEach((hole, k) => expect(covered(POSITIONS[k].x, POSITIONS[k].z)).toBe(!hole));
+  });
+  it('every counter is a face of 100 divisions with two hands', () => {
+    const ticks = m.items.filter((i) => i.name === 'counter dial' && i.geo.name === 'ticks*');
+    expect(ticks).toHaveLength(N);
+    const one = ticks[0].geo.indices.length, box = one / 100;
+    expect(Number.isInteger(box)).toBe(true);
   });
 });
