@@ -37,7 +37,7 @@ export const LENS_R = (DIAG * DIAG + LENS_H * LENS_H) / (2 * LENS_H);
 export const lensHeight = (x: number, z: number): number => Math.max(0, Math.sqrt(Math.max(0, LENS_R * LENS_R - x * x - z * z)) - (LENS_R - LENS_H));
 
 /** A closed solid: the cap's surface over the square, four walls down to y = 0 and the base (so a cut caps it). */
-function lensSolid(n: number): Geo {
+function lensSolid(n: number, x0 = -HALF, x1 = HALF): Geo {
   const p: number[] = [], nr: number[] = [], idx: number[] = [];
   const v = (x: number, y: number, z: number, a: number, b: number, c: number) => { p.push(x, y, z); nr.push(a, b, c); return p.length / 3 - 1; };
   const tri = (a: number, b: number, c: number, out: Vec3) => {
@@ -46,11 +46,11 @@ function lensSolid(n: number): Geo {
     const g = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
     if (g[0] * out[0] + g[1] * out[1] + g[2] * out[2] >= 0) idx.push(a, b, c); else idx.push(a, c, b);
   };
-  const at = (i: number) => -HALF + (W * i) / n, top: number[][] = [];
+  const at = (i: number) => -HALF + (W * i) / n, ax = (i: number) => x0 + ((x1 - x0) * i) / n, top: number[][] = [];
   for (let i = 0; i <= n; i++) {
     top.push([]);
     for (let j = 0; j <= n; j++) {
-      const x = at(i), z = at(j), y = lensHeight(x, z), k = Math.hypot(x, y + LENS_R - LENS_H, z) || 1;
+      const x = ax(i), z = at(j), y = lensHeight(x, z), k = Math.hypot(x, y + LENS_R - LENS_H, z) || 1;
       top[i].push(v(x, y, z, y > 0 ? x / k : 0, y > 0 ? (y + LENS_R - LENS_H) / k : 1, y > 0 ? z / k : 0));
     }
   }
@@ -60,7 +60,7 @@ function lensSolid(n: number): Geo {
   }
   // walls: along each edge, the cap's profile down to the base, flat-shaded outward
   const walls: [Vec3, (t: number) => [number, number]][] = [
-    [[0, 0, -1], (t) => [at(t), -HALF]], [[1, 0, 0], (t) => [HALF, at(t)]], [[0, 0, 1], (t) => [at(t), HALF]], [[-1, 0, 0], (t) => [-HALF, at(t)]],
+    [[0, 0, -1], (t) => [ax(t), -HALF]], [[1, 0, 0], (t) => [x1, at(t)]], [[0, 0, 1], (t) => [ax(t), HALF]], [[-1, 0, 0], (t) => [x0, at(t)]],
   ];
   for (const [o, xz] of walls) {
     const up: number[] = [], dn: number[] = [];
@@ -68,12 +68,12 @@ function lensSolid(n: number): Geo {
     for (let t = 0; t < n; t++) { tri(dn[t], dn[t + 1], up[t + 1], o); tri(dn[t], up[t + 1], up[t], o); }
   }
   // the base: a fan through the walls' own bottom points, so every edge is shared (closed, for the cut's cap)
-  const c = v(0, 0, 0, 0, -1, 0);
+  const c = v((x0 + x1) / 2, 0, 0, 0, -1, 0);
   for (const [, xz] of walls) for (let t = 0; t < n; t++) {
-    const [x0, z0] = xz(t), [x1, z1] = xz(t + 1);
-    tri(c, v(x0, 0, z0, 0, -1, 0), v(x1, 0, z1, 0, -1, 0), [0, -1, 0]);
+    const [xa, za] = xz(t), [xb, zb] = xz(t + 1);
+    tri(c, v(xa, 0, za, 0, -1, 0), v(xb, 0, zb, 0, -1, 0), [0, -1, 0]);
   }
-  return { name: 'microlens', positions: new Float32Array(p), normals: new Float32Array(nr), indices: new Uint32Array(idx), min: [-HALF, 0, -HALF], max: [HALF, LENS_H, HALF] };
+  return { name: 'microlens', positions: new Float32Array(p), normals: new Float32Array(nr), indices: new Uint32Array(idx), min: [x0, 0, -HALF], max: [x1, LENS_H, HALF] };
 }
 
 // ---------------------------------------------------------------- geometry, built once per detail
@@ -89,6 +89,9 @@ function bx(x: readonly number[], y: readonly number[], z: readonly number[], r 
 }
 const lenses = new Map<Detail, Geo>(), rods = new Map<string, Geo>();
 const lens = (d: Detail) => { let g = lenses.get(d); if (!g) { g = lensSolid(d === 'full' ? 40 : 10); lenses.set(d, g); } return g; };
+/** The neighbours' lenses: the half of each that lies over this block (a left half, a right half). */
+const halfLenses = new Map<string, Geo>();
+const halfLens = (d: Detail, side: -1 | 1) => { const k = `${d}${side}`; let g = halfLenses.get(k); if (!g) { g = side < 0 ? lensSolid(d === 'full' ? 20 : 5, 0, HALF) : lensSolid(d === 'full' ? 20 : 5, -HALF, 0); halfLenses.set(k, g); } return g; };
 /** A round plug (contact or via) between two heights. */
 function plug(x: number, z: number, y0: number, y1: number, r = 0.035): { geo: Geo; at: Vec3 } {
   const key = `${(y1 - y0).toFixed(4)},${r}`;
@@ -119,9 +122,9 @@ export function pixModel(pose: PixPose, detail: Detail = 'full'): Model3 {
   const hot = (m: Material, k: number) => (k > 0 ? M.glow(m, '--px-hot', k) : m);
 
   // ---- the front side, below the silicon: wafer, oxide, metal, gates
-  put(bx([0, W], [-ILD_T - WAFER_T, -ILD_T], [0, W]), tok('--px-wafer', { metal: 0.3, rough: 0.35, label: 'silicon (the bonded carrier wafer)' }), { name: 'carrier wafer', group: 'wafer', explode: [0, -2.2, 0], info: { dim: `${WAFER_T} µm drawn of hundreds`, source: SRC.rep, note: 'the wafer the thinned sensor is bonded to, face down; in a stacked sensor it holds the logic' } });
-  put(bx([0, W], [-ILD_T, 0], [0, W]), { ...M.oxide, transmit: 0.7, label: 'silicon dioxide (interlayer)' }, { name: 'interlayer oxide', group: 'front', explode: [0, -1.1, 0], order: 1, shadow: false, info: { dim: `${ILD_T} µm`, source: SRC.rep, note: 'insulates the metal levels from each other and from the silicon' } });
-  const metal = M.tint(M.copper, '--px-metal', 'copper (representative)'), metalLit = on.sel ? M.glow(metal, '--px-hot', 0.45) : metal;
+  put(bx([0, W], [-ILD_T - WAFER_T, -ILD_T], [0, W]), M.tint(M.silicon, [0.6, 0.62, 0.68], 'silicon (the bonded carrier wafer)'), { name: 'carrier wafer', group: 'wafer', explode: [0, -2.2, 0], info: { dim: `${WAFER_T} µm drawn of hundreds`, source: SRC.rep, note: 'the wafer the thinned sensor is bonded to, face down; in a stacked sensor it holds the logic' } });
+  put(bx([0, W], [-ILD_T, 0], [0, W]), M.make({ base: '--m3-oxide', metal: 0, rough: 0.35, label: 'silicon dioxide (interlayer)' }), { name: 'interlayer oxide', group: 'front', explode: [0, -1.1, 0], order: 1, shadow: false, info: { dim: `${ILD_T} µm`, source: SRC.rep, note: 'insulates the metal levels from each other and from the silicon' } });
+  const metal = { ...M.copper, label: 'copper (representative)' }, metalLit = on.sel ? M.glow(metal, '--px-hot', 0.45) : metal;
   const cz = mid(L.fd.z), fdX = mid(L.fd.x), sfX = mid(L.sf.x), sz = mid(L.strip.z), vddX = 2.15, colX = mid(L.col.x), sfDx = mid(L.sfD.x);
   const tungsten = M.make({ base: [0.62, 0.63, 0.66], metal: 1, rough: 0.35, label: 'tungsten' });
   const mInfo = (what: string) => ({ dim: `metal 1 at ${-M1[1]}–${-M1[0]} µm, metal 2 at ${-M2[1]}–${-M2[0]} µm below the surface`, source: SRC.rep, note: what });
@@ -149,9 +152,9 @@ export function pixModel(pose: PixPose, detail: Detail = 'full'): Model3 {
   gate(L.rs.x, L.strip.z, on.sel, 'rs: row select', 'connects this row\'s follower to the column line');
 
   // ---- the silicon: slab, photodiode, diffusions, isolation, the funnel, the lit-side p+ layer
-  const si = M.make({ base: '--m3-si', metal: 0.15, rough: 0.3, transmit: 0.62, tint: [0.75, 0.78, 0.88], label: 'silicon, thinned (drawn see-through)' });
+  const si = M.make({ base: [0.52, 0.55, 0.62], metal: 0.25, rough: 0.35, label: 'silicon, thinned' });
   put(bx([0, W], [0, SI_T], [0, W], 0.005), si, { name: 'silicon, lit from the back', group: 'silicon', order: 0, shadow: false, info: { dim: `${W} × ${W} µm, ${SI_T} µm thick`, source: SRC.emva + '; collecting depth from imagesensor.ts STACK_BSI', note: 'p-type epitaxial silicon, thinned and turned over so the light arrives from the back' } });
-  put(bx(L.pd.x, L.pd.y, L.pd.z, 0.04), M.make({ base: '--m3-n', metal: 0, rough: 0.4, transmit: 0.5, label: 'n-type silicon' }), { name: 'pd: pinned photodiode', group: 'diode', order: 3, shadow: false, info: { dim: `${(L.pd.x[1] - L.pd.x[0]).toFixed(2)} × ${(L.pd.z[1] - L.pd.z[0]).toFixed(2)} µm, ${L.pd.y[0]}–${L.pd.y[1]} µm deep`, source: SRC.rep, note: `n under p+: fully depleted, it holds up to ${FULL_WELL} e⁻ and empties completely through the transfer gate` } });
+  put(bx(L.pd.x, L.pd.y, L.pd.z, 0.04), M.make({ base: '--m3-n', metal: 0, rough: 0.4, label: 'n-type silicon' }), { name: 'pd: pinned photodiode', group: 'diode', order: 3, shadow: false, info: { dim: `${(L.pd.x[1] - L.pd.x[0]).toFixed(2)} × ${(L.pd.z[1] - L.pd.z[0]).toFixed(2)} µm, ${L.pd.y[0]}–${L.pd.y[1]} µm deep`, source: SRC.rep, note: `n under p+: fully depleted, it holds up to ${FULL_WELL} e⁻ and empties completely through the transfer gate` } });
   put(bx(L.pd.x, [0, L.pin.y], L.pd.z, 0.02), tok('--m3-p', { label: 'p+ silicon' }), { name: 'p+ pinning layer', group: 'diode', info: { dim: `${L.pin.y} µm`, source: SRC.rep, note: 'pins the surface at ground: no surface states to leak current or trap charge' } });
   const nplus = tok('--px-nplus', { label: 'n+ silicon' });
   const fdDrop = ph ? Math.min(1, Math.max(0, (VDD_PIX - ph.fd) / (FULL_WELL * CG_4T * 1e-6))) : 0;
@@ -160,7 +163,7 @@ export function pixModel(pose: PixPose, detail: Detail = 'full'): Model3 {
   for (const d of [L.sfD, L.mid, L.col]) put(bx(d.x, [0, L.fd.y], L.strip.z, 0.02), d === L.col && on.sel ? hot(nplus, 0.3) : nplus, { name: 'n+ source / drain', group: 'diode', info: { source: SRC.layout, note: 'the follower and select transistors in series, from the supply to the column line' } });
   const oxide = M.make({ base: '--px-sti', metal: 0, rough: 0.2, label: 'silicon dioxide (trench fill)' });
   put(bx([DTI_W, W - DTI_W], [0, STI_D], STI.z, 0.01), oxide, { name: 'STI: shallow trench', group: 'isolation', info: { dim: `${STI_D} µm deep`, source: SRC.rep, note: 'oxide between the photodiode and the transistors' } });
-  const dti = M.make({ base: '--px-dti', metal: 0, rough: 0.2, transmit: 0.45, label: 'silicon dioxide (trench fill)' }), dInfo = { dim: `${DTI_W} µm inside each edge (${2 * DTI_W} µm shared)`, source: SRC.dti, note: 'the full depth of the silicon: an electron born near the edge stays in its own pixel' };
+  const dti = M.make({ base: '--px-dti', metal: 0, rough: 0.25, label: 'silicon dioxide (trench fill)' }), dInfo = { dim: `${DTI_W} µm inside each edge (${2 * DTI_W} µm shared)`, source: SRC.dti, note: 'the full depth of the silicon: an electron born near the edge stays in its own pixel' };
   for (const [x, z] of [[[0, DTI_W], [0, W]], [[W - DTI_W, W], [0, W]], [[DTI_W, W - DTI_W], [W - DTI_W, W]], [[DTI_W, W - DTI_W], [0, DTI_W]]] as const)
     put(bx(x, [0, SI_T], z, 0.005), dti, { name: 'DTI: deep trench', group: 'isolation', order: 2, shadow: false, info: dInfo });
   // the funnel of built-in potential (graded doping) that steers electrons born at the back into the diode: a sketch
@@ -168,21 +171,38 @@ export function pixModel(pose: PixPose, detail: Detail = 'full'): Model3 {
   for (let k = 0; k < FUNNEL; k++) {
     const t = (k + 0.5) / FUNNEL, a = gTop + (gBot - gTop) * (k / FUNNEL), b = gTop + (gBot - gTop) * ((k + 1) / FUNNEL), lerp = (full: number, pd: number) => full + (pd - full) * t;
     put(bx([lerp(inset, L.pd.x[0]), lerp(W - inset, L.pd.x[1])], [b, a], [lerp(inset, L.pd.z[0]), lerp(W - inset, L.pd.z[1])], 0.005),
-      M.make({ base: '--m3-n', metal: 0, rough: 0.5, transmit: 0.88 - 0.25 * t, label: 'graded n doping (a sketch)' }), { name: 'potential funnel', group: 'diode', order: 1, shadow: false, info: { source: 'a sketch: the field comes from graded doping and deep implants', note: 'steers electrons born near the back surface into the photodiode' } });
+      M.make({ base: '--m3-n', metal: 0, rough: 0.5, transmit: 0.88 - 0.25 * t, label: 'graded n doping (a sketch)' }), { name: 'potential funnel', group: 'funnel', order: 1, shadow: false, info: { source: 'a sketch: the field comes from graded doping and deep implants', note: 'steers electrons born near the back surface into the photodiode' } });
   }
   put(bx([DTI_W, W - DTI_W], [SI_T - P_BACK, SI_T], [DTI_W, W - DTI_W], 0.005), tok('--m3-p', { label: 'p+ silicon' }), { name: 'p+ back layer', group: 'silicon', info: { dim: `${P_BACK} µm drawn (5 × the 0.01 µm dead layer)`, source: SRC.rep, note: 'an accumulation layer at the lit surface: electrons born here recombine before they can be collected' } });
 
   // ---- the lit side: films, the grid, the filter, the lens
   let y = SI_T;
   AR_FILMS.forEach((f, i) => {
-    put(bx([0, W], [y, y + f.t], [0, W], 0.003), M.make({ base: `--px-ar${i}`, metal: 0, rough: 0.15, coat: 0.5, transmit: 0.55, label: f.name }), { name: 'anti-reflection films', group: 'films', explode: [0, 0.6, 0], order: 4 + i, shadow: false, info: { dim: AR_FILMS.map((a) => `${a.name} ${a.t} µm`).join(', '), source: SRC.rep + '; the last two a quarter wave at 550 nm (λ / 4n)', note: 'silicon reflects a third of the light without them' } });
+    put(bx([0, W], [y, y + f.t], [0, W], 0.003), M.make({ base: `--px-ar${i}`, metal: 0, rough: 0.15, coat: 0.5, label: f.name }), { name: 'anti-reflection films', group: 'films', explode: [0, 0.6, 0], order: 4 + i, shadow: false, info: { dim: AR_FILMS.map((a) => `${a.name} ${a.t} µm`).join(', '), source: SRC.rep + '; the last two a quarter wave at 550 nm (λ / 4n)', note: 'silicon reflects a third of the light without them' } });
     y += f.t;
   });
-  const grid = M.make({ base: [0.72, 0.73, 0.76], metal: 1, rough: 0.35, label: 'tungsten or aluminium grid (representative)' });
+  const grid = { ...M.aluminium, label: 'tungsten or aluminium grid (representative)' };
   for (const [x, z] of [[[0, GRID_W], [0, W]], [[W - GRID_W, W], [0, W]], [[GRID_W, W - GRID_W], [W - GRID_W, W]], [[GRID_W, W - GRID_W], [0, GRID_W]]] as const)
     put(bx(x, [BACK, BACK + GRID_H], z, 0.01), grid, { name: 'metal grid', group: 'filter', explode: [0, 1.1, 0], info: { dim: `${GRID_H} µm tall, ${2 * GRID_W} µm shared`, source: SRC.rep, note: 'keeps light that enters one filter from leaking into the neighbour' } });
-  put(bx([GRID_W, W - GRID_W], CF, [GRID_W, W - GRID_W], 0.01), M.make({ base: `--px-${pose.filter}`, metal: 0, rough: 0.3, transmit: 0.6, tint: `--px-${pose.filter}`, label: 'pigmented resist' }), { name: 'colour filter', group: 'filter', explode: [0, 1.1, 0], order: 7, shadow: false, info: { dim: `${(CF[1] - CF[0]).toFixed(1)} µm`, source: SRC.rep, note: `${pose.filter === 'b' ? 'blue' : pose.filter === 'g' ? 'green' : 'red'}: one of the Bayer mosaic's four (red, two green, blue)` } });
+  put(bx([GRID_W, W - GRID_W], CF, [GRID_W, W - GRID_W], 0.01), M.make({ base: `--px-${pose.filter}`, metal: 0, rough: 0.35, label: 'pigmented resist' }), { name: 'colour filter', group: 'filter', explode: [0, 1.1, 0], order: 7, shadow: false, info: { dim: `${(CF[1] - CF[0]).toFixed(1)} µm`, source: SRC.rep, note: `${pose.filter === 'b' ? 'blue' : pose.filter === 'g' ? 'green' : 'red'}: one of the Bayer mosaic's four (red, two green, blue)` } });
   items.push({ geo: lens(detail), at: [W / 2, LENS[0], W / 2], mat: { ...M.glass, base: '--px-lens', transmit: 0.92, label: 'polymer microlens' }, name: 'microlens', group: 'lens', explode: [0, 1.8, 0], order: 8, info: { dim: `${W} µm square, ${LENS_H.toFixed(2)} µm sag (a sphere of r ${LENS_R.toFixed(2)} µm)`, source: SRC.lens, note: 'focuses the light that falls on the whole cell onto the photodiode, past the grid' } });
+  // ---- half of each neighbour along the row (red filters: a Bayer row runs green, red, green, red), so the block reads as
+  // part of an array and this pixel's cut face sits in the middle of it; simplified: no transistors of their own
+  const nb = { name: 'neighbouring pixel', group: 'neighbours', info: { source: SRC.layout, note: 'half of the next pixel in the row, red-filtered (a Bayer row alternates green and red); drawn without its own transistors' } };
+  const red = M.make({ base: '--px-r', metal: 0, rough: 0.35, label: 'pigmented resist (red)' });
+  for (const sx of [-1, 1] as const) {
+    const X = (a: number, b: number): [number, number] => (sx < 0 ? [-HALF + a, -HALF + b] : [W + HALF - b, W + HALF - a]), full = X(0, HALF);
+    put(bx(full, [-ILD_T - WAFER_T, -ILD_T], [0, W]), M.tint(M.silicon, [0.6, 0.62, 0.68], 'silicon (the bonded carrier wafer)'), { ...nb, explode: [0, -2.2, 0] });
+    put(bx(full, [-ILD_T, 0], [0, W]), M.make({ base: '--m3-oxide', metal: 0, rough: 0.35, label: 'silicon dioxide (interlayer)' }), { ...nb, explode: [0, -1.1, 0] });
+    put(bx(full, [0, SI_T], [0, W], 0.005), si, nb);
+    put(bx(sx < 0 ? [-HALF + 0.3, -0.25] : [W + 0.25, W + HALF - 0.3], L.pd.y, L.pd.z, 0.04), M.make({ base: '--m3-n', metal: 0, rough: 0.4, label: 'n-type silicon' }), nb);
+    put(bx(sx < 0 ? [-DTI_W, 0] : [W, W + DTI_W], [0, SI_T], [0, W], 0.005), dti, nb);
+    let yy = SI_T;
+    AR_FILMS.forEach((fl, i) => { put(bx(full, [yy, yy + fl.t], [0, W], 0.003), M.make({ base: `--px-ar${i}`, metal: 0, rough: 0.15, label: fl.name }), { ...nb, explode: [0, 0.6, 0] }); yy += fl.t; });
+    put(bx(sx < 0 ? [-GRID_W, 0] : [W, W + GRID_W], [BACK, BACK + GRID_H], [0, W], 0.01), grid, { ...nb, explode: [0, 1.1, 0] });
+    put(bx(sx < 0 ? [-HALF, -GRID_W] : [W + GRID_W, W + HALF], CF, [GRID_W, W - GRID_W], 0.01), red, { ...nb, explode: [0, 1.1, 0] });
+    items.push({ geo: halfLens(detail, sx), at: [sx < 0 ? -HALF : W + HALF, LENS[0], W / 2], mat: { ...M.glass, base: '--px-lens', transmit: 0.92, label: 'polymer microlens' }, ...nb, explode: [0, 1.8, 0], order: 8 });
+  }
   return { items, cuts: CUT, anchors: ANCHORS, beats: beats(), floor: -ILD_T - WAFER_T };
 }
 
@@ -205,17 +225,19 @@ const ANCHORS: StudioAnchor[] = [
   { text: 'column line (metal 2)', p: [mid(L.col.x), M2[0], Z], side: 'l', n: [0, -1, -0.4], on: 'metal' },
 ];
 
-export const PIX_HOME = { target: [1.2, 1.4, 1.2] as Vec3, yaw: 2.65, pitch: 0.3, dist: 13 };
-export const PIX_HOME_FRAME = ['lens', 'filter', 'films', 'silicon', 'diode', 'gates', 'metal'];
+export const PIX_HOME = { target: [1.2, 1.4, 1.2] as Vec3, yaw: 2.85, pitch: 0.22, dist: 13 };
+export const PIX_HOME_FRAME = ['lens', 'filter', 'films', 'silicon', 'diode', 'gates', 'metal', 'front', 'wafer', 'neighbours'];
+/** Shown only in their own beat: the funnel's sheets. */
+export const PIX_HIDDEN = ['funnel'];
 
 function beats(): Beat[] {
   const d = (f: Filter) => f2(absorptionDepth(FILTER_NM[f]));
   return [
     { title: 'One pixel', text: `One ${W} µm pixel of a back-illuminated sensor (the IMX183 class), cut through its photodiode. The light comes from above; the transistors are on the front side, below the silicon, out of its way.`, view: PIX_HOME, frame: [], cut: 1, explode: 0 },
     { title: 'Into the silicon', text: `The microlens gathers the light on the whole ${W} µm cell; the filter passes one colour; three films cut the reflection at the silicon. The lens is only about four wavelengths of green light across, so ray optics is only a rough picture here.`, view: { target: [1.2, 3.6, 1.2], yaw: 2.6, pitch: 0.25, dist: 7 }, frame: ['lens', 'filter', 'films'], cut: 1, explode: 0 },
-    { title: 'Where light is absorbed', text: `Silicon absorbs light at a depth set by its colour: 1/e at ${d('b')} µm for the blue filter's ${FILTER_NM.b} nm, ${d('g')} µm for green's ${FILTER_NM.g} nm and ${d('r')} µm for red's ${FILTER_NM.r} nm, deeper than the ${SI_T} µm of silicon, so some red passes straight through.`, view: { target: [1.2, 1.5, 1.2], yaw: 2.75, pitch: 0.15, dist: 9 }, frame: ['silicon', 'diode'], show: ['silicon', 'diode', 'isolation'], cut: 1, explode: 0 },
+    { title: 'Where light is absorbed', text: `Silicon absorbs light at a depth set by its colour: 1/e at ${d('b')} µm for the blue filter's ${FILTER_NM.b} nm, ${d('g')} µm for green's ${FILTER_NM.g} nm and ${d('r')} µm for red's ${FILTER_NM.r} nm, deeper than the ${SI_T} µm of silicon, so some red passes straight through.`, view: { target: [1.2, 1.5, 1.2], yaw: 2.75, pitch: 0.15, dist: 9 }, frame: ['silicon', 'diode'], show: ['silicon', 'diode', 'isolation', 'funnel'], hide: [], cut: 1, explode: 0 },
     { title: 'The pinned photodiode', text: `Electrons collect in the n region under its p+ layer. The transfer gate beside it is a door: open, it empties the diode completely onto the floating diffusion, which turns the charge into a voltage (${CG_4T} µV per electron here).`, view: { target: [1.6, 0.4, 1.0], yaw: 2.4, pitch: 0.2, dist: 5 }, frame: ['diode', 'gates'], show: ['diode', 'gates'], cut: 1, explode: 0 },
-    { title: 'The four transistors', text: 'From below: the transfer gate, the reset, the source follower whose gate is the floating diffusion, and the row select that hands its copy to the column line. Metal 1 joins the floating diffusion to the follower\'s gate.', view: { target: [1.2, -0.4, 1.4], yaw: 2.9, pitch: -0.75, dist: 7 }, frame: ['gates', 'metal'], show: ['gates', 'metal', 'diode'], hide: ['wafer', 'front'], cut: 0, explode: 0 },
+    { title: 'The four transistors', text: 'From below: the transfer gate, the reset, the source follower whose gate is the floating diffusion, and the row select that hands its copy to the column line. Metal 1 joins the floating diffusion to the follower\'s gate.', view: { target: [1.2, -0.4, 1.4], yaw: 2.9, pitch: -0.75, dist: 7 }, frame: ['gates', 'metal'], show: ['gates', 'metal', 'diode'], hide: ['wafer', 'front', 'neighbours', 'funnel'], cut: 0, explode: 0 },
     { title: 'Walls between pixels', text: `Deep trenches of oxide run the full ${SI_T} µm round the pixel, so an electron born near the edge stays here; a shallow trench separates the photodiode from the transistors.`, view: { target: [1.2, 1.5, 1.2], yaw: 2.3, pitch: 0.55, dist: 9 }, frame: ['isolation'], show: ['isolation', 'diode'], cut: 1, explode: 0 },
     { title: 'How it is made', text: 'Pulled apart, in the order light meets it: lens, filter in its grid, films, the silicon with its diode, the gates and metal on the front side, the oxide, and the carrier wafer the thinned sensor is bonded to face down.', view: { target: [1.2, 1.2, 1.2], yaw: 2.65, pitch: 0.2, dist: 18 }, frame: [], cut: 0, explode: 1 },
   ];

@@ -103,7 +103,7 @@ describe('the studio model', () => {
   it('the carrier wafer under the oxide, and every part inside the 2.4 µm pitch both ways', () => {
     const [a, b] = yRange(named(IDLE, 'carrier wafer')[0]);
     expect(b).toBeCloseTo(-ILD_T, 6); expect(b - a).toBeCloseTo(WAFER_T, 6);
-    for (const i of m({ ...IDLE, pd: FULL_WELL }).items) for (const k of [0, 2]) {
+    for (const i of m({ ...IDLE, pd: FULL_WELL }).items.filter((x) => x.group !== 'neighbours')) for (const k of [0, 2]) {
       expect((i.at?.[k] ?? 0) + i.geo.min[k]).toBeGreaterThanOrEqual(-1e-6);
       expect((i.at?.[k] ?? 0) + i.geo.max[k]).toBeLessThanOrEqual(PITCH + 1e-6);
     }

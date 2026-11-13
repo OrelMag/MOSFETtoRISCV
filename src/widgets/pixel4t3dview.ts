@@ -15,7 +15,7 @@ import type { Widget } from '../view/stage';
 import { absorptionDepth, C_FD_FF, CG_4T, ktcNoise, qe, SF_GAIN, VDD_PIX } from '../phys/imagesensor';
 import { frameLoop } from './mosfet';
 import { studioStage } from './studiostage';
-import { cutAt, ELECTRON, PHOTON, PIX_HOME, PIX_HOME_FRAME, pixModel } from './pixel4t3dkit';
+import { cutAt, ELECTRON, PHOTON, PIX_HIDDEN, PIX_HOME, PIX_HOME_FRAME, pixModel } from './pixel4t3dkit';
 import {
   absorbed, dotAt, dots, DRAWN, electronsOf, FD_BOX, FILTER_NM, FULL_WELL, IDLE, LENS, nextPhase, PD_BOX, PHOTONS_PER_FLASH, photonsAt, phaseOf, PITCH, SI_T, sequenceOf,
   type Filter, type Photon, type PixState,
@@ -35,7 +35,8 @@ export function pixel4tView(): Widget {
     home: PIX_HOME,
     knobs: { cut: 1 },
     homeFrame: PIX_HOME_FRAME,
-    aspect: 1,
+    hidden: PIX_HIDDEN,
+    aspect: 0.78,
     limits: { minDist: 2, maxDist: 40, minPitch: -1.2, maxPan: 6 },
     scaleBar: (len) => (len >= 1 ? `${len} µm` : `${Math.round(len * 1000)} nm`),
     note: `Drawn to scale in µm (${PITCH} µm pixel, ${SI_T} µm of thinned silicon, absorption depths from Green's 2008 table) except the gate oxide, a few nanometres and not drawn. Representative, not IMX183's own (Sony does not publish them): the deep trench walls (0.08 µm inside each edge, full depth; Sony's are oxide-filled, about 150 nm), the 0.28 µm shallow trench, the HfO₂ / Ta₂O₅ / SiO₂ films (0.03, 0.065 and 0.095 µm, the last two a quarter wave at 550 nm), the 0.25 µm metal grid, the metal levels, and the 1.2 µm drawn of the bonded carrier wafer, which is hundreds of µm thick; the p+ back layer is drawn 0.05 µm, five times the 0.01 µm dead layer the model fits. The microlens is a spherical cap whose corners meet the filter (no IMX183 sag is published). The potential funnel is a sketch: the real field comes from graded doping and deep implants. The layout is ours: a real ${PITCH} µm pixel shares its reset, follower and select transistors among two or four photodiodes. A dot is ${groupNum(Math.round(FULL_WELL / 60))} electrons, and each drawn photon stands for ${PHOTONS_PER_FLASH / DRAWN}. Sony does not publish the IMX183's conversion gain: ${CG_4T} µV/e⁻ is illustrative, and the floating diffusion's ${C_FD_FF.toFixed(2)} fF follows from it as q / CG; the full well (${groupNum(FULL_WELL)} e⁻) is an EMVA 1288 measurement.`,
