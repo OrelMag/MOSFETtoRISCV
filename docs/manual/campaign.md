@@ -175,12 +175,13 @@ Your circuit and your progress are saved in this browser as you go. To carry the
 ### The CPU
 
 **The CPU** (in the header's switch) shows the processor the campaign builds, block by block:
-- next PC, PC and the instruction ROM;
+- next PC, its +1, PC and the instruction ROM;
 - control, the registers and the immediate generator;
 - the ALU, branch, the data RAM and I/O;
-- the pipeline registers, the hazard and forwarding units, and the CSRs and traps.
+- the pipeline registers (F/D, D/E, E/M, M/W), the hazard and forwarding units, the CSRs and traps, and the result.
 
-Click a block to see what it does and which levels build it. Blocks you have built light up. The text under the
+Click a block: under the diagram it says what the block does, **Built in:** the level that builds it, and how many of
+the levels leading to it you have done. Blocks you have built light up. The text under the
 diagram explains the loop the processor runs, and why the acts come in this order.
 
 ![The CPU view: the pipelined processor's blocks in a diagram, with the explanation below](img/campaign/28-the-cpu.png)
