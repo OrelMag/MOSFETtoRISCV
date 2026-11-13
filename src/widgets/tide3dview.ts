@@ -33,8 +33,8 @@ export function tideView(): Widget {
   const stage = studioStage({
     aria: 'Kelvin’s tide predictor in 3D: ten slotted cranks driven by one hand crank through a gear each, every crank carrying a pulley on its pin (or, switched, on a slotted yoke), one cord running under every movable pulley and over a fixed pulley between them, and a pen at its end drawing on a moving band of paper between two rollers',
     home: TIDE_HOME,
-    // home: the ten cranks, their pulleys and the cord across the width (the cord is the idea: it adds); the paper at the right edge
-    homeFrame: ['fixed', 'cord', ...Array.from({ length: N_CRANKS }, (_, i) => `crank${i}`)],
+    // home: the ten cranks, their pulleys and the cord across the width (the cord is the idea: it adds); the paper's whole width inside at the right
+    homeFrame: ['fixed', 'cord', 'paper band', ...Array.from({ length: N_CRANKS }, (_, i) => `crank${i}`)],
     aspect: 1.5,
     scaleBar: (len) => `${+(len * 10).toPrecision(3)} mm`,
     limits: { minDist: 60, maxDist: 700 },
