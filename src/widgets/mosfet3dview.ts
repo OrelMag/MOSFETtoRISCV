@@ -11,6 +11,7 @@ import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
 import { depletionAt, lengthNm, mosAnchors, mosParts, NM_PER_UNIT, widthNm } from './mosfet3dparts';
 import { carrierVelocity, channelCharge, current, depletionDepth, gateCap, sizedCurrent, VDD, VT } from './mosphys';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 
 const REGION = { cut: 'cut-off', lin: 'linear', sat: 'saturation' } as const;
@@ -22,6 +23,7 @@ export function mosfetView(link?: BiasLink): Widget {
   let carriers: Carrier[] = [];
   const panel = h('div', { class: 'panel mf3' });
   const stage = modelStage(panel, {
+    look: LOOKS.silicon,
     aria: 'An NMOS transistor in 3D: source and drain islands, the channel between them, oxide and gate above',
     camera: { target: [0, 4, 0], yaw: -0.55, pitch: 0.5, dist: 84 },
     limits: { minDist: 30, maxDist: 260 },

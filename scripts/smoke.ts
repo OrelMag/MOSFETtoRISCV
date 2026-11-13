@@ -72,6 +72,8 @@ interface Route {
   viewport?: Viewport;
   /** A page script run once the page is idle (awaited; returns the problems it found, as strings), then the page settles again. */
   drive?: string;
+  /** Added to the page's query (a flag such as studio3d). */
+  query?: string;
 }
 
 interface Viewport { width: number; height: number; mobile: boolean; name: string; /** a touch screen: `pointer: coarse` is true (Emulation.setTouchEmulationEnabled), which mobile emulation alone does not do */ touch?: boolean }
@@ -1362,10 +1364,10 @@ const lensInsideDrive = (part: string, inner: string, on: boolean) => `(async ()
 
 function routes(): Route[] {
   const out: Route[] = [];
-  const add = (hash: string, storage: Record<string, string>, note = '', viewport?: Viewport, drive?: string) => {
+  const add = (hash: string, storage: Record<string, string>, note = '', viewport?: Viewport, drive?: string, query?: string) => {
     const set = JSON.parse(storage[SETTINGS_KEY] ?? '{}');
     if (zoomOpen && !('zoomOpen' in set)) storage = { ...storage, [SETTINGS_KEY]: JSON.stringify({ ...set, zoomOpen: zoomOpen === 'on' }) };
-    out.push({ hash, storage, label: hash + note, viewport, drive });
+    out.push({ hash, storage, label: hash + note, viewport, drive, query });
   };
   add('#/', light);
   add('#/', themed('dark'), ' (dark)');
@@ -1423,6 +1425,9 @@ function routes(): Route[] {
   for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ` (3D model, ${phoneVp.name})`, phoneVp);
   // and on the narrowest phone, where the corner buttons (turn, save image, full screen) take the most of the stage
   for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ' (3D model, 360px phone)', { width: 360, height: 740, mobile: true, name: '360px phone' });
+  // Every model on the studio renderer (gl/studio.ts: the triode and the relay by default, the rest under ?studio3d), dark and on a phone.
+  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, themed('dark'), ' (3D model, studio, dark)', undefined, undefined, 'studio3d');
+  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ` (3D model, studio, ${phoneVp.name})`, phoneVp, undefined, 'studio3d');
   for (const n of NODES) {
     add(`#/campaign/play/${n.id}`, unlocked);
     // Lessons, drills and programs open on the map instead (pages/level.ts levelRoute).
@@ -1873,6 +1878,35 @@ const MODEL_LABELS = `(() => {
   return out;
 })()`;
 
+// The studio stage's labels (widgets/studiostage.ts): names in the gutters, or numbered badges at the canvas's edges with the
+// names listed under it. Names neither cut nor touching, badges inside the canvas, apart and clear of the corner buttons,
+// the list inside the stage.
+const STUDIO_LABELS = `(() => {
+  const out = [];
+  const hit = (a, b, gx, gy) => a.left < b.right + gx && b.left < a.right + gx && a.top < b.bottom + gy && b.top < a.bottom + gy;
+  for (const st of document.querySelectorAll('.st')) {
+    // (.st is also a puzzle / test table status cell: only a studio stage has a view)
+    const view = st.querySelector('.st-view');
+    if (!st.offsetWidth || !view) continue;
+    const v = view.getBoundingClientRect(), tools = view.querySelector('.r3-tools');
+    const tr = tools && tools.offsetWidth ? tools.getBoundingClientRect() : null;
+    const names = [...st.querySelectorAll('.st-gutter .st-lbl')].filter((e) => e.offsetParent && e.style.display !== 'none');
+    for (const [i, a] of names.entries()) {
+      if (a.scrollWidth > a.clientWidth + 1) out.push('3D name cut in its gutter: ' + a.textContent);
+      for (const b of names.slice(i + 1)) if (a.parentElement === b.parentElement && hit(a.getBoundingClientRect(), b.getBoundingClientRect(), 0, -1)) out.push('3D names touch: ' + a.textContent + ' / ' + b.textContent);
+    }
+    const badges = [...st.querySelectorAll('.st-badge')].filter((e) => e.offsetParent && e.style.display !== 'none').map((e) => ({ t: e.textContent, r: e.getBoundingClientRect() }));
+    for (const [i, a] of badges.entries()) {
+      if (a.r.left < v.left - 1 || a.r.right > v.right + 1 || a.r.top < v.top - 1 || a.r.bottom > v.bottom + 1) out.push('3D badge outside the canvas: ' + a.t);
+      if (tr && hit(a.r, tr, 0, 0)) out.push('3D badge under the corner buttons: ' + a.t);
+      for (const b of badges.slice(i + 1)) if (hit(a.r, b.r, 0, 0)) out.push('3D badges clump: ' + a.t + ' / ' + b.t);
+    }
+    const s = st.getBoundingClientRect();
+    for (const li of st.querySelectorAll('.st-list li')) { if (li.hidden || !li.offsetParent) continue; const r = li.getBoundingClientRect(); if (r.right > s.right + 1 || r.left < s.left - 1) out.push('3D list item cut: ' + li.textContent.trim()); }
+  }
+  return out;
+})()`;
+
 const STAGE_BARS = `(() => {
   const out = [];
   for (const bar of document.querySelectorAll('.stage-bar, .stage .controls')) {
@@ -2011,7 +2045,7 @@ class Tab {
       this.emulated = false;
     }
     // A query of its own makes every route a fresh document (a hash alone would only fire hashchange).
-    const url = `${this.base}?smoke=${seq}${route.hash}`;
+    const url = `${this.base}?smoke=${seq}${route.query ? `&${route.query}` : ''}${route.hash}`;
     try {
       const nav = await this.send('Page.navigate', { url });
       if (nav.errorText) throw new Error(`navigation failed: ${nav.errorText}`);
@@ -2043,6 +2077,8 @@ class Tab {
       for (const p of bars) this.errors.push(p);
       const lbls = (await this.send('Runtime.evaluate', { expression: MODEL_LABELS, returnByValue: true })).result.value as string[];
       for (const p of lbls) this.errors.push(p);
+      const slbls = ((await this.send('Runtime.evaluate', { expression: STUDIO_LABELS, returnByValue: true })).result.value ?? ['studio label check threw']) as string[];
+      for (const p of slbls) this.errors.push(p);
       if (route.viewport) {
         const wide = (await this.send('Runtime.evaluate', { expression: OVERFLOW, returnByValue: true })).result.value as string[];
         for (const p of wide) this.errors.push(`overflow: ${p}`);

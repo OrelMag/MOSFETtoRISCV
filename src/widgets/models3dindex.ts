@@ -52,13 +52,13 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'relay', title: 'A telephone relay', category: 'devices', chapter: 'relays', step: 0,
     summary: 'Coil, armature and contacts placed by the relay\'s physics model over 25 ms: pull-in, travel and bounce.',
-    files: ['relay3d', 'relay3dview'], factory: 'relayCloseup', codex: ['relay', 'relaystep', 'selfhold'],
+    files: ['relay3d', 'relay3dview', 'relay3dkit', 'relay3dgeom'], factory: 'relayCloseup', codex: ['relay', 'relaystep', 'selfhold'],
     open: () => import('./relay3d').then((m) => m.relayCloseup()),
   },
   {
     id: 'triode', title: 'The 6SN7 twin triode', category: 'devices', chapter: 'tubes', step: 0,
     summary: 'A twin triode at real size with a plate cut away: cathode glow, electrons and the transfer curve from the tube model.',
-    files: ['triode3d', 'triode3dview'], factory: 'triodeCloseup', codex: ['triode', 'griddivider'],
+    files: ['triode3d', 'triode3dnext', 'triode3dkit', 'triode3dview'], factory: 'triodeCloseup', codex: ['triode', 'griddivider'],
     open: () => import('./triode3d').then((m) => m.triodeCloseup()),
   },
   {

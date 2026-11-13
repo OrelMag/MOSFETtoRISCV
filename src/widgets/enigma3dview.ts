@@ -9,6 +9,7 @@ import type { Widget } from '../view/stage';
 import { chr, DEFAULT_SETTINGS, Enigma, GREEK, idx, KEY_ROWS, plugMap, REFLECTORS, ROTORS, socketOf, U264, UKWD_SAMPLE, ukwdWiring, type EnigmaSettings, type GreekName, type Moved, type ReflectorName, type RotorName, type Trace } from '../crypto/enigma';
 import type { OrbitView } from '../gl/camera';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import type { EnigmaPalette, EnigmaPose } from './enigma3dparts';
 import { enigmaAnchors, enigmaParts } from './enigma3dmachine';
@@ -56,6 +57,7 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
 
   const panel = h('div', { class: 'panel en' });
   const stage = modelStage(panel, {
+    look: LOOKS.machine,
     aria: 'The German navy’s four-wheel Enigma M4 in 3D: wooden case, keyboard, lamps, plugboard and rotor stack. Type a letter while it has focus to press that key',
     camera: opts.camera ?? view.camera,
     limits: { minDist: 90, maxDist: 2600 },

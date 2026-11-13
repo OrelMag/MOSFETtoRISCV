@@ -68,3 +68,23 @@ export function zipFiles(files: ZipEntry[]): Uint8Array {
   for (const a of all) { out.set(a, at); at += a.length; }
   return out;
 }
+
+/**
+ * The files of a stored zip, as zipFiles writes them (the Digital and FPGA exports), so an export can be imported
+ * back. A compressed entry is refused with a reason: there is no inflater here, and an unzipped folder imports fine.
+ */
+export function unzipStored(b: Uint8Array): ZipEntry[] | { error: string } {
+  const v = new DataView(b.buffer, b.byteOffset, b.byteLength), dec = new TextDecoder();
+  const out: ZipEntry[] = [];
+  let at = 0;
+  while (at + 30 <= b.length && v.getUint32(at, true) === 0x04034b50) {
+    const flags = v.getUint16(at + 6, true), method = v.getUint16(at + 8, true), size = v.getUint32(at + 18, true);
+    const nameLen = v.getUint16(at + 26, true), extraLen = v.getUint16(at + 28, true);
+    const name = dec.decode(b.subarray(at + 30, at + 30 + nameLen)), data = at + 30 + nameLen + extraLen;
+    if (method !== 0 || flags & 0x08) return { error: `${name} is compressed: unzip the file and import what is inside` };
+    if (data + size > b.length) return { error: 'the zip is cut short' };
+    if (!name.endsWith('/')) out.push({ name: name.split('/').pop()!, text: dec.decode(b.subarray(data, data + size)) });
+    at = data + size;
+  }
+  return out.length ? out : { error: 'not a zip, or an empty one' };
+}

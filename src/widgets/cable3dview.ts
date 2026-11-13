@@ -12,6 +12,7 @@ import {
 } from '../phys/cable';
 import { z0Of } from '../phys/line';
 import { cableAnchors, cableParts, presetOf, type CablePalette, type CableState, type Neighbour } from './cable3dparts';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 
 /** Run length (m), conductor spacing (mm): the numbers behind the readouts. */
@@ -29,6 +30,7 @@ export function cableView(): Widget {
     diel: stage.rgba('--m3-diel', 0.55), jacket: stage.rgba('--m3-jacket', 0.4),
   });
   const stage = modelStage(panel, {
+    look: LOOKS.field,
     aria: 'A twisted pair in 3D with each loop tinted by the sign of its induced voltage, or a stock coax with its ends stripped back',
     camera: { target: [0, 0, 0], yaw: -0.5, pitch: 0.75, dist: 98 },
     limits: { minDist: 30, maxDist: 220 },

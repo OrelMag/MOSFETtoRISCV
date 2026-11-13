@@ -10,6 +10,7 @@ import type { OrbitView } from '../gl/camera';
 import { SHED, ROWS } from './loom3dparts';
 import { HOOKS, LOOM_PRESETS, PICKS, WARP, loomPick } from './cards';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { loomAnchors, loomParts, poseOf, steppedPose, type Cards, type LoomPalette } from './loom3dparts';
 
@@ -35,6 +36,7 @@ export function loomView(): Widget {
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.machine,
     aria: 'A Jacquard head in 3D: a square cylinder carrying a chain of punched cards against sprung needles, vertical hooks over the griffe knife, harness cords with lingoes lifting warp threads, a shuttle, a reed and the cloth',
     camera: { ...VIEWS.head },
     limits: { minDist: 90, maxDist: 600 },

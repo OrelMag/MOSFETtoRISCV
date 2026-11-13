@@ -36,7 +36,7 @@ const PINNED: Record<string, string> = {
   'arith.dig: Compare 4 signed (Digital)': 'cross 0→3, through 0→0, pointers 10→0',
   'arith.dig: Negate 4 (Digital)': 'cross 0→2, through 0→0, pointers 10→2',
   'arith.dig: Sign-extend 4→6': 'cross 0→0, through 0→0, pointers 8→0',
-  'arith.dig: Demultiplexer 2×4 (Digital)': 'cross 0→0, through 0→0, pointers 16→7',
+  'arith.dig: Demultiplexer 2×4 (Digital)': 'cross 0→0, through 0→0, pointers 16→6',
   'arith.dig: arith': 'cross 0→70, through 0→0, pointers 27→24',
   'counter2.dig: counter2': 'cross 5→2, through 0→0, pointers 0→0',
   'full-adder.dig: half-adder': 'cross 1→2, through 0→0, pointers 0→0',

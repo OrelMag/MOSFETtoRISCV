@@ -8,6 +8,7 @@ import { groupNum } from '../sim/numfmt';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import {
   atAnchors, atParts, atPpm, atThicknessMm, AT_BLANK_MM, AT_ELEC_MM, AT_F, AT_N, AT_T_DRAWN, boardAnchors, boardParts, crystalAnchors, crystalParts, DIVIDE, driftAnchors, driftOf, realPerScreen, screenSlip, SLIP_S, driftParts, driveCurrent, DRIVE_W, F_WATCH, fmtTime, freqAt, inWindow,
@@ -50,6 +51,7 @@ export function quartzView(): Widget {
     at: `The AT-cut blank is drawn ${Math.round(AT_T_DRAWN / 10 / atThicknessMm(AT_F))} times thicker than its ${atThicknessMm(AT_F).toFixed(3)} mm, with its shear swing exaggerated and slowed to ${SHOWN_HZ} a second; its 8 mm diameter, its 5 mm electrodes and its cubic temperature curve (turning points at −20 and 70 °C, ±15 ppm) are illustrative.`,
   };
   const stage = modelStage(panel, {
+    look: LOOKS.lab,
     aria: 'A 32768 hertz quartz tuning fork in its ceramic package, and the Pierce oscillator and fifteen-stage divider around it',
     camera: CRYSTAL,
     limits: { minDist: 12, maxDist: 160 },

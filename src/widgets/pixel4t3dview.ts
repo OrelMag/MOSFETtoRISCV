@@ -11,6 +11,7 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { absorptionDepth, C_FD_FF, CG_4T, ktcNoise, qe, SF_GAIN, VDD_PIX } from '../phys/imagesensor';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import {
   DRAWN, electronsOf, FILTER_NM, FULL_WELL, IDLE, nextPhase, PHOTONS_PER_FLASH, photonsAt, phaseOf, pixAnchors, pixParts, PITCH, SI_T, sequenceOf,
@@ -29,6 +30,7 @@ export function pixel4tView(): Widget {
   let st: PixState = { ...IDLE }, filter: Filter = 'g', photons: Photon[] = [], seed = 1, cut = true, reading = false, held = 0;
   const panel = h('div', { class: 'panel px4t' });
   const stage = modelStage(panel, {
+    look: LOOKS.silicon,
     aria: 'One back-illuminated CMOS pixel in 3D, cut through its photodiode: microlens, colour filter, thinned silicon with the pinned photodiode, and on the front side the transfer gate, floating diffusion, reset, source follower and row select transistors with their metal to the column line',
     camera: HOME,
     views: [{ label: 'Whole pixel', view: HOME }, { label: 'Zoom to the transistors', view: ZOOM, title: 'Close on the transfer gate, floating diffusion and the reset, follower and select transistors' }],

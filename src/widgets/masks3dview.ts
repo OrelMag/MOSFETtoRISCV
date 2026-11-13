@@ -5,6 +5,7 @@
 import '../styles/masks3d.css';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { LAND_AT, LAYER_NAME, LAYERS, MASK_AT, MASK_NAME, maskRects, masksAnchors, masksParts, misalignment, type MasksPalette, type MasksState } from './masks3dparts';
 import { CELLS, FAB } from './silicon';
@@ -18,6 +19,7 @@ export function masksView(): Widget {
   const st: MasksState = { step: 6, spread: 0.35, shift: 0, aligned: true };
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.silicon,
     aria: 'A standard cell in 3D, built mask by mask; the current step’s reticle floats above it',
     camera: { target: [0, 3, 0], yaw: -0.75, pitch: 0.7, dist: 78 },
     limits: { minDist: 30, maxDist: 240 },

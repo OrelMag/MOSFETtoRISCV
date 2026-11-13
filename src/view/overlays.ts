@@ -61,8 +61,9 @@ export interface OvContext {
 /** Why an overlay cannot be shown here ('' if it can). */
 export function overlayRefusal(kind: OverlayKind, c: OvContext): string {
   if (c.engine === 'nmos') return 'This chip runs on the NMOS engine: two values, no gate delays, so none of the overlays apply.';
-  if (c.level === 'switch' && (kind === 'slack' || kind === 'activity' || kind === 'energy' || kind === 'depth'))
-    return 'A transistor-level circuit: the switch-level solver has no gate delays, so only Load, Unknown and Cost apply.';
+  // Load is the gate-level load model (NAND inputs, buffers from BUFFER_FANOUT on): a transistor, relay or tube level has neither
+  if (c.level === 'switch' && kind !== 'unknown' && kind !== 'cost')
+    return 'A transistor-level circuit: the switch-level solver has no gate delays and no NAND inputs to load, so only Unknown and Cost apply.';
   if ((kind === 'activity' || kind === 'energy') && c.engine === 'cycle') return 'This scene runs on the cycle engine, which keeps no toggle counts (it is too large for the gate-level engine).';
   if ((kind === 'activity' || kind === 'energy') && c.sub) return 'This level has a simulation of its own (opened from a leaf): its toggles are not counted.';
   return '';
@@ -137,7 +138,7 @@ export function activityOverlay(node: HierNode, toggles: ArrayLike<number>, base
       rows: ACTIVITY_LABELS.map((l, b) => ({ band: b, label: l, count: plural(hist(net, b), 'wire') })),
       note: units > 0
         ? `0 ↔ 1 changes over the last ${plural(units, per)}, glitches included (a clock makes 2 a cycle). Counted on the gate-level engine while this overlay is on.`
-        : `Nothing has run since the overlay came on: ${clocked ? 'Step, Pulse or Run the clock' : 'change an input'} and the wires take their colours.`,
+        : `Nothing has run since the overlay came on (or the last Reset or Back): ${clocked ? 'Step, Pulse or Run the clock' : 'change an input'} and the wires take their colours.`,
     },
   };
 }
@@ -294,7 +295,7 @@ export function energyOverlay(design: FlatDesign, node: HierNode, toggles: Array
       rows: SHARE_LABELS.map((l, b) => ({ band: b, label: l, count: plural(hist(inst, b), 'part') })),
       note: units > 0 && level > 0
         ? `Each wire a part drives, times how often it flipped between 0 and 1 (brief glitches too), over the last ${plural(units, per)}: on this level about ${groupDigits(Math.round(level / units))} fF (femtofarads: the charge a wire holds per volt) is charged or emptied ${aPer}. Each flip costs half that capacitance times the supply voltage squared, so energy follows this share. Counted on the gate-level engine while this overlay is on.`
-        : `Nothing has switched since the overlay came on: ${clocked ? 'Step, Pulse or Run the clock' : 'change an input'} and the parts take their colours.`,
+        : `Nothing has switched since the overlay came on (or the last Reset or Back): ${clocked ? 'Step, Pulse or Run the clock' : 'change an input'} and the parts take their colours.`,
     },
   };
 }
