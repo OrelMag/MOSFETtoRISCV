@@ -112,7 +112,8 @@ Your circuit and your progress are saved in this browser as you go. To carry the
   - Lines between the boxes show which level needs which.
 - **The optional acts.** Each is folded to one line until you open it:
   - **Act P · Before the transistor**: relays, vacuum tubes and punched cards, beside act 0;
-  - the acts after the CPU: arithmetic units, a GPU, memory, links and signals.
+  - the acts after the CPU: arithmetic units, a GPU, memory, links and signals;
+  - **Debugging · Find it, fix it**: the bug hunts (see [Hunt a bug](#hunt-a-bug)).
 
   Click **Show ▾** on the line to unfold an act, and **Hide** to fold it again.
 
@@ -350,16 +351,42 @@ list under **Unlocked parts**.
 
 ### Hunt a bug
 
-Bug hunts are optional levels in the **Debugging · Find it, fix it** group, each placed after the level it belongs
-to. A colleague's circuit opens already wired, with a fault in it, and the **Why** tab tells their story.
+Bug hunts are optional levels: a block you have built, now wrong. They are grouped under **Debugging · Find it, fix
+it**, an optional group near the bottom of the map; click its **Show ▾** to unfold it. Each bug hunt builds on the
+level it breaks; point at the small circle on its box's left edge to see which. There are two kinds:
 
-![A bug hunt: a nine-NAND full adder with a fault, the FIX IT tag and a par of 1 edit](img/campaign/24-bug-hunt.png)
+- **FIX IT**: a colleague's drawing with one mistake in it. Repair it in as few edits as you can.
+- **FIND IT**: the drawing is right, but the chip has a defect in the silicon, a net stuck at 0 or at 1. Name that
+  net with the fault brush.
 
-1. Open the bug hunt from the map and click **Play**.
+![The Debugging group unfolded: FIX IT and FIND IT levels in dashed amber boxes](img/campaign/29-bug-hunts-on-map.png)
+
+**To fix a drawing (FIX IT):**
+
+![A FIX IT level: a nine-NAND full adder with a fault, the FIX IT tag and a par of 1 edit](img/campaign/24-bug-hunt.png)
+
+1. Click the level on the map, then **Play**. The circuit opens as the colleague left it, and the **Why** tab tells
+   their story.
 2. Click **Check**. The test player shows which rows are wrong.
 3. Find the fault with the inputs, the probe or the test player, and fix it.
-4. The grade counts edits. Adding, removing or swapping a part is one edit, and so is moving a pin to another net.
-   Moving parts and redrawing wires are free. Par is usually 1.
+4. Check again. The grade counts edits:
+   - adding, removing or swapping a part is one edit, and so is moving a pin to another net;
+   - moving parts and redrawing wires are free.
+
+   Par is the fewest edits that fix it.
+
+**To find a defect (FIND IT):**
+
+1. Click the level on the map, then **Play**. Check has already run, and the test player shows the failing cases;
+   they are your clues. A FIND IT level never passes Check, because the drawing is already right.
+2. Work out which net would give exactly those failures. Probe wires, step through the failing cases, or use the
+   **Timing** panel to see which bit never moves.
+3. Press **B**, or click **Accuse** beside Check. The banner says: *click the wire you think is stuck, then say at
+   what* (**B** or **Esc** to stop).
+4. Click the wire, then choose **It is stuck at 0 here** or **… at 1**. A right accusation solves the level. Each
+   wrong one costs a star, so par is 0 wrong.
+
+![A FIND IT level with the fault brush on: the Accuse banner over the canvas and the failing rows in the test player](img/campaign/30-fault-brush.png)
 
 ### Skip a level, or unlock everything
 
