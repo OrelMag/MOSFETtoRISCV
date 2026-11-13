@@ -394,11 +394,14 @@ stops growing): the learner then has to find double-click at the very moment zoo
   the stage). In the search: `> Open blocks as you zoom`, keywords zoom, inside, peek, transparent, lens, open (a
   `searchbuiltin.ts` `act()` like moveParts's).
 - **Wording:** **Open blocks as you zoom** · "Zoom into a block and its inside opens over it, live; zoom further to step
-  in. Off: a block opens only when you double-click it. Starts off on a touch screen".
+  in. Off: a block opens only when you double-click it" (the touch-screen clause went when it became the default everywhere).
 - **Type and default:** `zoomOpen: boolean | null`, null = the device default, as `moveParts`. **Off everywhere in the
   first phase** (opt-in while it is new: it changes what a zoom does, and the out-of-order levels cannot open yet).
   When phase 3 makes it the default, null means **on with a mouse, off on a touch screen** (at 390 px a lens is nearly a
   drill, item 6).
+- **Default since 2026-11-13 (the author's call): on, desktop and touch alike**, with Opened blocks without colour on too.
+  null = never chosen = on; a stored false is kept. lensPlain's old default false had been saved for everyone, so a stored
+  false without the `lensV` marker is read as unset once (settings.ts load; tests/lens-default.test.ts).
 - **Off restores today exactly:** no lens element is ever created, the zoom never hands off and zooming out never goes
   up a level, the stage hint is today's text, double-click and the breadcrumb drill as now. **The one difference from
   today is the route cache (phase 0), which is not part of the setting:** drill uses it whatever the setting, so a

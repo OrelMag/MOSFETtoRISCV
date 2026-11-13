@@ -83,7 +83,9 @@ export function lowestOne(n: number): ComponentDef {
       ports: [bus('x', n, 'in'), bus('y', n, 'out'), bit('any', 'out')],
       symbol: { kind: 'box', label: 'LOWEST 1' },
       spec: ([x]) => [x & -x & (2 ** n - 1), x ? 1 : 0],
-      netlist: () => ({ pins: edgePins(b, ['x'], ['y', 'any'], 4), instances: b.instances, nets: b.nets() }),
+      // eight bits and up by logic depth: the below-chain b2 → b3 → … → any steps diagonally (in one column each wire crossed the next
+      // gate); the short chains keep the Builder's columns (laid, low1_4's labels overlap)
+      netlist: n >= 8 ? laid(b, {}) : () => ({ pins: edgePins(b, ['x'], ['y', 'any'], 4), instances: b.instances, nets: b.nets() }),
     });
   });
 }

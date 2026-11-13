@@ -236,6 +236,8 @@ class CpuPanel {
     this.oooSec.hidden = this.oooV.el.hidden = true; // until an out-of-order core is found (renderOoo)
     this.body = h('div', { class: 'sb-cpu-body' },
       h('div', { class: 'sb-btns sb-cpu-btns' }, this.runBtn, this.stepBtn, this.slowBtn, this.rateSel, reset),
+      // the chapters' CPU panel has Back; this drawer does not (the golden model would need snapshots): say how to start over
+      h('p', { class: 'sb-cpu-backnote' }, 'No Back here: Reset starts the program over.'),
       this.status, this.gaps, this.now,
       h('div', { class: 'cpu-sec sb-cpu-sechead' }, h('span', null, 'Program', this.progHint),
         h('span', { class: 'sb-cpu-secbtns' }, this.customBtn, this.ucodeBtn, this.editBtn)),

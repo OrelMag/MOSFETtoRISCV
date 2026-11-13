@@ -48,7 +48,7 @@ export function untangled(doc: ChipDoc, chips: Record<string, ChipDoc> | ((id: s
       for (const n of byNet.keys()) touched.add(n);
       pick.push(...[...byNet.values()].sort((a, b) => a.length - b.length)[0]);
     }
-    const r = collapseWires(doc, pick, defOf);
+    const r = collapseWires(doc, pick, defOf, false);
     if (r.doc === doc) return doc;
     doc = r.doc;
   }

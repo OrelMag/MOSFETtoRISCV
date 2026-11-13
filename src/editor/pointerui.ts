@@ -24,6 +24,7 @@ export function collapseAll(ed: Editor, ids: string[]): void {
     ed.select({ labels: r.labels });
   }
   if (r.reason) ed.toast(r.reason, 'err');
+  else if (r.kept) ed.toast(`${r.kept} short wire${r.kept === 1 ? '' : 's'} kept as drawn: two pointers that close would touch`);
 }
 
 /** A small modal over the editor (Esc or a click outside closes it); Enter in a field runs `ok`. */

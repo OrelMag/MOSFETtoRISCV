@@ -7,6 +7,8 @@
 // click, Reset) ends the replay.
 
 import { groupDigits } from '../sim/numfmt';
+import type { Rect } from '../view/camera';
+import { pinBody } from './geom';
 import { h, icon } from '../ui/dom';
 import { type BuildChallenge, type CheckResult, fmtBits, fmtNum, MAX_FAILED } from './challenges';
 import type { Editor } from './editor';
@@ -73,6 +75,12 @@ export class TestPlayer {
     this.fold.title = t;
     this.fold.setAttribute('aria-label', t);
     this.fold.setAttribute('aria-expanded', String(this.open));
+  }
+
+  /** Where the shown case goes wrong on the canvas: its failing output pins (every output when it could not be played). */
+  failingPins(): Rect[] {
+    const v = this.rp.read(), bad = new Set(v.outs.filter((o) => !o.ok || v.error).map((o) => o.name));
+    return (this.ed.doc?.pins ?? []).filter((p) => p.dir !== 'in' && bad.has(p.name)).map(pinBody);
   }
 
   get k(): number {

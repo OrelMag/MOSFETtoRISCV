@@ -22,6 +22,8 @@ export interface ModelFrameOptions {
   renderer: () => Renderer | null;
   /** The HTML labels over the canvas, drawn into a saved image. */
   labels?: HTMLElement;
+  /** The picture to save, labels included, when the stage composes its own (studiostage.ts: names in its gutters, leaders, scale bar). */
+  image?: () => HTMLCanvasElement | null;
   /** What full screen takes (default: the stage's panel, else its widget, else the stage). */
   root?: () => HTMLElement;
 }
@@ -136,6 +138,8 @@ export function modelFrame(o: ModelFrameOptions): ModelFrame {
 
   // ---- save image: the frame as drawn, then the labels on it ----
   shot.addEventListener('click', () => {
+    const own = o.image?.();
+    if (own) { own.toBlob((blob) => { if (blob) saveFile(fileName(o.name), blob); }, 'image/png'); return; }
     const r = o.renderer();
     if (!r) return;
     const c = r.canvas, out = document.createElement('canvas');

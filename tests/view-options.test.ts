@@ -81,7 +81,7 @@ describe('view options', () => {
     // the fixed-size names set an inline display (view/legible.ts)
     expect(app).toMatch(/data-hide~='parts'\] svg\.schematic \.lg-name \{ display: none !important; \}/);
     expect(app).toMatch(/\.tap-label:not\(\.net-hover, \.net-sel, \.fld\)/);
-    const paper = readFileSync(new URL('../src/ui/pages/printfig.ts', import.meta.url), 'utf8');
+    const paper = readFileSync(new URL('../src/ui/paper.ts', import.meta.url), 'utf8');
     expect(paper).toContain("['data-hide', null]");
     expect(paper).toContain("['data-wires', null]");
   });
@@ -174,22 +174,26 @@ describe('opened blocks without colour', () => {
     return a;
   };
 
-  it('is off by default, comes back off on a reset, and a corrupt saved value reads as off', () => {
-    expect(settings.lensPlain).toBe(false);
-    settings.set('lensPlain', true);
+  it('is on by default (with Open blocks as you zoom), comes back on after a reset, and only a stored false turns it off', () => {
     expect(settings.lensPlain).toBe(true);
+    expect(settings.zoomOpen).toBe(true);
+    settings.set('lensPlain', false);
+    settings.set('zoomOpen', false);
+    expect(settings.lensPlain).toBe(false);
+    expect(settings.zoomOpen).toBe(false);
     settings.resetView();
-    expect(settings.lensPlain).toBe(false);
+    expect(settings.lensPlain).toBe(true);
+    expect(settings.zoomOpen).toBe(true);
     settings.set('lensPlain', 'yes' as never);
-    expect(settings.lensPlain).toBe(false);
+    expect(settings.lensPlain).toBe(true);
   });
 
   it('sets data-lens-fill on <html> while on, and takes it off again', () => {
-    expect(attrs().has('data-lens-fill')).toBe(false);
-    settings.set('lensPlain', true);
     expect(attrs().get('data-lens-fill')).toBe('plain');
     settings.set('lensPlain', false);
     expect(attrs().has('data-lens-fill')).toBe(false);
+    settings.set('lensPlain', true);
+    expect(attrs().get('data-lens-fill')).toBe('plain');
   });
 
   it('is no part of a preset: a preset is still recognized with it on, and applying one leaves it alone', () => {

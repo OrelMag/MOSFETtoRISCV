@@ -57,8 +57,8 @@ const DRIVE_MS = 2 * routeTimeout;
 const throttle = Number(opt('throttle') ?? 1);
 // After the load and two frames: long enough for a 2 Hz automatic clock (settings.autoClock) to tick once.
 const dwell = Number(opt('dwell') ?? 600);
-// `--zoom-open on | off`: View options ▸ Open blocks as you zoom for every route that does not set it itself (the lens's "off
-// restores today" check, DESIGN.md: the same routes with it on and off).
+// `--zoom-open on | off`: View options ▸ Open blocks as you zoom for every route that does not set it itself (on by default
+// since 2026-11-13; `off` is the lens's "off restores today" check, DESIGN.md: the same routes with it on and off).
 const zoomOpen = opt('zoom-open');
 
 // ---- routes ----------------------------------------------------------------------------------
@@ -696,6 +696,25 @@ const WHEEL_DRIVE = `(async () => {
   return bad;
 })()`;
 
+/** A 3D model's stage holds its box from first paint (studiostage.ts: the names made from the model before the first layout,
+ *  laid out in the first frame it is in the page, the scale bar unseen until it has a length): every layout shift since the
+ *  page loaded (buffered) whose source is the stage or inside it fails, named. Shifts elsewhere on the page are not this check's. */
+const STAGE_SHIFT_DRIVE = `(async () => {
+  const entries = await new Promise((res) => {
+    let got = [];
+    try { new PerformanceObserver((l, o) => { got = l.getEntries(); o.disconnect(); res(got); }).observe({ type: 'layout-shift', buffered: true }); } catch { res([]); }
+    setTimeout(() => res(got), 400);
+  });
+  const bad = [];
+  for (const e of entries) for (const s of e.sources ?? []) {
+    const n = s.node, el = n && n.nodeType === 1 ? n : n?.parentElement;
+    if (!el || !el.closest('.st-view, .st-stage')) continue;
+    const r = (q) => Math.round(q.width) + 'x' + Math.round(q.height) + '@' + Math.round(q.x) + ',' + Math.round(q.y);
+    bad.push('the 3D stage shifted after first paint: ' + (el.className.baseVal ?? el.className) + ' ' + r(s.previousRect) + ' -> ' + r(s.currentRect) + ' at ' + Math.round(e.startTime) + ' ms');
+  }
+  return bad;
+})()`;
+
 const GALLERY_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
@@ -877,6 +896,59 @@ const ANALOGY_DRIVE = `(async () => {
  * left waiting), that the dialog was asked for exactly once (window.print is stubbed for every route: see visit()), and that a
  * wrong theme did not leak into the sheet (the page behind keeps the learner's own).
  */
+// A failing Check opens the test player under the canvas: the view keeps its corner and scale (it may pan to show the
+// failing pins, never zoom), and closing the player fits an untouched view again (editor.ts holdView / releaseView).
+const PLAYER_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const c = document.querySelector('.sb-canvas'), svg = c && c.querySelector('svg');
+  if (!svg) return ['no canvas'];
+  const px = () => c.clientWidth / +svg.getAttribute('viewBox').split(' ')[2];
+  const before = px(), vb0 = svg.getAttribute('viewBox'), size = () => c.clientWidth + '×' + c.clientHeight, size0 = size();
+  const check = [...document.querySelectorAll('button')].find((b) => /^Check/.test(b.textContent.trim()) && b.offsetParent);
+  if (!check) return ['no Check button'];
+  check.click(); await wait(2500);
+  const bad = [];
+  if (!document.querySelector('[data-chal=player]')) return ['an empty circuit failed nothing: no test player'];
+  if (Math.abs(px() - before) > 1e-3 * before) bad.push('the scale changed when the test player opened: ' + before.toFixed(3) + ' → ' + px().toFixed(3) + ' px a unit');
+  // t_inv's pins stay in view above the player, so nothing pans either: the corner is where it was
+  const corner = (v) => v.split(' ').slice(0, 2).map((n) => (+n).toFixed(3)).join(' ');
+  if (corner(svg.getAttribute('viewBox')) !== corner(vb0)) bad.push('the view moved when the test player opened: ' + corner(vb0) + ' → ' + corner(svg.getAttribute('viewBox')));
+  const close = document.querySelector('[data-chal=player] [data-tp=close]');
+  if (close) {
+    close.click(); await wait(1500);
+    // fitted again: what Fit to view gives now (the strip may have grown with the result, so not always vb0)
+    const vb1 = svg.getAttribute('viewBox'), r = c.getBoundingClientRect();
+    svg.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 4, clientY: r.top + 4, button: 2 }));
+    await wait(300);
+    const fit = [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Fit to view/.test(m.textContent.trim()));
+    if (!fit) bad.push('no Fit to view in the canvas menu');
+    else { fit.click(); await wait(500); if (svg.getAttribute('viewBox') !== vb1) bad.push('closing the player did not fit the view again: ' + vb1 + ' in ' + size() + ', fitted ' + svg.getAttribute('viewBox') + ' (opened at ' + vb0 + ' in ' + size0 + ')'); }
+  }
+  return bad;
+})()`;
+
+// Statistics on a phone (ui/pages/hwstats.ts renderCards): two-line cards of one height, built only in view, a sort select,
+// no sideways scroll, every control 40 px; the desktop table hidden.
+const STATS_PHONE_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (let i = 0; i < 60 && !document.querySelector('.hw-card'); i++) await wait(250);
+  const bad = [];
+  const cards = [...document.querySelectorAll('.hw-card')];
+  if (!cards.length) return ['no cards on a phone'];
+  if (document.querySelector('.hw-table-wrap:not([hidden])')) bad.push('the table shows on a phone');
+  if (cards.length > 60) bad.push(cards.length + ' cards built: the list should build only those in view');
+  const sel = document.querySelector('.hw-sort-sel');
+  if (!sel) bad.push('no Sort by select');
+  else { sel.value = 'period'; sel.dispatchEvent(new Event('change')); await wait(300); }
+  const list = document.querySelector('.hw-cards'); list.scrollTop = list.scrollHeight / 2; await wait(300);
+  const hs = new Set([...document.querySelectorAll('.hw-card')].map((c) => c.offsetHeight));
+  if (hs.size > 1) bad.push('cards of different heights: ' + [...hs].join(', '));
+  const small = [...document.querySelectorAll('.hw-card-wrap button, .hw-card-wrap select, .hw-card a')].filter((b) => b.getBoundingClientRect().height < 39.5);
+  if (small.length) bad.push(small.length + ' controls under 40 px');
+  if (document.querySelector('.hw-page').scrollWidth > innerWidth + 1) bad.push('the page scrolls sideways');
+  return bad;
+})()`;
+
 const PRINT_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
@@ -887,14 +959,25 @@ const PRINT_DRIVE = `(async () => {
   const figs = [...page.querySelectorAll('.pd-fig-body')];
   if (figs.length < 3) bad.push('only ' + figs.length + ' figures');
   for (const f of figs) {
-    if (!f.querySelector('svg')) bad.push('a figure is not drawn: ' + f.textContent.trim().slice(0, 80));
-    else if (f.querySelector('svg').getBoundingClientRect().width < 20) bad.push('a figure is collapsed');
+    // a circuit is an svg; a 3D model (ui/pages/printmodel.ts) an img of its picture, or the flat svg without WebGL2
+    const pic = f.querySelector('img.pd-model, svg');
+    if (!pic) bad.push('a figure is not drawn: ' + f.textContent.trim().slice(0, 80));
+    else if (pic.getBoundingClientRect().width < 20) bad.push('a figure is collapsed');
+    else if (pic.tagName === 'IMG' && !(pic.complete && pic.naturalWidth > 0)) bad.push('a model figure is an empty image');
   }
   if (page.querySelector('.pd-wait')) bad.push('a figure is still waiting');
   if (page.querySelector('.lz, [aria-busy="true"]')) bad.push('a figure number is still a placeholder (' + page.querySelectorAll('.lz').length + ')');
   if (window.__printed !== 1) bad.push('window.print was called ' + window.__printed + ' times');
   if (!page.querySelector('.pd-q') || !page.querySelector('.pd-answers li')) bad.push('no questions and answers');
   if (document.querySelector('.topbar') && document.documentElement.getAttribute('data-palette') === 'print') bad.push('the figures left <html> in the paper palette');
+  // a chapter with 3D models: each a numbered figure, its Try lines after it for the site, and no model left on the page (WebGL released)
+  if (window.__printModels) {
+    const models = [...page.querySelectorAll('.pd-fig-model')];
+    if (models.length < window.__printModels) bad.push('only ' + models.length + ' 3D model figures');
+    for (const m of models) if (!/^Figure [\\w.]+\\./.test(m.querySelector('figcaption')?.textContent ?? '')) bad.push('a model figure has no number');
+    if (!page.querySelector('.pd-onsite')) bad.push('no "On the site" line after a model');
+    if (document.querySelector('.r3-stage')) bad.push('a 3D stage was left mounted after the figures');
+  }
   return bad;
 })()`;
 
@@ -1167,8 +1250,7 @@ const pulsed = (...runs: [n: number, drive: string][]) => `(async () => {
 /**
  * Open blocks as you zoom on a touch screen (DESIGN.md item 6, Revision 3): pinches spreading over `part` (two touch
  * pointers) open its inside in its outline once past its opening zoom, as the wheel does; the stage bar keeps its height;
- * a tap on an inner part under 40 px steps into `part` (#/…/<part>). `off`: the setting left at its default (null), and a
- * pinch only zooms.
+ * a tap on an inner part under 40 px steps into `part` (#/…/<part>). `off`: the setting turned off, and a pinch only zooms.
  */
 const lensPinchDrive = (mode: 'open' | 'off', part: string) => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1213,7 +1295,7 @@ const lensPinchDrive = (mode: 'open' | 'off', part: string) => `(async () => {
   // the first finger of a pinch is not a press and hold: no menu once the hold's time has passed
   await wait(500);
   if (document.querySelector('.ctx-menu')) bad.push('a pinch opened the press-and-hold menu');
-  if ('${mode}' === 'off') return lenses() ? [...bad, 'an inside opened on a touch screen with the setting at its default'] : bad;
+  if ('${mode}' === 'off') return lenses() ? [...bad, 'an inside opened on a touch screen with the setting off'] : bad;
   // the inside crumb must not restack the stage bar and take the canvas's height away (it did at 360 px)
   if (canvas.getBoundingClientRect().height < canvasH - 1) bad.push('the canvas shrank from ' + Math.round(canvasH) + ' to ' + Math.round(canvas.getBoundingClientRect().height) + ' px');
   const el = mine();
@@ -1469,6 +1551,7 @@ function routes(): Route[] {
   // The default of every workbench family (what the family picker opens first).
   for (const f of families) add(`#/workbench/${f.key(initialParams(f))}`, light);
   add('#/workbench/stats', light);
+  add('#/workbench/stats', light, ` (${phoneVp.name})`, phoneVp, STATS_PHONE_DRIVE);
   add('#/workbench/bench', light);
   add('#/workbench/lab', light);
   // A line opened: its model's panel, not a schematic (widgets/modelleaf.ts).
@@ -1496,7 +1579,7 @@ function routes(): Route[] {
   // and on the narrowest phone, where the corner buttons (turn, save image, full screen) take the most of the stage
   for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ' (3D model, 360px phone)', { width: 360, height: 740, mobile: true, name: '360px phone' });
   // Every 3D model (all on the studio renderer, gl/studio.ts), dark and on a phone.
-  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, themed('dark'), ' (3D model, studio, dark)');
+  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, themed('dark'), ' (3D model, studio, dark)', undefined, STAGE_SHIFT_DRIVE);
   for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ` (3D model, studio, ${phoneVp.name})`, phoneVp);
   // the Names switch off (settings.modelNames): nothing named on the stage, no overflow, on a phone and wide
   const namesOff = { [SETTINGS_KEY]: JSON.stringify({ theme: 'light', modelNames: false, coachDone: { stage: true, sandbox: true } }) };
@@ -1516,6 +1599,7 @@ function routes(): Route[] {
   for (const c of DSP_CAPSTONES) if (c.route) add(c.route, light);
   // The Verilog twins (campaign/twinids.ts): the source beside the check, never synthesized here (Yosys is 78 MB)
   for (const l of TWIN_LEVELS) add(`#/campaign/play/${twinKey(l)}`, unlocked);
+  add('#/campaign/play/t_inv', unlocked, ' (test player keeps the view)', undefined, PLAYER_DRIVE);
   // A locked level renders its notice (fresh progress: only the first levels are open).
   add(`#/campaign/play/${NODES[NODES.length - 1].id}`, light, ' (locked)');
   add('#/sandbox', light);
@@ -1525,6 +1609,8 @@ function routes(): Route[] {
   add(`#/c/${printCh.id}/print`, light, ` (${VIEWPORTS[VIEWPORTS.length - 1].name})`, VIEWPORTS[VIEWPORTS.length - 1], PRINT_DRIVE);
   // a chapter whose numbers are computed by the page (ui/lazy.ts): none may print as a placeholder
   add('#/c/sdr/print', light, '', undefined, PRINT_DRIVE.replace('if (figs.length < 3)', 'if (false)'));
+  // a chapter with 3D models (the triode and ENIAC's decade ring): pictures in paper's look although the theme is dark
+  add('#/c/tubes/print', themed('dark'), ' (3D models)', undefined, PRINT_DRIVE.replace('if (figs.length < 3)', 'window.__printModels = 2; if (figs.length < 2)'));
   // The first-run coach marks over a chapter step, the workbench and the sandbox, in both themes and on a phone.
   for (const theme of ['light', 'dark'] as const) {
     for (const hash of [`#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/sandbox']) add(hash, firstRun(theme), ` (first run, ${theme})`);
@@ -1619,7 +1705,7 @@ function routes(): Route[] {
   // View options ▸ Opened blocks without colour: the opened alu on the board's colour, closed boxes keep theirs; the dark board
   // and the light canvas; off, the opened alu keeps its hue
   const plainOn = (theme: 'light' | 'dark', board: boolean, lensPlain: boolean) =>
-    ({ [SETTINGS_KEY]: JSON.stringify({ theme, board, lensPlain, autoClock: false, zoomOpen: true, coachDone: { stage: true, sandbox: true } }) });
+    ({ [SETTINGS_KEY]: JSON.stringify({ theme, board, lensPlain, lensV: 1, autoClock: false, zoomOpen: true, coachDone: { stage: true, sandbox: true } }) });
   add('#/c/cpu/0', plainOn('dark', true, true), ' (lens plain, alu, dark board)', undefined, lensPlainDrive('alu', true));
   add('#/c/cpu/0', plainOn('light', false, true), ' (lens plain, alu, light canvas)', undefined, lensPlainDrive('alu', true));
   add('#/c/cpu/0', plainOn('light', true, false), ' (lens plain off, alu)', undefined, lensPlainDrive('alu', false));
@@ -1632,12 +1718,13 @@ function routes(): Route[] {
     add(comp, { ...lensOff, [SANDBOX_KEY]: ex.json }, ' (look inside, zoom lens off)', undefined, lensInsideDrive('cpu', 'alu', false));
   }
   // a touch screen (DESIGN.md item 6): pinches onto the control unit open its inside like the wheel and a tap on a small inner
-  // part steps in, at both phone widths in both themes; at its default (null) nothing opens
+  // part steps in, at both phone widths in both themes; at its default (on since 2026-11-13) it opens, turned off nothing does
   for (const vp of TOUCH_VIEWPORTS) for (const theme of ['light', 'dark'] as const) add('#/c/cpu/0', lensOn(theme), ` (zoom lens, ${vp.name}, ${theme})`, vp, lensPinchDrive('open', 'ctl'));
   // the fingers on an open inside: a closing pinch, then one spreading to the hand-off, nothing moving under them
   // alu's inside fills its box; pc's is a narrow column in a wider box (fingers on its margin step in all the same)
   for (const vp of TOUCH_VIEWPORTS) for (const part of ['alu', 'pc']) add('#/c/cpu/0', lensOn(vp === TOUCH_VIEWPORTS[0] ? 'light' : 'dark'), ` (zoom lens, fingers on an inside, ${part}, ${vp.name})`, vp, lensTouchDrive(part));
-  add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens at its default, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('off', 'ctl'));
+  add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens at its default, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('open', 'ctl'));
+  add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, zoomOpen: false, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens off, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('off', 'ctl'));
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
   // The layout lock: locked by default on a touch screen, unlocked with a mouse; an arrangement of an older drawing set aside.
   add('#/workbench/xor', light, ` (layout lock, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], layoutDrive('touch'));
@@ -1968,9 +2055,15 @@ const STUDIO_LABELS = `(() => {
     const v = view.getBoundingClientRect(), tools = view.querySelector('.r3-tools');
     const tr = tools && tools.offsetWidth ? tools.getBoundingClientRect() : null;
     const names = [...st.querySelectorAll('.st-gutter .st-lbl')].filter((e) => e.offsetParent && e.style.display !== 'none');
+    // a name slides to its place (transition: transform 120 ms, studio3d.css) and the spread only keeps the places apart:
+    // measured mid-slide two can overlap for a frame (the CRT's codex route, once). Read where they are going, not where they are.
+    for (const e of names) e.style.transition = 'none';
+    void st.offsetWidth;
+    const at = names.map((e) => e.getBoundingClientRect());
+    for (const e of names) e.style.transition = '';
     for (const [i, a] of names.entries()) {
       if (a.scrollWidth > a.clientWidth + 1) out.push('3D name cut in its gutter: ' + a.textContent);
-      for (const b of names.slice(i + 1)) if (a.parentElement === b.parentElement && hit(a.getBoundingClientRect(), b.getBoundingClientRect(), 0, -1)) out.push('3D names touch: ' + a.textContent + ' / ' + b.textContent);
+      for (const [j, b] of names.entries()) if (j > i && a.parentElement === b.parentElement && hit(at[i], at[j], 0, -1)) out.push('3D names touch: ' + a.textContent + ' / ' + b.textContent);
     }
     const badges = [...st.querySelectorAll('.st-badge')].filter((e) => e.offsetParent && e.style.display !== 'none').map((e) => ({ t: e.textContent, r: e.getBoundingClientRect() }));
     for (const [i, a] of badges.entries()) {

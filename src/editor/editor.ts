@@ -22,6 +22,7 @@ import { showKeySheet } from '../ui/keyhelp';
 import { settings } from '../ui/settings';
 import { type PlaceMode, placeMode } from '../ui/wording';
 import { closePopover } from '../view/popover';
+import { panToShow, type Rect } from '../view/camera';
 import { type Compiled, type Diag, diagText } from './compile';
 import { addFolder, findFolder, folderGroups, moveToFolder, newFolderName, renameFolder } from './folders';
 import { History } from './history';
@@ -280,6 +281,8 @@ export class Editor {
     this.props = new PropsPanel(this);
 
     this.tabs = h('div', { class: 'sb-tabs', role: 'group', 'aria-label': 'Open chips' });
+    // tabs scrolled off to the left leave a sliver of the first one: a fade says there is more (S-6)
+    this.tabs.addEventListener('scroll', () => this.tabEdges(), { passive: true });
     this.actionsEl = h('div', { class: 'sb-actions' });
     this.moreBtn = h('button', { class: 'btn ghost sm sb-more', title: 'More tools', 'aria-label': 'More tools', 'aria-haspopup': 'menu', 'aria-expanded': 'false', hidden: true,
       onclick: () => this.toggleMore() }, icon('more', 16), h('span', null, 'More')) as HTMLButtonElement;
@@ -317,6 +320,11 @@ export class Editor {
         // a pane beside the canvas (state machine, truth table, tests) opened, hid or was dragged: a view still as
         // fitted follows the room it has (a zoomed or panned one keeps what the learner chose)
         this.fitView();
+      } else if (this.canvas.clientWidth > 0) {
+        // a zoomed or panned view (or one held while the test player opens) keeps its scale and top-left corner:
+        // without this the svg letterboxes the old view box into the new size and everything shrinks and slides
+        this.view.cam.resized();
+        this.settleHold();
       }
     });
     this.resize.observe(this.canvas);
@@ -769,6 +777,48 @@ export class Editor {
     this.view.fit(this.defOf, parseFloat(this.slots.overlay.style.getPropertyValue('--dock-space')) || 0);
   }
 
+  /** The camera held while a panel opens under the canvas: was the view the fitted one, the view box it settled
+   *  to (to tell whether the learner moved it since), and the rectangles to keep in view once it has. */
+  private hold: { fitted: boolean; vb: { x: number; y: number; px: number } | null; show: (() => Rect[]) | null } | null = null;
+
+  /**
+   * A panel is about to open under the canvas (the test player): nothing on screen moves. The camera keeps its origin
+   * and scale through the resize (the bottom edge simply comes up), then pans once, never zooms, if `show`'s
+   * rectangles (the failing pins) would be out of view. releaseView() refits a view nobody touched meanwhile.
+   */
+  holdView(show?: () => Rect[]): void {
+    const cam = this.view.cam;
+    if (!this.hold) this.hold = { fitted: cam.fitted, vb: null, show: null };
+    this.hold.show = show ?? null;
+    this.hold.vb = null;
+    cam.fitted = false;
+    // no resize at all (the panel had the same height already): settle on the next frame anyway
+    requestAnimationFrame(() => requestAnimationFrame(() => this.settleHold()));
+  }
+
+  private settleHold(): void {
+    const hd = this.hold;
+    if (!hd || hd.vb) return;
+    const cam = this.view.cam;
+    if (hd.show) {
+      const vb = panToShow(cam.vb, hd.show());
+      if (vb !== cam.vb) { cam.vb = vb; cam.apply(); }
+    }
+    hd.vb = { x: cam.vb.x, y: cam.vb.y, px: cam.pxPerUnit() };
+  }
+
+  /** The panel closed: a view that was fitted and that the learner has not moved since is fitted again. */
+  releaseView(): void {
+    const hd = this.hold, cam = this.view.cam;
+    this.hold = null;
+    if (!hd?.fitted || cam.fitted) return;
+    // a later resize keeps the corner and the scale (Camera.resized), so those say whether the learner moved it
+    const v = hd.vb, c = cam.vb, near = (a: number, b: number) => Math.abs(a - b) < 1e-6 * Math.max(1, Math.abs(a));
+    if (v && !(near(v.x, c.x) && near(v.y, c.y) && near(v.px, cam.pxPerUnit()))) return;
+    cam.fitted = true;
+    this.fitView();
+  }
+
   repaint(): void {
     this.view.paint(this.sim.sim ? this.sim : null, this.sim.built);
     this.updateStatus();
@@ -869,8 +919,11 @@ export class Editor {
     this.showActiveTab();
   }
 
+  private tabEdges(): void { this.tabs.classList.toggle('fade-l', this.tabs.scrollLeft > 1); }
+
   /** Scroll the open chip's tab into view, clear of the sticky Open… / New chip group (many tabs scroll). */
   private showActiveTab(): void {
+    queueMicrotask(() => this.tabEdges());
     const t = this.tabs, on = t.querySelector<HTMLElement>('.sb-tab.on');
     // Open… gives way before the chip names: only its count while a tab's name is cut or the strip scrolls (not on a phone,
     // whose one tab always ends in an ellipsis and whose Open… is on a row of its own)

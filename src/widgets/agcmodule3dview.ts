@@ -7,7 +7,6 @@ import { h } from '../ui/dom';
 import { groupNum } from '../sim/numfmt';
 import type { Widget } from '../view/stage';
 import { studioStage } from './studiostage';
-import { keepWidth } from './studiowidth';
 import { AGC_HOME, agcModel, type AgcPose, type AgcView } from './agcmodule3dkit';
 import { ADDER_GATES, ADDER_PACKAGES, GATE_NPN, GATE_RES, MAG, MODULE_GATES, PACKAGES, REG_GATES, REG_PACKAGES, norOut } from './agcmodule3dgeom';
 
@@ -21,6 +20,7 @@ export function agcModuleView(): Widget {
     home: AGC_HOME.module,
     fit: false,
     aspect: 1.45,
+    framedAt: 2.2, // its homes' canvas at 1440 px
     knobs: { cut: 1, explode: 1 },
     limits: { minDist: 6, maxDist: 2400, maxPan: 1200 },
     scaleBar: (len) => (st.view === 'gate' ? `${groupNum(Math.round((len / MAG) * 1000))} µm (die ×${MAG})` : `${groupNum(len)} mm`),
@@ -28,7 +28,6 @@ export function agcModuleView(): Widget {
     noteMore: `The flatpack is to MIT / MSC drawing 1006321 (the dual NOR gate's specification control drawing): body 0.275 × 0.190 in at most, 0.070 in high, ten gold-plated leads 0.050 in apart, a keying stripe at the pin 1 end, pin 5 ground and pin 10 the supply. Two boards of sixty chips, 240 NOR gates a module, and A8–A11 as the four arithmetic modules are from Ken Shirriff's study of the AGC (2019); the module's outline, 5/8 × 9 5/8 × 1 3/4 in, from the Computer History Museum's record of one; the wiring between the boards cast in epoxy, as E. C. Hall (MIT's Role in Project Apollo, 1972, p. 129) says. Typical, and drawn: the packages' spacing on the board, the board's layers (one slab here), the connector's pins, the epoxy's colour, the tray around the modules, the die's size and layout (a gate as R-700 and drawing 2005011 describe it: three NPN transistors, collectors joined under one collector resistor, a base resistor on each input), drawn ${MAG} times life. The adder's packages are the first ${ADDER_PACKAGES} on the board: which ones they are is not known here.`,
     build: (detail) => agcModel(st, detail),
   });
-  const width = keepWidth(stage, 2.2, () => AGC_HOME[st.view]); // its homes' canvas at 1440 px
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
   stage.chips.append(chip);
   function readout(): void {
@@ -50,7 +49,7 @@ export function agcModuleView(): Widget {
   }
   const paint = () => { stage.refresh(); readout(); };
   const btn = (label: string, fn: () => void, aria?: string) => { const b = h('button', { type: 'button', class: 'btn sm', ...(aria ? { 'aria-label': aria } : {}) }, label) as HTMLButtonElement; b.addEventListener('click', fn); return b; };
-  const setView = (v: AgcView) => { st.view = v; panel.dataset.view = v; paint(); stage.goTo(width.scaled(AGC_HOME[v])); };
+  const setView = (v: AgcView) => { st.view = v; panel.dataset.view = v; paint(); stage.goTo(AGC_HOME[v]); };
   const viewBtns = VIEWS.map(([v, label]) => btn(label, () => setView(v)));
   const inBtns = [0, 1, 2].map((i) => btn('', () => {
     st.ins[i] = st.ins[i] ? 0 : 1; paint();
@@ -71,5 +70,5 @@ export function agcModuleView(): Widget {
       h('div', { class: 'r3-main' }, stage.el),
       h('div', { class: 'r3-side' }, h('h4', null, 'Counted ', h('span', { class: 'r3-badge' }, 'model')), kv)));
   readout();
-  return { el: panel, destroy() { width.stop(); stage.destroy(); } };
+  return { el: panel, destroy() { stage.destroy(); } };
 }

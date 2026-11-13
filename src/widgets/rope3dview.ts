@@ -9,7 +9,6 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
 import { studioStage } from './studiostage';
-import { keepWidth } from './studiowidth';
 import { ROPE_HOME, ropeModel } from './rope3dkit';
 import {
   BITS, CORES, FIXED_WORDS, MODULE_CORES, MODULES, SENSE_LINES, STRANDS, UNIT_MM, WORDS, WORDS_PER_CORE, WORD_BITS,
@@ -29,11 +28,12 @@ export function ropeView(): Widget {
     home: ROPE_HOME.close,
     fit: false,
     aspect: 1.6,
+    framedAt: 2.2, // its homes' canvas at 1440 px
     limits: { minDist: 60, maxDist: 1400, maxPan: 400 },
     scaleBar: (len) => `${groupNum(len * UNIT_MM)} mm`,
     note: 'From R-700 vol. III and Ken Shirriff’s 2019 study of a Block II rope: cores of permalloy ribbon on steel bobbins 0.249 in across, 512 a module in two layers of 32 × 8, 192 sense wires past each core (12 words of 16 bits), an inhibit pair per address bit. Drawn: 8 of the 512 cores, spread far apart so the wires can be followed; 2 of the 12 strands with 4 of their 16 wires; 3 of the 8 inhibit pairs; one set and one reset wire. The bobbin’s hole, flanges and length, the wire gauge, the frame the cores stand in and the cores’ 8 mm pitch in the module are not sourced: they are guesses, so is the module’s outline. The contents are an example pattern. In a real rope a core holds fewer than 192 threading wires (parity: at most 180).',
     build: (detail) => ropeModel(st, detail),
-  });  const width = keepWidth(stage, 2.2, () => ROPE_HOME[st.module ? 'module' : 'close']); // its homes' canvas at 1440 px
+  });
 
   function paint(): void { stage.refresh(); }
 
@@ -77,7 +77,7 @@ export function ropeView(): Widget {
   const strandBtns = Array.from({ length: STRANDS }, (_, i) => btn(String(i), () => { st.strand = i; read = null; readout(); paint(); }, `Strand ${i}`));
   const setView = (module: boolean) => {
     st.module = module; st.phase = 'idle'; panel.dataset.view = module ? 'module' : 'close';
-    readout(); paint(); stage.goTo(width.scaled(ROPE_HOME[module ? 'module' : 'close']));
+    readout(); paint(); stage.goTo(ROPE_HOME[module ? 'module' : 'close']);
   };
   const viewBtns = [btn('Eight cores', () => setView(false)), btn('The module', () => setView(true), 'Zoom out: the module the eight cores come from')];
 
@@ -94,5 +94,5 @@ export function ropeView(): Widget {
       h('div', { class: 'r3-main' }, stage.el),
       h('div', { class: 'r3-side' }, h('h4', null, 'This read ', h('span', { class: 'r3-badge' }, 'model')), kv)));
   readout(); paint();
-  return { el: panel, destroy() { width.stop(); loop.stop(); stage.destroy(); } };
+  return { el: panel, destroy() { loop.stop(); stage.destroy(); } };
 }

@@ -70,7 +70,7 @@ export const smallSig1 = (): ComponentDef => sigma('sha_ssig1', 'σ1', 'σ1(x) =
 export function shaCh(): ComponentDef {
   return memo('sha_ch', () => {
     const b = new Builder(8, 12, 8);
-    b.maxH = 220;
+    b.maxH = 100; // the 32 multiplexers in columns of eight beside the splitters: one column of 32 was 216 units tall, 2.8 px a unit at fit
     b.pins('e', 'f', 'g');
     const se = b.op(splitter(W32), ['e']), sf = b.op(splitter(W32), ['f']), sg = b.op(splitter(W32), ['g']);
     b.next();
@@ -108,7 +108,7 @@ export const maj1 = (): ComponentDef => memo('sha_maj1', () => {
 export function shaMaj(): ComponentDef {
   return memo('sha_maj', () => {
     const b = new Builder(8, 12, 2);
-    b.maxH = 220;
+    b.maxH = 80; // columns of eight: one column of 32 was 218 units tall, 2.8 px a unit at fit
     b.pins('a', 'b', 'c');
     const sa = b.op(splitter(W32), ['a']), sb = b.op(splitter(W32), ['b']), sc = b.op(splitter(W32), ['c']);
     b.next();
