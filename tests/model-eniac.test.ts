@@ -9,7 +9,7 @@ import { ENIAC } from '../src/phys/triode';
 import {
   ACCUMULATORS, DIGITS, PITCH, RING_TRIODES, STAGES, TUBES_PER_DIGIT, UNIT_L, after, oneHot, pulse, stageX, zero,
 } from '../src/widgets/eniac3dgeom';
-import { eniacModel } from '../src/widgets/eniac3dkit';
+import { eniacModel, sectionX } from '../src/widgets/eniac3dkit';
 
 const out = (s: Sim, p: string) => { let v = 0; s.getBits(s.design.root.ports[p]).forEach((b: number, i: number) => { if (b === 1) v |= 1 << i; }); return v; };
 const set = (s: Sim, v: Record<string, number>) => { for (const [k, x] of Object.entries(v)) s.setInput(k, x); s.settle(); };
@@ -58,6 +58,14 @@ describe('ENIAC\'s decade ring', () => {
     expect(carry(false)).toBeFalsy();
     expect(carry(true, pulse(after(40)))).toBeFalsy(); // 40 → 41 carries nothing
     expect(m.items.filter((i) => i.name?.startsWith('6SN7: stage') && i.info).length).toBe(2 * STAGES);
+    // the conducting half of each tube: the "1" side only in the stage that holds the digit
+    const cond = m.items.filter((i) => i.group === 'units decade' && i.mat.label?.startsWith('conducting triode'));
+    expect(cond.length).toBe(STAGES);
+    for (const c of cond) {
+      const s = Number(c.name!.split(' ').pop()), holds = s === d.digits[0];
+      expect(c.at![0] - stageX(s)).toBeCloseTo(sectionX(holds), 6);
+      expect(c.mat.label!.includes('"1" side')).toBe(holds);
+    }
     expect((m.beats ?? []).length).toBeGreaterThanOrEqual(4);
     expect(eniacModel({ d, pulsing: false }, 'flat').items.length).toBeGreaterThan(0);
   });
