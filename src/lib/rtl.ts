@@ -36,6 +36,11 @@ export const RTL_SPLITS: ComponentDef[] = [];
 
 /** The gates split() moves into next state / outputs; any other part (a CRC unit, a counter) stays a box where it was. */
 const PLAIN = new Set<ComponentDef>([NAND, NOT, AND, OR, NOR, XOR, XNOR, MUX2, TIE0, TIE1]);
+/** A signal's number standing for its name (fresh(): n<id>, a clash n<id>_<id>), and the words a gate gives the signal it drives. */
+const AUTO_NAME = /^n\d+(_\d+)*$/;
+const OP_WORD = new Map<ComponentDef, string>([[NAND, 'nand'], [NOT, 'not'], [AND, 'and'], [OR, 'or'], [NOR, 'nor'], [XOR, 'xor'], [XNOR, 'xnor'], [MUX2, 'mux']]);
+/** A boundary name made from its gate is at most this long: longer ones collide as pointer labels across the narrow gaps. */
+const NAME_MAX = 10;
 
 /** A block with at least this many gates of its own, flip-flops among them, is drawn as next state, state register and outputs. */
 export const SPLIT_MIN = 40;
@@ -271,6 +276,30 @@ export class Rtl {
     return { imp, exp };
   }
 
+  /**
+   * A signal nobody named that crosses a block's edge is a pin of that block: it gets a name from the gate driving it and
+   * that gate's named inputs, "and_busy_go" (else "and_busy") rather than "n958". Never cut short: a name longer than
+   * NAME_MAX and the design's longest (so no column gap, sized for two names, grows) is not used, and a signal with no
+   * such name keeps its number.
+   */
+  private nameBoundaries(imp: Set<Sig>[], exp: Set<Sig>[]): void {
+    const live = this.names.filter((_, i) => this.alias[i] === i), L = Math.min(NAME_MAX, Math.max(4, ...live.map((nm) => nm.length)));
+    const byOut = new Map<Sig, Gate>();
+    for (const g of this.gates) for (const o of g.out) byOut.set(this.root(o), g);
+    const edge = new Set<Sig>();
+    for (let k = 1; k < this.scopes.length; k++) for (const set of [imp[k], exp[k]]) for (const s of set) edge.add(this.root(s));
+    for (const s of [...edge].sort((a, b) => a - b)) {
+      if (!AUTO_NAME.test(this.names[s])) continue;
+      const g = byOut.get(s), op = g && OP_WORD.get(g.def);
+      if (!op) continue;
+      const ins = [...new Set(g!.ins.map((x) => this.names[this.root(x)]).filter((nm) => !AUTO_NAME.test(nm)))];
+      const nm = [ins, ins.slice(0, 1)].map((xs) => `${op}_${xs.join('_')}`).find((t) => ins.length && t.length <= L && !this.used.has(t));
+      if (!nm) continue;
+      this.used.add(nm);
+      this.names[s] = nm;
+    }
+  }
+
   /** d and q of each register of a split block, by register: ports of the three blocks line up in this order. */
   private regRank = new Map<Sig, number>();
 
@@ -411,8 +440,21 @@ export class Rtl {
     const R = x - gapW;
     const ports: PortDef[] = [];
     const pins: Record<string, [number, number]> = {};
-    importList.forEach((s, i) => { ports.push({ name: netName(s), width: 1, dir: 'in', ...(this.clocks.has(netName(s)) ? { side: 'bottom' as const, clock: true } : {}) }); pins[netName(s)] = [0, 2 + 2 * i]; });
-    exportList.forEach((s, i) => { ports.push({ name: netName(s), width: 1, dir: 'out' }); pins[netName(s)] = [R, 2 + 2 * i]; });
+    // a pin at the height of the port it feeds in the first column (an input) or comes from in the last (an output), so its
+    // wire runs straight; in that order, two units apart at least, the rest (a pointer) after them
+    const portY = (bl: Block, p: string) => instances[blocks.indexOf(bl)].at![1] + symbolGeom(bl.def).ports[p].pos[1];
+    const place = (list: Sig[], at: (s: Sig) => number | null, x: number) => {
+      const want = list.map((s, i) => ({ s, i, y: at(s) }));
+      const ord = [...want.filter((w) => w.y !== null).sort((a, b) => a.y! - b.y! || a.i - b.i), ...want.filter((w) => w.y === null)];
+      let y = 0;
+      for (const w of ord) { y = Math.max(y + 2, w.y ?? 0, 2); pins[netName(w.s)] = [x, y]; }
+    };
+    const firstIn = (s: Sig) => { for (const bl of blocks) if (bl.col === 0) for (const [p, x] of bl.ins) if (x === s) return portY(bl, p); return null; };
+    const lastOut = (s: Sig) => { for (const bl of blocks) if (bl.col === col - 1) for (const [p, x] of bl.outs) if (x === s) return portY(bl, p); return null; };
+    importList.forEach((s) => ports.push({ name: netName(s), width: 1, dir: 'in', ...(this.clocks.has(netName(s)) ? { side: 'bottom' as const, clock: true } : {}) }));
+    exportList.forEach((s) => ports.push({ name: netName(s), width: 1, dir: 'out' }));
+    place(importList, firstIn, 0);
+    place(exportList, lastOut, R);
     const drv = new Map<Sig, { end: string; col: number }>();
     for (const s of importList) drv.set(s, { end: netName(s), col: -1 });
     for (const bl of blocks) for (const [p, s] of bl.outs) drv.set(s, { end: `${bl.name}.${p}`, col: bl.col });
@@ -449,6 +491,7 @@ export class Rtl {
     if (this.pending.size) throw new Error(`${this.opt.id}: a register has no d`);
     if (!this.opt.noSplit) for (const sc of [...this.scopes]) this.split(sc);
     const { imp, exp } = this.plumbing();
+    this.nameBoundaries(imp, exp);
     const built = new Map<number, ComponentDef>();
     const rootOf = (s: Sig) => this.root(s);
 
