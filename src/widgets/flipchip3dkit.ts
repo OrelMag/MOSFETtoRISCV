@@ -72,7 +72,7 @@ export const MATS = {
   glue: mat({ base: '--fc-glue', metal: 0, rough: 0.7, label: 'lid adhesive' }),
   capBody: mat({ ...M.ceramic, base: '--fc-cap', label: 'multilayer ceramic capacitor' }),
   capEnd: mat({ ...M.nickel, label: 'capacitor terminal' }),
-  board: mat({ base: '--fc-board', metal: 0, rough: 0.55, coat: 0.3, label: 'circuit board (FR-4 under solder mask)' }),
+  board: mat({ base: '--fc-board', metal: 0, rough: 0.85, label: 'circuit board (FR-4 under solder mask)' }),
   heat: M.beam('--fc-heat', 1.3, 'heat, flowing up'),
 };
 
@@ -217,7 +217,7 @@ export function fcModel(st: FcState = {}, detail: 'full' | 'flat' = 'full'): Mod
   const beats: Beat[] = [
     { title: 'A package on its balls', text: `A 37.5 mm square on ${BALLS.toLocaleString('en')} solder balls at 0.92 mm pitch, under a copper lid: AMD’s Versal VFVC1596, to scale. Nothing on the outside shows the die or how it is wired.`, view: v(0.55, 0.4, [0, 1.5, 0], 70), frame: ['lid', 'substrate', 'balls'], explode: 0, cut: 0, hide: ['heat'] },
     { title: 'Under the lid', text: 'Lift the lid: the die lies on a substrate, its back under a thin thermal interface that the lid presses on. No bond wires anywhere: the die is upside down.', view: v(0.55, 0.62, [0, 3, 0], 60), frame: ['die', 'tim', 'substrate', 'lid'], explode: 1, cut: 0, hide: ['heat'] },
-    { title: 'Cut open', text: 'A quarter cut through a ball column. From the top: lid, TIM, the die face down, its bumps in underfill, a substrate of copper planes in dielectric round a core, the balls, the board. Under the die’s middle, where balls are left out, decoupling capacitors.', view: v(0.78, 0.26, [CUT, 1.5, CUT], 30), frame: ['die', 'underfill', 'tim', 'caps'], explode: 0, cut: 1, hide: ['heat'] },
+    { title: 'Cut open', text: 'A quarter cut through a ball column. From the top: lid, TIM, the die face down, its bumps in underfill, a substrate of copper planes in dielectric round a core, the balls, the board. Under the die’s middle, where balls are left out, decoupling capacitors.', view: v(0.78, 0.26, [CUT, 1.5, CUT], 30), frame: ['die', 'tim'], explode: 0, cut: 1, hide: ['heat'] },
     { title: 'A bump beside a ball', text: `One bump is ${Math.round(BUMP.h * 1000)} µm tall at ${Math.round(BUMP.pitch * 1000)} µm pitch, under every part of the die’s face: about ${BUMPS.toLocaleString('en')} of them. The ball below is ${BALL_D} mm across. The SOIC’s bond wire, at 2.8 mm, is forty bumps long: the bump’s inductance is a few hundredths of a nanohenry against the wire’s 3 nH.`, view: v(1.4, 0.1, [CUT, 1.35, ballPos(29) - 0.3], 4.2), explode: 0, cut: 1, labels: false, hide: ['heat'] },
     { title: 'Heat goes up', text: 'Most of the power leaves through the die’s back, the TIM and the lid to a heat sink. Each layer adds t / (k·A); the polymer TIM, a twentieth of a millimetre, adds the most. Move the power and read the rise.', view: v(0.55, 0.35, [0, 2.5, 0], 55), frame: ['die', 'tim', 'lid'], explode: 0, cut: 1, hide: [] },
   ];

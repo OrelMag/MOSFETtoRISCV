@@ -8,7 +8,7 @@
   --fc-lid: light-dark(#c9ccd2, #a9adb6);
   --fc-glue: light-dark(#6b6b66, #55554f);
   --fc-cap: light-dark(#c8a77a, #a88a60);
-  --fc-board: light-dark(#2f6e4a, #24563a);
+  --fc-board: light-dark(#7d8f84, #34413a);   /* a muted base: the package is the subject */
   --fc-heat: light-dark(#e0542c, #ff7a4a);
 }
 /* the canvas takes the whole column; the readout sits under it */
