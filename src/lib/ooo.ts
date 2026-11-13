@@ -514,15 +514,12 @@ export function issueQueue(P: number, tw = TAG, Q = 8, S = 4): ComponentDef {
 function iqDrawing(b: Builder, Q: number, PC: number, ins: string[], outs: string[]) {
   const P = new Placer(b.instances), raw = b.nets();
   const top = P.cols('alloc', 10, 2, [['slot0', 'slot1'], ['valid'], ['free'], ['low0', 'nl0'], ['rest'], ['low1'], ['f0', 'f1', 'for1'], ['A0', 'A1'], ['a0s', 'a1s'], ['age']], 14, 4);
-  // the inputs every entry reads (the result buses, the store-done mask, flush, clk) come in along the bottom and rise on
-  // trunks beside each column of entries, TR units of room
-  const SH = ['bv0', 'bt0', 'bx0', 'bv1', 'bt1', 'bx1', 'sdone', 'flush', 'clk'], TR = 2 * SH.length + 6;
-  const DX = 12, ROWS = Math.ceil(Q / 2), ROWH = 54, Y0 = top.bottom + 12, CW = 72 + 6 * DX + TR;
+  const DX = 12, ROWS = Math.ceil(Q / 2), ROWH = 54, Y0 = top.bottom + 12, CW = 72 + 6 * DX;
   // an entry's outputs on its right: valid 15, ready 17, portQ 19, loadQ 21, divQ 23, lat2Q 25 (opA, opB, payQ below): the
   // candidate chain runs left to right above them (bus free → not → or lat2 → divider mux → and ready → per port), each
   // gate taking its entry signal from below
   for (let e = 0; e < Q; e++) {
-    const g = `row${e}`, x = 24 + Math.floor(e / ROWS) * CW, y = Y0 + (e % ROWS) * ROWH, ex = x + 20 + TR, E = ex + 22;
+    const g = `row${e}`, x = 24 + Math.floor(e / ROWS) * CW, y = Y0 + (e % ROWS) * ROWH, ex = x + 20, E = ex + 22;
     P.put(g, `al${e}`, x, y - 2);
     P.put(g, `in${e}`, x, y + 12);
     P.put(g, `nf${e}`, ex - 6, y + 3);
@@ -554,9 +551,7 @@ function iqDrawing(b: Builder, Q: number, PC: number, ins: string[], outs: strin
   }
   const right = Math.max(...b.instances.map((i) => P.right(i.name))) + 20;
   const pins: Record<string, At> = {};
-  const yb = Math.max(...b.instances.map((i) => i.at![1] + symbolGeom(i.def).h)) + 6, line = (k: number) => yb + 2 * k;
-  ins.filter((n) => !SH.includes(n)).forEach((n, i) => (pins[n] = [0, Y0 + 2 * i]));
-  SH.forEach((n, k) => (pins[n] = [0, line(k)]));
+  ins.forEach((n, i) => (pins[n] = [0, Y0 + 2 * i]));
   outs.forEach((n, i) => (pins[n] = [right, Y0 + 2 * i]));
   // a fan-out within one row or block, every sink to the right of its driver, is wired too
   const wired = new Set<string>(), instOf = (e: string) => (e.includes('.') ? e.slice(0, e.indexOf('.')) : '');
@@ -564,20 +559,7 @@ function iqDrawing(b: Builder, Q: number, PC: number, ins: string[], outs: strin
     const d = instOf(nt.ends[0]), sinks = nt.ends.slice(1);
     if (d && d !== 'free' && sinks.length > 1 && sinks.every((t) => { const si = instOf(t); return si && P.group.get(si) === P.group.get(d) && P.x(si) >= P.right(d); })) for (const t of sinks) wired.add(`${nt.ends[0]}>${t}`);
   }
-  const eg = symbolGeom(b.instances.find((i) => i.name === 'e0')!.def);
-  const nets = (placedNets(P, raw, { wired }) as NetDef[]).map((nt) => {
-    const k = SH.indexOf(nt.ends[0]);
-    if (k < 0) return nt;
-    const via: Record<string, At[]> = {}, far: string[] = [];
-    for (const t of nt.ends.slice(1)) {
-      const m = /^e(\d+)\.(.+)$/.exec(t);
-      if (!m) { far.push(t); continue; }
-      const e = +m[1], xT = 24 + Math.floor(e / ROWS) * CW + 20 + 2 * k, at = P.at.get(`e${e}`)!;
-      via[t] = [[xT, line(k)], [xT, at[1] + eg.ports[m[2]].pos[1]]];
-    }
-    return { name: nt.name, ends: nt.ends, via, ...(far.length ? { tags: far } : {}) };
-  });
-  return { pins, instances: b.instances, nets };
+  return { pins, instances: b.instances, nets: placedNets(P, raw, { wired }) as NetDef[] };
 }
 
 /** n inverters side by side. */
