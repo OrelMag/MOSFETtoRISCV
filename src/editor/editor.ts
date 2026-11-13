@@ -280,6 +280,8 @@ export class Editor {
     this.props = new PropsPanel(this);
 
     this.tabs = h('div', { class: 'sb-tabs', role: 'group', 'aria-label': 'Open chips' });
+    // tabs scrolled off to the left leave a sliver of the first one: a fade says there is more (S-6)
+    this.tabs.addEventListener('scroll', () => this.tabEdges(), { passive: true });
     this.actionsEl = h('div', { class: 'sb-actions' });
     this.moreBtn = h('button', { class: 'btn ghost sm sb-more', title: 'More tools', 'aria-label': 'More tools', 'aria-haspopup': 'menu', 'aria-expanded': 'false', hidden: true,
       onclick: () => this.toggleMore() }, icon('more', 16), h('span', null, 'More')) as HTMLButtonElement;
@@ -869,8 +871,11 @@ export class Editor {
     this.showActiveTab();
   }
 
+  private tabEdges(): void { this.tabs.classList.toggle('fade-l', this.tabs.scrollLeft > 1); }
+
   /** Scroll the open chip's tab into view, clear of the sticky Open… / New chip group (many tabs scroll). */
   private showActiveTab(): void {
+    queueMicrotask(() => this.tabEdges());
     const t = this.tabs, on = t.querySelector<HTMLElement>('.sb-tab.on');
     // Open… gives way before the chip names: only its count while a tab's name is cut or the strip scrolls (not on a phone,
     // whose one tab always ends in an ellipsis and whose Open… is on a row of its own)
