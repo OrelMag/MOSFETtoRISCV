@@ -5,6 +5,7 @@ import { chipLayoutWidget } from '../widgets/chiplayout';
 import { journeyWidget } from '../widgets/journey';
 import { cell3d } from '../widgets/cell3d';
 import { masks3d } from '../widgets/masks3d';
+import { finfet3d } from '../widgets/finfet3d';
 import { withModel } from '../widgets/modelhost';
 import { clockTreeWidget, fabWidget, floorplanWidget, mappingWidget, pnrWidget, waferWidget } from '../widgets/silicon';
 import { cabinetCounts, hallFacts, periodIn } from '../lib/hall';
@@ -341,7 +342,7 @@ export const chSilicon: Chapter = {
         <div class="try">Switch to the system core: find the block sky130 builds far smaller than our NAND count, and the one it builds larger. Then compare where the two critical paths run.</div>
         <p>What the table checks is the model. Our NAND count, our unit delay and our hierarchy came from a course that never mentioned a layout; here the same design is measured on silicon rules. The agreement is
         approximate, and the gaps are the finding: they say which of our simplifications (a NAND as the only cell, a gate delay as the only delay, wires as free) cost the most.</p>`,
-      widget: chipLayoutWidget,
+      widget: () => withModel(chipLayoutWidget(), finfet3d()),
       more: {
         derive: `<p>The conversion between the two timing scales: if the real critical path takes t ns after routing and ours is d unit delays, one of our delays is worth t / d in that process. Applied to every
           path of the design it predicts how fast the design would run if the unit-delay model held; the difference from the measured path is the cost of wires and load, which a unit-delay model does not carry.</p>`,

@@ -74,6 +74,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./masks3d').then((m) => m.masks3d()),
   },
   {
+    id: 'finfet', title: 'Planar, fin and nanosheet', category: 'devices', chapter: 'silicon', step: 6,
+    summary: 'Three transistors cut across the gate: one side gated, three (Intel 22 nm fins), four (IBM 2 nm sheets), and what each leaks.',
+    files: ['finfet3d', 'finfet3dview', 'finfet3dkit'], factory: 'finfet3d', codex: ['cmos'],
+    open: () => import('./finfet3d').then((m) => m.finfet3d()),
+  },
+  {
     id: 'package', title: 'A package, opened up', category: 'devices', chapter: 'wire', step: 8,
     summary: 'Die, pads, bond wires, lead frame and board, with the ground bounce that more ground wires divide.',
     files: ['package3d', 'package3dview', 'package3dparts'], factory: 'package3d',
