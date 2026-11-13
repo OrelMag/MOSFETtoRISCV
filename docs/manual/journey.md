@@ -96,6 +96,10 @@ That is the whole pattern of every chapter: read, try the circuit, open what you
    question or level needs it.
 4. To jump anywhere, click the chapter title (or **Chapters** in the top bar): the menu lists every chapter with its
    number of steps and how far you got, and has a search box at its top.
+5. A long chapter is cut into parts. Its bar of dots is grouped into segments, one per part, with a line such as
+   *Part 1 of 6 · 0 / 23 checks · core path 24 steps* under it ("core path": the steps that are not deep dives). Click
+   **⌄** at the line's end to list the parts (for example **Shift and add**, **Dividing**, **In the CPU**) with their
+   steps; click a step to go there.
 
 ![The chapter menu: a search box, Print this chapter, then the chapters by section](img/journey/14-chapter-menu.png)
 
@@ -208,8 +212,15 @@ Steps with a processor have a CPU panel on the right of the circuit.
    instruction set.
 4. Click a line of the program to light the hardware that instruction uses. Click just left of an address (its
    **Breakpoint** button) to stop a run when that instruction is reached.
-5. Under the circuit, the clock bar has **Pulse** (one clock cycle), **Run** (runs the clock), **Step back**, **Step**
+5. Under the program, **FIELDS** shows the selected instruction's bits split into its fields (point at a field to
+   light its wires), and **NARRATE** tells the last instruction unit by unit.
+6. Under the circuit, the clock bar has **Pulse** (one clock cycle), **Run** (runs the clock), **Step back**, **Step**
    and **Reset**.
+
+### Watch a memory's contents
+
+On a step whose circuit holds a memory or a register file, a **Memory contents** panel beside the circuit lists every
+word with its value, live (for example *8 × 8 bits*: **x0** to **x7**). It changes as the circuit writes.
 
 ### Look at a 3D model
 
@@ -235,8 +246,10 @@ These are the buttons on the bar above the circuit, left to right after the leve
   probes and clock cycles).
 - **Layout**: unravel named labels into wires, or reset this level. You can drag parts and wires to tidy a drawing;
   **Lock the layout** (the padlock) stops that, so a drag pans instead.
-- **Probe** (**P**): click wires to add them to the timing diagram. **Timing diagram** shows every probed wire over
-  time.
+- **Probe** (**P**): click wires to add them to the timing diagram. The first probe opens the timing panel under the
+  circuit: every probed wire over time, with **Live**, **Fit everything recorded**, **Clear the recording**, **Clear
+  probes**, **VCD** (the recording as a file other waveform viewers read) and **×** to close it. **Timing diagram** on
+  the bar opens and closes the panel.
 - **Why?** (**W**): click a wire to trace its value back to the inputs that decide it, or see what each part is for.
 - **Overlay**: one quantity drawn over the whole circuit: **Slack**, **Activity**, **Load**, **Unknown**, **Cost**,
   **Energy**, **Depth** (**O** cycles through them, **Shift O** turns it off).
