@@ -97,7 +97,7 @@ of this page covers every control.
   - **The bar above**, from left to right:
     - the part's name, and the path when you are inside it;
     - **Open in Sandbox** (the chip icon);
-    - **Share** (the picture icon);
+    - **Share this view** (the picture icon);
     - **Layout** (the four arrows);
     - **Lock the layout** (the padlock);
     - **Probe** (P);
@@ -276,13 +276,13 @@ Moving parts changes only the drawing, never the circuit.
 
 ### Save an image or share a link
 
-1. Click **Share** (the picture icon) on the bar.
+1. Click **Share this view** (the picture icon) on the bar.
    - **Image as SVG**: this level, whole, as drawn in your current theme.
    - **Image as PNG**: the same at 2× resolution.
    - **Copy link to this view**: a link that reopens this part with the same opened level, inputs, probes and clock
      cycles.
 
-![The Share menu](img/workbench/15-share-menu.png)
+![The Share this view menu](img/workbench/15-share-menu.png)
 
 ### Open a copy in the Sandbox
 
