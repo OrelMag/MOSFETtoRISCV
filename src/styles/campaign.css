@@ -87,7 +87,7 @@
 
 /* As tall as the map pane beside it (its scroller: 100vh - topbar - 150px), so its foot, the action bar, is on screen
    before the page is scrolled too. */
-.cp-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; position: sticky; top: 8px; max-height: calc(100vh - var(--topbar-h) - 108px); overflow: auto; }
+.cp-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; position: sticky; top: 8px; max-height: calc(100vh - var(--topbar-h) - 190px); overflow: auto; }
 .cp-panel h2 { margin: 2px 0 6px; font-size: 20px; }
 .cp-panel h3 { margin: 14px 0 6px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); }
 .cp-panel p, .cp-panel li { line-height: 1.5; font-size: 14px; }

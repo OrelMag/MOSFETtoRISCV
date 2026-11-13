@@ -477,6 +477,7 @@ export class Tools {
     if (ed.selCount > 1) ed.select(selOf(h));
     // A click on the name of what was already selected: type a new one.
     if (st.was && st.name && ed.selCount <= 1) return this.rename(h);
+    if (h.k === 'pin' && st.name) return; // a first click on the name only selects it: the double-click renames, the input stays (S-2)
     if (h.k === 'pin') return void this.pinAction(h.id, new DOMRect(e.clientX, e.clientY, 0, 0));
     if (h.k === 'part' && this.flipSwitchAt(h.id, st.at)) return;
     if (h.k === 'label' && st.was) this.jump(h.id);

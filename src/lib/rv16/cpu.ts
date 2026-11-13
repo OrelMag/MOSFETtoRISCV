@@ -14,7 +14,7 @@ import { AND, MUX2, NOT, OR, XOR } from '../gates';
 import { orN } from '../wide';
 import { TIE0 } from '../transistors';
 import { ADD16, choose4, CMP16, cmpWith, EQ16, INC16, MUX16, PC16, RF8, RV16_ALU16, RV16_ALU16KS, RV16_DREG16 } from './logic';
-import { foldBands } from '../fold';
+import { CORE_LAY, coreNetlist } from '../fold';
 import { DIV16, MUL16 } from './md';
 import { aluCtl16, meaning16, rowsKey16, type Custom16Row } from '../../riscv/rv16/custom16';
 
@@ -306,10 +306,14 @@ export function rv16Core(full: boolean, fast = false, md: CoreMd = '', arith = f
   b.next();
   // Core I uses two immediates (I, U): isel bit 1 tells them apart. Without jumps, J is never selected.
   const isel = arith ? b.op(splitter([1, 1], 2), [`${ctl}.isel`]) : '';
-  const immv = b.name(arith ? b.op1(MUX16, [`${imm}.i`, `${imm}.u`, `${isel}.o1`], 'imm')
-    : choose4(b, [`${imm}.i`, `${imm}.sb`, full ? `${imm}.j` : null, `${imm}.u`], `${ctl}.isel`, 'imm').y, 'imm', true);
+  const immEnd = arith ? b.op1(MUX16, [`${imm}.i`, `${imm}.u`, `${isel}.o1`], 'imm')
+    : choose4(b, [`${imm}.i`, `${imm}.sb`, full ? `${imm}.j` : null, `${imm}.u`], `${ctl}.isel`, 'imm').y;
+  const immv = b.name(immEnd, 'imm', true);
   let rwe = b.name(`${ctl}.rwe`, 'rwe', true);
   const rf = b.op(RF8, [rd, md ? '' : rwe, '', rs1, rs2, 'clk'], 'registers');
+  // Laid out by logic depth, these nets would run through other blocks: drawn as labels instead (measured per variant)
+  const labels: string[] = arith ? [immEnd] : !full ? [`${imm}.u`] : md === 'div'
+    ? ['alu', 'br', 'jal', 'jalr', 'wb', 'mwe'].map((p) => `${ctl}.${p}`) : md ? [] : [`${ctl}.bimm`, `${ctl}.wb`, `${rf}.rd1`];
   const r1 = b.name(`${rf}.rd1`, 'r1', true), r2 = b.name(`${rf}.rd2`, 'r2', true);
   b.next();
   const bsrc = b.op1(MUX16, [r2, immv, `${ctl}.bimm`], 'ALU b');
@@ -341,6 +345,7 @@ export function rv16Core(full: boolean, fast = false, md: CoreMd = '', arith = f
     const fs = b.op(splitter([2, 1], 2), [`${f}.o5`], 'f3');
     b.next();
     const lo = b.op1(AND, [`${ops}.o0`, `${ops}.o1`]);
+    if (md === 'mul') labels.push(lo, `${ctl}.mwe`);
     const hi = b.op1(OR, [`${ops}.o2`, `${ops}.o3`]);
     const mul = b.op1(MUL16, [r1, r2, `${fs}.o0`], 'multiplier');
     b.next();
@@ -395,10 +400,7 @@ export function rv16Core(full: boolean, fast = false, md: CoreMd = '', arith = f
     ports: CORE_PORTS,
     symbol: { kind: 'box', label: full ? (md ? 'RV16 M' : 'RV16') : arith ? 'RV16 (ALU)' : 'RV16 (no br)' },
     // a core is too wide to read at fit in one strip: two bands (lib/fold.ts)
-    netlist: () => foldBands({
-      pins: { ...pinsAt(['clk', 'rst', 'instr', 'drdata'], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) },
-      instances: b.instances, nets: b.nets(),
-    }),
+    netlist: function (this: ComponentDef) { return coreNetlist(this.ports, b, { ...pinsAt(['clk', 'rst', 'instr', 'drdata'], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) }, cx ? undefined : { ...CORE_LAY, wires: Object.fromEntries(labels.map((e) => [e, false])) }); },
   });
   cores.set(key, d);
   return d;

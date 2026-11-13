@@ -215,8 +215,8 @@ registerActions((ctx) => {
     act('text.bigger', 'Larger text', `chapter prose ${Math.min(130, settings.textSize + 10)}% (now ${settings.textSize}%)`, () => { settings.set('textSize', Math.min(130, settings.textSize + 10)); applyTheme(); }),
     act('text.smaller', 'Smaller text', `chapter prose ${Math.max(90, settings.textSize - 10)}% (now ${settings.textSize}%)`, () => { settings.set('textSize', Math.max(90, settings.textSize - 10)); applyTheme(); }),
     act('text.narrow', 'Narrow reading column', `chapter text held to about 62 characters (${onOff(settings.narrowText)})`, () => { settings.set('narrowText', !settings.narrowText); applyTheme(); }),
-    act('backup.export', 'Export all progress', 'one backup file: chapters, campaign, puzzles, sandbox projects', () => { void import('./backupui').then((m) => m.exportBackup()); }),
-    act('backup.import', 'Import progress…', 'merge a backup file into what you have', () => { void import('./backupui').then((m) => m.importBackup()); }),
+    act('backup.export', 'Export all progress', 'one backup file: chapters, campaign, puzzles, sandbox projects', () => { void import('./backupui').then((m) => m.exportBackup()); }, ['backup']),
+    act('backup.import', 'Import progress…', 'merge a backup file into what you have', () => { void import('./backupui').then((m) => m.importBackup()); }, ['backup']),
     // each page by its name (alt): the top bar's word typed, then Enter, goes there
     { ...act('go.journey', 'Go to the journey map', 'home', go('#/')), alt: 'home' },
     { ...act('go.campaign', 'Go to the campaign map', 'campaign', go('#/campaign')), alt: 'campaign' },
