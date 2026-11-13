@@ -24,6 +24,8 @@ export const CX = 1.1, CZ = 0.65;
 export const GX = 2.2, GZ = 1.35, PITCH = 0.6, WIRE_D = 0.14;
 export const PX = 5, PZ = 3, PT = 0.25, EAR = 1.3;
 const MICA_LO = 29.6, MICA_HI = 52.4;
+/** The grid supports' fins (the US pattern of the 6SN7GT): width, height, bottom (mm), illustrative. */
+export const FIN_W = 1.8, FIN_H = 3, FIN_Y = MICA_HI + 0.6;
 const GLASS_R = 14.3, GLASS_T = 0.9, GLASS_Y0 = 12, GLASS_Y1 = 62, DOME_H = 8;
 const BASE_R = 14.8, BASE_H = 13;
 const PIN_D = 2.36, PIN_L = 9.2, KEY_D = 7.9, KEY_L = 12.5;
@@ -35,6 +37,7 @@ const SRC = {
   sheet: 'Tung-Sol 6SN7GTB data sheet: T-9 bulb, intermediate octal base',
   octal: 'JEDEC octal base (B8-58): pins on a 0.687 in (17.45 mm) circle, 0.093 in (2.36 mm) pins',
   photo: 'illustrative: proportions from photographs of a 6SN7GT mount (no maker\'s drawing found)',
+  fins: 'r-type.org, 6SN7GT (abh0146): "Note the heat sinking fins on the grid supports. These fins are absent on the UK made valve." Size and shape illustrative',
   model: 'computed by phys/triode.ts',
 };
 
@@ -46,7 +49,7 @@ interface Geos {
   base: Geo; cement: Geo; key: Geo; keyRib: Geo; pin: Geo; glass: Geo; getterFlash: Geo; flare: Geo; press: Geo;
   leads: Geo[]; mica: Geo; plateBack: (xs: number) => Geo; plateFront: (xs: number) => Geo; rib: Geo;
   rod: (y0: number, y1: number, r: number) => Geo; grid: (xs: number) => Geo; sleeve: Geo; heater: (xs: number) => Geo;
-  getterCup: Geo; electron: Geo; cloud: Geo; print: Geo; field: Geo;
+  getterCup: Geo; electron: Geo; cloud: Geo; print: Geo; field: Geo; fin: Geo;
 }
 
 const memo = new Map<Detail, Geos>();
@@ -120,6 +123,8 @@ function geos(d: Detail): Geos {
     // the type number printed on the glass (silk-screened white), facing the home view
     print: strokeGeo('6SN7GT', onCylinder(GLASS_R, -0.5), 0, 20.5, 2.2, 0.14, 0.03, { flat: true }),
     field: plane(PX - CX, Y1 - Y0),
+    // a grid support's heat-sink fin: a small sheet clamped on the side rod's top, above the top mica
+    fin: roundedBox(FIN_W, FIN_H, 0.15, 0.06, 1),
     electron: sphere(0.15, 8, 5), cloud: lathe([[0, 30.6], [0.85, 30.6], [0.95, 31.4], [0.95, 44], [0.85, 44.6], [0, 44.6]], { seg: full ? 32 : 8 }),
   };
   memo.set(d, g);
@@ -228,7 +233,9 @@ export function tubeModel(st: TubeState, look: TubeLook): Model3 {
     for (const s of [-1, 1]) for (const zs of [-1, 1]) items.push({ geo: G.rib, mat: plate, at: [xs + s * 2.6, (Y0 + Y1) / 2, zs * (PZ + PT)], name: 'plate', group: 'plate', explode: [0, 0, 12 * zs] });
     for (const s of [-1, 1]) {
       items.push({ geo: G.rod(22, 55, 0.35), mat: M.nickel, at: [xs + s * (PX + PT + 0.6), 0, 0], name: 'support rod', group: 'rods', info: { dim: '0.7 mm', source: SRC.photo, note: 'carries the plate and holds the mount between the micas' } });
-      items.push({ geo: G.rod(24, 54.2, 0.25), mat: M.copper, at: [xs + s * GX, 0, 0], name: 'grid side rod', group: 'grid', explode: [0, 12, 0], info: { dim: '0.5 mm', source: SRC.photo } });
+      items.push({ geo: G.rod(24, FIN_Y + FIN_H - 0.3, 0.25), mat: M.copper, at: [xs + s * GX, 0, 0], name: 'grid side rod', group: 'grid', explode: [0, 12, 0], info: { dim: '0.5 mm', source: SRC.photo } });
+      items.push({ geo: G.fin, mat: M.copper, at: [xs + s * GX, FIN_Y + FIN_H / 2, 0], name: 'grid fin', group: 'grid', explode: [0, 12, 0],
+        info: { dim: `${FIN_W} × ${FIN_H} mm (drawn)`, source: SRC.fins, note: 'carries heat out of the grid wire, so it stays too cool to emit electrons itself; the curves beside the model are from the later Tung-Sol 6SN7GTB reissue sheet' } });
     }
     items.push({ geo: G.grid(xs), mat: moly, name: 'grid', group: 'grid', explode: [0, 12, 0],
       info: { dim: `${2 * GX} × ${2 * GZ} mm oval, ${PITCH} mm pitch; wire drawn ${WIRE_D} mm (thicker than life)`, source: SRC.photo, note: `${sec}: grid at ${st.vg.toFixed(2)} V; cutoff at ${(-B_PLUS / 20).toFixed(1)} V with the full supply` } });

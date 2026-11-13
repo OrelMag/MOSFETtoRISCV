@@ -80,3 +80,17 @@ describe('the Tung-Sol 6SN7GTB sheet against the model (phys/triodedata.ts)', ()
     expect(Math.abs(plateCurrent(0, 250) * 1e3 - 42.9)).toBeLessThan(1.5);
   });
 });
+
+describe('the grid fins (US 6SN7GT pattern)', () => {
+  it('one on each grid side rod, above the top mica, inside the glass, citing r-type', () => {
+    const m = tubeModel(stateAt(0, 20), { charge: true, detail: 'full', electron: M.steel });
+    const fins = m.items.filter((i) => i.name === 'grid fin');
+    expect(fins).toHaveLength(4);
+    for (const f of fins) {
+      expect(f.geo.min[1] + f.at![1]).toBeGreaterThan(52.4);
+      expect(Math.abs(f.at![0]) + f.geo.max[0]).toBeLessThan(13.4);
+      expect(f.info?.source).toMatch(/r-type.*abh0146/);
+      expect(f.info?.note).toMatch(/reissue/);
+    }
+  });
+});
