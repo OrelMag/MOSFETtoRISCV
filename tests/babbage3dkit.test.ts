@@ -100,3 +100,11 @@ describe('the motion follows the model', () => {
     expect(named(m, 'carry arm')).toHaveLength(ARMS);
   });
 });
+
+describe('the tour quotes the document’s angles', () => {
+  it('22½° between arms, 45° at the gap, written as the Technical Description writes them', () => {
+    const helix = babbageModel(look()).beats!.find((b) => b.title === 'The helix of arms')!.text;
+    expect(helix).toContain('22½° apart');
+    expect(helix).toContain('45° between the 15th and 16th');
+  });
+});

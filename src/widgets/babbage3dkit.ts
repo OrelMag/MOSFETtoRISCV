@@ -28,6 +28,8 @@ import { ARMS, DIGITS, EVENTS, GAP_DEG, PITCH_DEG, TURN_MAX, armPhase, type Carr
 import { GLYPHS } from './strokefont';
 
 const D2R = Math.PI / 180;
+/** Degrees as the document writes them: 22½°. */
+const degText = (x: number): string => `${Number.isInteger(x) ? x : `${Math.floor(x)}½`}°`;
 
 /** The Technical Description's figures for the figure wheel. */
 export const TEETH = 40, DEG_PER_UNIT = 360 / TEETH, MAX_TURN = 9 * DEG_PER_UNIT;
@@ -200,12 +202,12 @@ const OUT = (d: number): Vec3 => [-0.62 * d, 0, -0.78 * d];
 
 export function babbageModel(look: BabbageLook): Model3 {
   const full = look.detail === 'full', items: Item[] = [], mo = motion(look.col, look.carry), C = look.rgb;
-  const brass: Material = { ...M.brass, base: C.brass }, steel = M.steel, bright = M.make({ base: [0.74, 0.76, 0.8], metal: 0.85, rough: 0.3, label: 'steel' }), dark = M.make({ base: [0.16, 0.17, 0.19], metal: 0.7, rough: 0.45, label: 'steel spacer' });
+  const brass: Material = M.make({ base: C.brass, metal: 0.55, rough: 0.3, label: 'gunmetal bronze' }), steel = M.steel, bright = M.make({ base: [0.74, 0.76, 0.8], metal: 0.85, rough: 0.3, label: 'steel' }), dark = M.make({ base: [0.16, 0.17, 0.19], metal: 0.7, rough: 0.45, label: 'steel spacer' });
   const castIron = M.make({ base: [0.24, 0.25, 0.27], metal: 0.35, rough: 0.7, label: 'cast iron' });
   const ink = M.make({ base: C.ink, metal: 0.2, rough: 0.6, label: 'engraved numerals' });
   const nineInk = M.make({ base: C.nine, metal: 0, rough: 0.5, emit: C.nine, glow: 0.2, label: 'engraved numerals (the wheel stands at 9)' });
   const warnMat = M.make({ base: C.warn, metal: 0.6, rough: 0.35, emit: C.warn, glow: 0.45, label: 'steel, the lever warned' });
-  const live = M.make({ ...M.brass, base: C.brass, emit: C.live, glow: 0.35, label: 'gunmetal, about to receive a carry (foreseen)' });
+  const live = M.make({ base: C.brass, metal: 0.55, rough: 0.3, emit: C.live, glow: 0.35, label: 'gunmetal, about to receive a carry (foreseen)' });
   const yQ = (a: number) => quatAxisAngle([0, 1, 0], a);
   const exOf = (i: number, v: Vec3): { explode?: Vec3; group?: string } => (i === EX ? { explode: v, group: 'digit' } : {});
 
@@ -241,7 +243,7 @@ export function babbageModel(look: BabbageLook): Model3 {
   for (let a = 0; a < ARMS; a++) {
     const ph = armPhase(a, theta), on = Math.abs((((ph % 360) + 540) % 360) - 180) < 3.5 && look.carry !== null, ex = exOf(a, OUT(150));
     items.push({ geo: armGeo(), mat: on && look.col.warn[a] ? warnMat : bright, at: [C_AXIS[0], leverY(a), C_AXIS[1]], rot: yQ(ARM_YAW + ph * D2R), name: 'carry arm', group: ex.group ?? 'arms', explode: ex.explode,
-      info: { dim: `arm ${a + 1} of ${ARMS}, at ${(((ph % 360) + 360) % 360).toFixed(0)}° from its lever`, source: SRC.axis, note: `${PITCH_DEG}° from the next arm round the helix, ${GAP_DEG}° between the 15th and 16th (the angles as the model takes them)` } });
+      info: { dim: `arm ${a + 1} of ${ARMS}, at ${(((ph % 360) + 360) % 360).toFixed(0)}° from its lever`, source: SRC.axis, note: `${degText(PITCH_DEG)} from the next arm round the helix, ${degText(GAP_DEG)} between the 15th and 16th (the angles as the model takes them)` } });
   }
   // the anticipating carriage's look-ahead, its effect only: a bar the column's height, lit over the run that receives a carry
   if (look.lookAhead) {
@@ -304,7 +306,7 @@ function beats(): Beat[] {
     { title: 'A column of figure wheels', text: `Thirty-one figure wheels, the units at the bottom. Each has ${TEETH} teeth and four decades of numerals 0 to 9, a decade a quadrant: one unit is ${DEG_PER_UNIT}° of turn, and the most a wheel turns in an addition is ${MAX_TURN}°.`, view: { ...HOME, yaw: -0.5, pitch: 0.2 }, frame: ['colbox'], explode: 0 },
     { title: 'The carry lever', text: 'Behind each wheel, on the warning axis, a carry lever: three limbs from one boss. The warning claw underneath is caught by the wheel’s nib when it passes 9 to 0; the horns reach the teeth of the wheel above; the lozenge faces the carry axis.', view: { ...HOME, yaw: -2.3, pitch: 0.42 }, frame: ['leverbox'], explode: 0 },
     { title: 'Warned', text: 'A wheel that passes 9 to 0 during the addition turns its lever on to the warned position and carries nothing yet: the lever’s lozenge now stands in the path of the carry arms. Press Add with a run of 9s to see it.', view: { ...HOME, yaw: -1.9, pitch: 0.9 }, frame: ['leverbox'], explode: 0 },
-    { title: 'The helix of arms', text: `The carry axis turns, and its thirty arms, ${PITCH_DEG}° apart round a helix with ${GAP_DEG}° between the 15th and 16th, poll the levers one after another from below. An arm meeting a warned lever wipes past its lozenge and nudges it on; its horn turns the wheel above one tooth. If that wheel passes 9 to 0 its own lever is warned for an arm still to come: the carry ripples. Two turns of the axis, ${TURN_MAX}°, finish any carry.`, view: { ...HOME, yaw: -2.6, pitch: 0.3 }, frame: ['axisbox'], explode: 0 },
+    { title: 'The helix of arms', text: `The carry axis turns, and its thirty arms, ${degText(PITCH_DEG)} apart round a helix with ${degText(GAP_DEG)} between the 15th and 16th, poll the levers one after another from below. An arm meeting a warned lever wipes past its lozenge and nudges it on; its horn turns the wheel above one tooth. If that wheel passes 9 to 0 its own lever is warned for an arm still to come: the carry ripples. Two turns of the axis, ${TURN_MAX}°, finish any carry.`, view: { ...HOME, yaw: -2.6, pitch: 0.3 }, frame: ['axisbox'], explode: 0 },
     { title: 'One digit, apart', text: 'One digit of the column pulled apart: its figure wheel and numerals, its carry lever, and the carry arm that services it. The Technical Description calls the lever the most complex single part in the Engine.', view: { target: [-80, 200, -150], yaw: -2.0, pitch: 0.95, dist: 620 }, show: ['digit'], explode: 1 },
     { title: 'The whole engine', text: 'The engine has eight such columns (seven orders of difference and the tabular value) and a printer, about 7 ft tall, 11 ft long and 18 in deep, some five tons: the outline from the Computer History Museum’s figures, the other columns placed for scale.', view: { ...HOME, yaw: -0.35, pitch: 0.18 }, frame: ['enginebox'], explode: 0, labels: true },
   ];
