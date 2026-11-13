@@ -278,7 +278,10 @@ export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, bl
     }
     const whole = cands.filter((l) => l.px >= MIN_TEXT_PX || !l.over).map((l) => ({ l, who: takers(l) })).filter((x) => x.who.length === g.length)
       .sort((x, y) => y.l.px - x.l.px)[0];
-    const best = whole ?? scored.filter((x) => keepsOld(x.l, x.who)).sort((x, y) => y.who.length - x.who.length || y.l.px - x.l.px)[0];
+    const most = (xs: typeof scored) => xs.sort((x, y) => y.who.length - x.who.length || y.l.px - x.l.px)[0];
+    // no look keeps the old names: the look most of them take all the same (they all say one thing, so one style on most of
+    // them reads better than three sizes and a gap)
+    const best = whole ?? most(scored.filter((x) => keepsOld(x.l, x.who))) ?? most(scored);
     if (!best) continue;
     for (const i of g) out[i] = best.who.includes(i) ? best.l : null;
   }
