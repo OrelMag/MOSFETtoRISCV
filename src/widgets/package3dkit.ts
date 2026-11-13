@@ -176,7 +176,7 @@ export const verdictOf = (v: number): Verdict => (v >= VIO ? 'invalid' : v >= VI
 type Detail = 'full' | 'flat';
 interface Geos {
   board: Geo; land: Geo; solder: Geo; mouldLo: Geo; mouldHi: Geo; mark: Geo; dot: Geo;
-  lead: [Geo, Geo]; finger: (k: number) => Geo; paddle: Geo; tie: [Geo, Geo];
+  lead: [Geo, Geo]; finger: (k: number) => Geo; spot: (k: number) => Geo; paddle: Geo; tie: [Geo, Geo];
   die: Geo; attach: Geo; passivation: Geo; pad: Geo; ball: Geo; stitch: Geo; wire: (b: Bond) => Geo;
 }
 const memo = new Map<Detail, Geos>();
@@ -219,6 +219,11 @@ function geos(d: Detail): Geos {
     dot: lathe([[0, 0], [0.32, 0], [0.32, 0.004], [0, 0.004]], { seg: full ? 32 : 10 }),
     lead: [sweep(leadPath(1), rect, { bend: full ? 0.18 : 0 }), sweep(leadPath(-1), rect, { bend: full ? 0.18 : 0 })],
     finger: (k) => { let v = fingers.get(k); if (!v) { v = extrude(band(fingerLine(k, CORNER_TIP), FINGER_W), LEAD_T); fingers.set(k, v); } return v; },
+    spot: (k) => {
+      // the silver spot plating: the finger's last stretch, where its wires land
+      const [p, q] = fingerLine(k, CORNER_TIP).slice(1), l = Math.hypot(p[0] - q[0], p[1] - q[1]), back = Math.min(l, corner(k) ? 0.66 : 0.36);
+      return extrude(band([[q[0] + ((p[0] - q[0]) * back) / l, q[1] + ((p[1] - q[1]) * back) / l], q], FINGER_W + 0.004), 0.004);
+    },
     paddle: box(2 * PADDLE_X, LEAD_T, 2 * PADDLE_Z, 0.03), tie: [tie(-1), tie(1)],
     die: box(2 * DIE_X, DIE_T, 2 * DIE_Z, 0.01), attach: box(2 * DIE_X + 0.06, ATTACH_T, 2 * DIE_Z + 0.06, 0.01),
     passivation: box(2 * DIE_X - 0.36, 0.004, 2 * DIE_Z - 0.36, 0.002), pad: box(PAD, PAD_T, PAD, 0.003),
@@ -244,12 +249,15 @@ export interface PkLook { detail: Detail }
 
 export function packageModel(st: PkState, look: PkLook = { detail: 'full' }): Model3 {
   const G = geos(look.detail), items: Item[] = [], v = bounceOf(st), hot = Math.min(1, v / VIL);
-  const frameMetal = M.tint(M.copper, [0.86, 0.74, 0.62], 'copper alloy, silver-plated where bonded');
+  const frameMetal = M.tint(M.copper, [0.86, 0.6, 0.48], 'copper alloy (bare inside the moulding)');
+  const tin = M.make({ base: [0.74, 0.74, 0.72], metal: 1, rough: 0.55, label: 'copper alloy, tin-plated (matte)' });
+  const spotSilver = { ...M.silver, label: 'silver spot plating' };
+  const board = M.make({ base: [0.07, 0.19, 0.11], metal: 0, rough: 0.5, coat: 0.3, label: 'FR-4 under green solder mask' });
   const lit = M.glow(M.gold, '--pk-lit', 0.9), railLit = M.glow(M.gold, '--pk-bad', 0.35 + 0.65 * hot);
   const none = { cut: 'none' as const };
 
   // The board: FR-4 under solder mask, sixteen copper lands with solder.
-  items.push({ geo: G.board, mat: M.fr4, at: [0, -0.4, 0], name: 'circuit board', group: 'board', explode: [0, -1.6, 0], ...none, info: { note: 'FR-4 under solder mask; the copper lands carry the solder joints' } });
+  items.push({ geo: G.board, mat: board, at: [0, -0.4, 0], name: 'circuit board', group: 'board', explode: [0, -1.6, 0], ...none, info: { note: 'FR-4 under solder mask; the copper lands carry the solder joints' } });
   for (let k = 1; k <= 16; k++) {
     const x = pinX(k), z = sideOf(k) * (SPAN / 2 - FOOT / 2);
     items.push({ geo: G.land, mat: M.copper, at: [x, 0.0175, z], name: 'land', group: 'board', explode: [0, -1.6, 0], ...none, info: { dim: '0.6 × 1.55 mm', source: 'typical SO16 land on 1.27 mm (IPC-7351 style), not the maker\'s' } });
@@ -266,8 +274,9 @@ export function packageModel(st: PkState, look: PkLook = { detail: 'full' }): Mo
   for (let k = 1; k <= 16; k++) {
     const s = sideOf(k), x = pinX(k), name = pinLabel(k), kind = kindOf(k);
     const info = { dim: `${f2(LEAD_W)} × ${f2(LEAD_T)} mm lead, ${f2(PITCH)} mm pitch`, source: `${SRC.outline}; ${SRC.pins}`, note: ROLE[kind] };
-    items.push({ geo: G.lead[s > 0 ? 0 : 1], mat: frameMetal, at: [x, 0, 0], name, group: 'leads', ...none, info });
-    items.push({ geo: G.finger(k), mat: frameMetal, at: [0, FRAME_Y, 0], name, group: 'frame', ...none, info: { ...info, source: `${SRC.inside} (the finger's path)` } });
+    items.push({ geo: G.lead[s > 0 ? 0 : 1], mat: tin, at: [x, 0, 0], name, group: 'leads', ...none, info: { ...info, note: `${ROLE[kind]}; outside the moulding the copper alloy is tin-plated (matte) to take the solder` } });
+    items.push({ geo: G.finger(k), mat: frameMetal, at: [0, FRAME_Y, 0], name, group: 'frame', ...none, info: { ...info, source: `${SRC.inside} (the finger's path)`, note: `${ROLE[kind]}; inside, bare copper alloy` } });
+    items.push({ geo: G.spot(k), mat: spotSilver, at: [0, FRAME_TOP - 0.001, 0], name, group: 'frame', ...none, shadow: false, info: { ...info, source: SRC.inside, note: 'silver spot-plated where the wire is stitched: gold bonds to silver, not to oxidised bare copper' } });
   }
   items.push({ geo: G.paddle, mat: frameMetal, at: [0, PADDLE_TOP - LEAD_T / 2, 0], name: 'die paddle', group: 'frame', ...none, info: { dim: `${2 * PADDLE_X} × ${2 * PADDLE_Z} mm, set down ${f2(FRAME_TOP - PADDLE_TOP)} mm`, source: SRC.inside, note: 'part of the lead frame, held by two tie bars until the moulding holds it' } });
   for (const t of G.tie) items.push({ geo: t, mat: frameMetal, name: 'die paddle', group: 'frame', ...none });
@@ -310,8 +319,8 @@ function anchors(st: PkState): StudioAnchor[] {
   ];
 }
 
-export const PK_HOME = { target: [0, 0.8, 0] as Vec3, yaw: -0.38, pitch: 0.86, dist: 9 };
-export const PK_HOME_FRAME = ['wires', 'die'];
+export const PK_HOME = { target: [0, 0.8, 0] as Vec3, yaw: -0.4, pitch: 0.78, dist: 16 };
+export const PK_HOME_FRAME = ['mould', 'leads'];
 
 function beats(st: PkState): Beat[] {
   const bs = bonds(st), gnd = bs.find((b) => b.pin === GND_PIN && b.j === 0)!, lens = bs.map((b) => b.len), v = bounceOf(st);
@@ -320,7 +329,7 @@ function beats(st: PkState): Beat[] {
     { title: 'Life size', text: `A 74HC595 in its SOIC-16: a body ${f2(BODY_D)} × ${f2(BODY_E)} mm and ${f2(BODY_H)} mm thick, sixteen leads ${PITCH} mm apart, ${f2(SPAN)} mm across their feet. Eight of the pins are outputs that change together on one clock edge; ground is pin 8 and the supply pin 16.`,
       view: { target: [0, 0.6, 0], yaw: -0.5, pitch: 0.55, dist: 18 }, frame: ['mould', 'leads'], cut: 0, explode: 0, labels: false },
     { title: 'Opened', text: `The upper half of the moulding off. The die (${2 * DIE_X} × ${2 * DIE_Z} mm here) sits on a paddle of the lead frame, and a gold wire runs from each of its pads to the finger of a lead: from ${f2(Math.min(...lens))} mm for a middle pin to ${f2(Math.max(...lens))} mm for a corner.`,
-      view: { target: [0, 0.8, 0], yaw: -0.4, pitch: 0.9, dist: 14 }, frame: ['die', 'wires', 'frame'], cut: 1, explode: 0 },
+      view: { target: [0, 0.8, 0], yaw: -0.4, pitch: 0.9, dist: 14 }, frame: ['wires', 'die'], cut: 1, explode: 0 },
     { title: 'The ground wire', text: `Pin 8 is a corner, the furthest from the die: its wire is ${f2(gnd.len)} mm, ${f2(gnd.nH)} nH by Grover's formula. Every output that falls sends its current back to the board through it, so its inductance is the one that matters.`,
       view: { target: [2, 0.9, 0.6], yaw: -0.2, pitch: 0.7, dist: 7 }, frame: [`bond wire, ${pinLabel(GND_PIN)}`, 'die'], show: [`bond wire, ${pinLabel(GND_PIN)}`, pinLabel(GND_PIN), 'die'], cut: 1, explode: 0 },
     { title: 'Eight outputs at once', text: `${st.n} outputs ${st.edge === 'rise' ? 'rise' : 'fall'} in ${st.rise.toFixed(1)} ns, ${(padSwing() * 1000).toFixed(1)} mA each, all through ${wires} on the ${rail} lead: L · n · di/dt lifts the chip's ${rail} by ${f2(v)} V (V_IL is ${f2(VIL)} V).`,

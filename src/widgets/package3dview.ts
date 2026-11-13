@@ -21,6 +21,7 @@ export function packageView(): Widget {
     aria: 'A 74HC595 in its SOIC-16 package, opened in 3D: the die on its paddle, a gold bond wire from each pad to a lead, the leads soldered to the board',
     home: PK_HOME,
     homeFrame: PK_HOME_FRAME,
+    aspect: 1.3,
     knobs: { cut: 1 },
     limits: { minDist: 0.8, maxDist: 60, maxPan: 12 },
     scaleBar: (len) => (len >= 1 ? `${len} mm` : `${Math.round(len * 1000)} µm`),
