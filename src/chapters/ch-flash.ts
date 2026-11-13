@@ -376,7 +376,7 @@ export const chFlash: Chapter = {
         <p>A planar string lies along the silicon, so its cells shrink only as fast as F. <strong>3D NAND</strong> stands the string on end. The chip deposits a stack of
         alternating layers (in Samsung's second V-NAND, ${LEVELS.length} of them: ${WORD_LINES} word lines, four dummies and a select gate at each end), etches round holes straight
         through it, and lines each hole from the outside in: an oxide, a film of silicon nitride, a thinner oxide, ${POLY_NM} nm of polysilicon for the channel, and an oxide core.
-        The layers become tungsten word lines, and where each one wraps a hole there is a cell: the floating-gate cell from earlier in this chapter, rolled into a ring with its gate all round.</p>
+        The layers become tungsten word lines, and where each one wraps a hole there is a cell: a transistor like the floating-gate cell earlier in this chapter, rolled into a ring with its gate all round.</p>
         <p>The charge no longer sits on a floating gate but in the nitride, which is an insulator: electrons stay where a program pulse puts them, so one tube of nitride can run the
         height of the hole while each cell keeps its own charge. The rules do not change. A read puts the read voltage on the chosen word line and the pass voltage on the other
         ${WORD_LINES - 1}, and the string conducts only if the chosen cell is erased: the model below runs the chapter's rule, and a test holds it to the eight-cell string of the NOR and NAND step, read for read.</p>
