@@ -240,11 +240,12 @@ Some steps have a model in 3D (a transistor, a relay, a valve, a chip, a picture
 
 ### Change, reuse or share the circuit
 
-These are the buttons on the bar above the circuit, left to right after the level's name:
+These are the buttons on the bar above the circuit, left to right after the level's name. Most show only an icon;
+point at one to see its name.
 
 - **Open in Sandbox**: an editable copy of the circuit on screen, as one of your own chips.
-- **Share**: **Image as SVG**, **Image as PNG**, or **Copy link to this view** (the step, the opened part, the inputs,
-  probes and clock cycles).
+- **Share this view** (the picture icon): **Image as SVG**, **Image as PNG**, or **Copy link to this view** (the step,
+  the opened part, the inputs, probes and clock cycles).
 - **Layout**: unravel named labels into wires, or reset this level. You can drag parts and wires to tidy a drawing;
   **Lock the layout** (the padlock) stops that, so a drag pans instead.
 - **Probe** (**P**): click wires to add them to the timing diagram. The first probe opens the timing panel under the
