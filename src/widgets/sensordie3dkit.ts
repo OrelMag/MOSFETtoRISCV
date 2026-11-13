@@ -34,9 +34,11 @@ export const DIE = { x0: DEC_X0 - 6, x1: AW / 2 + 26, z0: -AH / 2 - 10, z1: ADC_
 const OUT = { x0: AW / 2 + 6, x1: AW / 2 + 22, z0: ADC_Z0 - 6, z1: ADC_Z1 + 4 };
 
 const at3 = (g: Geo, x: number, y: number, z: number): Geo => { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; m[12] = x; m[13] = y; m[14] = z; return transform(g, m); };
+/** Boxes are sharp while the flat (SVG) drawing's geometry is built: 12 triangles a box, not 108 (geos() sets it). */
+let sharp = false;
 /** A box between two corners, as a geometry in place. */
 const B = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, r = 0.15): Geo =>
-  at3(roundedBox(x1 - x0, y1 - y0, z1 - z0, Math.min(r, (x1 - x0) / 3, (y1 - y0) / 3, (z1 - z0) / 3), 1), (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  at3(roundedBox(x1 - x0, y1 - y0, z1 - z0, sharp ? 0 : Math.min(r, (x1 - x0) / 3, (y1 - y0) / 3, (z1 - z0) / 3), 1), (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
 /** Boxes merged into one mesh with a colour slot per box (each box's vertices one run). */
 function painted(boxes: Geo[], name: string): { geo: Geo; per: number } {
   const g = merge(boxes, name), per = boxes[0].positions.length / 3;
@@ -57,6 +59,7 @@ const memo = new Map<Detail, Geos>();
 function geos(d: Detail): Geos {
   const hit = memo.get(d);
   if (hit) return hit;
+  sharp = d === 'flat';
   const pads: Geo[] = [];
   for (let x = DIE.x0 + 4; x < DIE.x1 - 2; x += 6) for (const z of [DIE.z0 + 2, DIE.z1 - 2]) pads.push(B(x - 1.6, x + 1.6, 0, 0.4, z - 1.6, z + 1.6, 0.3));
   for (let z = DIE.z0 + 8; z < DIE.z1 - 6; z += 6) for (const x of [DIE.x0 + 2, DIE.x1 - 2]) pads.push(B(x - 1.6, x + 1.6, 0, 0.4, z - 1.6, z + 1.6, 0.3));
@@ -88,6 +91,7 @@ function geos(d: Detail): Geos {
     cells: painted(cells, 'pixel array'), drivers: painted(drivers, 'row drivers'), cmps: painted(cmps, 'comparators'), obLeft: painted(obLeft, 'optical black'),
   };
   memo.set(d, g);
+  sharp = false;
   return g;
 }
 

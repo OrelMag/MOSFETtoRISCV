@@ -251,7 +251,8 @@ export function coreModel(s: CoreState, detail: 'full' | 'flat' = 'full'): Model
     { text: 'ferrite core', p: ringPoint(idx(Math.min(N - 1, ar + 1), ac), Math.PI / 2, RO), side: 'r', n: up, on: 'cores' },
     { text: 'X select wire', p: [colX(0) - PITCH / 2, OFF.x[1], rowZ(ar) + OFF.x[2]], side: 'l', n: up, on: 'xwires' },
     { text: 'Y select wire', p: [colX(ac) + OFF.y[0], OFF.y[1], rowZ(0) - PITCH / 2], side: 'l', n: up, on: 'ywires' },
-    { text: s.threeWire ? 'sense + inhibit wire' : 'sense wire (diagonal)', p: [colX(N - 1) - PITCH / 2 * 0.5, OFF.senseDy, rowZ(N - 1) - PITCH / 2 * 0.5], side: 'r', n: up, on: 'sense' },
+    // on the diagonal one core in from the far corner: that corner lands under the stage's tool buttons on a phone
+    { text: s.threeWire ? 'sense + inhibit wire' : 'sense wire (diagonal)', p: [colX(N - 2) - PITCH / 4, OFF.senseDy, rowZ(N - 2) - PITCH / 4], side: 'r', n: up, on: 'sense' },
     ...(s.threeWire ? [] : [{ text: 'inhibit wire', p: [colX(N - 1) + PITCH / 2, OFF.inh[1], rowZ(0) + OFF.inh[2]] as Vec3, side: 'r' as const, n: up, on: 'inhibit' }]),
     { text: 'sense amplifier', p: [F_IN + F_W + 110, F_T / 2 + 52, F_IN + F_W - 90], side: 'r', n: up, on: 'drivers' },
     { text: 'frame and lugs', p: [-F_IN - F_W / 2, F_T / 2, F_IN + F_W / 2], side: 'l', n: up, on: 'frame', minor: true },

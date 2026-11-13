@@ -162,12 +162,13 @@ export function valveModel(sc: ValveScene, detail: Detail = 'full'): Model3 {
   for (const [a, b, k] of cols) items.push({ geo: s.column, mat: MATS.water, name: k === 'left' && single ? 'drain: tank' : k === 'right' && single ? 'source: basin, 0 V' : 'water', group: `w_${k}`, at: [(a + b) / 2, 0, 0], scale: [b - a, 1, 1], order: 1, shadow: false });
   items.push({ geo: s.pellet, mat: MATS.pellet, name: 'gate line (dead end)', group: 'pellet', shadow: false });
 
-  const front: Vec3 = [0, 0.3, 1], up: Vec3 = [0, 1, 0], a = vs[vs.length - 1], dy = diaphragmY(a.open * TRAVEL);
+  // anchors at rest: the stage's move (valvePose) carries each with its part, so a lift or the spring's rise counts once
+  const front: Vec3 = [0, 0.3, 1], up: Vec3 = [0, 1, 0], a = vs[vs.length - 1], dy = diaphragmY(0);
   const anchors: StudioAnchor[] = [
     { text: 'gate line (dead end)', p: single ? [a.cx + 13, 60, 3] : [(vs[0].cx + a.cx) / 2 + 8, GATE_Y, 3], side: single ? 'r' : 't', n: up, on: 'gate' },
-    { text: single ? 'spring: preload = Vt' : 'spring', p: [a.cx + 4, 44, 0], side: 'r', n: front, on: `spring${p.valves.indexOf(a)}` },
+    { text: single ? 'spring: preload = Vt' : 'spring', p: [a.cx + 4.5, springLen(a.open * TRAVEL) / 2, 0], side: 'r', n: front, on: `spring${p.valves.indexOf(a)}` },
     { text: single ? 'diaphragm (gate)' : 'diaphragm', p: [a.cx + 8, dy, 0], side: 'r', n: front, on: `lift${p.valves.indexOf(a)}` },
-    { text: single ? 'channel: the gap' : 'plunger', p: [a.cx + 5.5, SEAT_Y + a.open * TRAVEL + 1, 0], side: 'r', n: front, on: `lift${p.valves.indexOf(a)}` },
+    { text: single ? 'channel: the gap' : 'plunger', p: [a.cx + 5.5, SEAT_Y + 1, 0], side: 'r', n: front, on: `lift${p.valves.indexOf(a)}` },
   ];
   if (single) anchors.push({ text: 'drain: tank', p: [a.cx - 30, FLOOR + LEVEL_H * a.left + 0.5, 8], side: 't', n: up, on: 'w_left' }, { text: 'source: basin, 0 V', p: [a.cx + 26, FLOOR + 2, -5], side: 't', n: up, on: 'w_right' });
   else anchors.push({ text: 'PMOS valve', p: [vs[0].cx, 4, 10], side: 'b', n: front, on: 'body' }, { text: 'NMOS valve', p: [a.cx, 4, 10], side: 'b', n: front, on: 'body' });

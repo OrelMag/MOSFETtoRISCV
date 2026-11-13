@@ -49,10 +49,11 @@ const facing = (g: Geo): Geo => { const m = new Float32Array(16); m[0] = 1; m[6]
 function geos(d: Detail): Geos {
   const hit = memo.get(d);
   if (hit) return hit;
-  const full = d === 'full', seg = full ? 32 : 10, box = (w: number, h: number, dd: number, r: number) => roundedBox(w, h, dd, r, full ? 2 : 1);
+  const full = d === 'full', seg = full ? 32 : 10, box = (w: number, h: number, dd: number, r: number) => roundedBox(w, h, dd, full || Math.max(w, h, dd) > 3 ? r : 0, full ? 2 : 1); // flat: small boxes sharp (12 triangles, not 108); large ones keep their facets, or their long triangles would sort over what stands in front
   // the dial: 100 ticks, every tenth longer, merged into one mesh in the face's plane (x, y), then turned to face +z
   const tick = box(0.07, 0.3, 0.05, 0.01), tick10 = box(0.12, 0.55, 0.05, 0.02);
-  const ticks = merge(Array.from({ length: 100 }, (_, i) => {
+  // the flat (SVG) drawing keeps only every tenth tick: 800 small boxes would be tens of thousands of polygons on a phone
+  const ticks = merge(Array.from({ length: 100 }, (_, i) => i).filter((i) => full || i % 10 === 0).map((i) => {
     // clockwise from 12 seen from the front: a tick at θ sits at (r sin θ, r cos θ), turned by −θ about z
     const th = (i / 100) * 2 * Math.PI, r = i % 10 ? 2.05 : 1.95;
     return transform(i % 10 ? tick : tick10, zturn(-th, r * Math.sin(th), r * Math.cos(th)));
@@ -71,11 +72,13 @@ function geos(d: Detail): Geos {
     plate: box(34, 2, 23.2, 0.3), column: box(1.4, LID - 2, 1.4, 0.2), back: box(34, LID - 2, 1.8, 0.2),
     lever: tube([[17, 0, 0], [29, 0, 0], [30, 1, 0], [30, 13, 0]], 0.8, { bend: full ? 1 : 0, sides: full ? 12 : 6 }),
     knob: sphere(1.6, full ? 20 : 8, full ? 12 : 5),
-    face: facing(lathe([[0, -0.4], [2.4, -0.4], [2.4, 0.4], [0, 0.4]], { seg: full ? 40 : 12 })),
+    // flat: the face in rings, so no triangle runs from the centre to the rim (a long one sorts behind the board it is on)
+    face: facing(lathe(full ? [[0, -0.4], [2.4, -0.4], [2.4, 0.4], [0, 0.4]] : [[0, -0.4], [0.6, -0.4], [1.2, -0.4], [1.8, -0.4], [2.4, -0.4], [2.4, 0.4], [1.8, 0.4], [1.2, 0.4], [0.6, 0.4], [0, 0.4]], { seg: full ? 40 : 12 })),
     ticks: transform(ticks, (() => { const m = new Float32Array(16); m[0] = 1; m[5] = 1; m[10] = 1; m[14] = 0.43; m[15] = 1; return m; })()),
     long: needle(2.2, 0.16), short: needle(1.3, 0.3), hub: facing(lathe([[0, 0], [0.3, 0], [0.3, 0.3], [0, 0.3]], { seg: 12 })),
     bobbin: lathe([[0, 0], [1.3, 0], [1.3, 0.2], [0.75, 0.2], [0.75, 2.2], [1.3, 2.2], [1.3, 2.4], [0, 2.4]], { seg: full ? 20 : 8 }),
-    coil: tube(helix({ r: 0.95, pitch: 0.2, from: 0.25, to: 2.15, perTurn: full ? 14 : 6 }), 0.1, { sides: full ? 5 : 3 }),
+    // flat: the winding as a plain cylinder (a helix is hundreds of polygons a coil)
+    coil: full ? tube(helix({ r: 0.95, pitch: 0.2, from: 0.25, to: 2.15, perTurn: 14 }), 0.1, { sides: 5 }) : lathe([[0, 0.25], [1.05, 0.25], [1.05, 2.15], [0, 2.15]], { seg: 8 }),
     relayBase: box(25, 4, 28, 0.3),
     relayCoil: tube(helix({ r: 1.7, pitch: 0.28, from: 0.3, to: 5.7, perTurn: full ? 18 : 6 }), 0.13, { sides: full ? 5 : 3 }),
     armature: box(6.8, 0.6, 1.8, 0.15), yoke: box(0.8, 7.4, 2, 0.15), contact: box(1, 6.6, 1.4, 0.2), battery: lathe([[0, 0], [0.7, 0], [0.7, 9], [0, 9]], { seg: 12 }),
@@ -211,7 +214,9 @@ export function pressModel(p: PressPose, detail: Detail = 'full'): Model3 {
   runs.push([[52, 6.6, RZ[1]], [52, 6.6, 23], [dialX(N), 6.6, 23], [dialX(N), DIAL_Y - 2.4, DIAL_Z - 0.4]]);
   for (const r of runs) items.push({ geo: wire(r, full), mat: live(M.copper, conducts, 0.6), name: p.wiring === 'and' ? 'contacts in series (AND)' : 'contacts in parallel (OR)', ...rl, info: { note: p.wiring === 'and' ? 'current reaches the eleventh dial only through both contacts: married AND born abroad' : 'either contact passes the current: married OR born abroad, counted once' } });
   dial(dialX(N), p.relayCount, conducts, p.wiring === 'and' ? 'married AND abroad dial' : 'married OR abroad dial');
-  return { items, cuts: CUT, anchors: anchors(p), beats: beats(p), floor: -4 };
+  // flat: whole items back to front (a board's few large triangles cannot be sorted against the dials on it); the cups,
+  // behind the board, are left out there, as item order would draw them through it
+  return { items: full ? items : items.filter((i) => i.group !== 'cups'), cuts: CUT, anchors: anchors(p), beats: beats(p), floor: -4, flatOrder: full ? undefined : 'items' };
 }
 
 /** A section through the front row of cups (field 3): the pins, the card and the mercury there cut in half. */
