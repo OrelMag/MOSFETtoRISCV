@@ -18,5 +18,6 @@
 .pk-bar b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); }
 .pk-scale { position: relative; height: 16px; margin-bottom: 8px; font: 600 10.5px var(--font-mono); color: var(--muted); }
 .pk-scale span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
-/* on a phone the stage comes first, the sliders under it (the four sliders filled the first screen) */
-@media (max-width: 700px) { .m3d .pk-main { display: flex; flex-direction: column; } .m3d .pk-main > .r3-ctl { order: 5; margin-top: 8px; } }
+/* the studio model: the canvas takes the whole column, the bounce bar and the numbers under it (side by side when wide) */
+.pk3 .r3 { grid-template-columns: minmax(0, 1fr); }
+@container (min-width: 760px) { .pk3 .r3-side { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 28px; align-items: start; } .pk3 .r3-side > h4 { grid-column: 1 / -1; } }

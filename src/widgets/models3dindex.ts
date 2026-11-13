@@ -76,7 +76,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'package', title: 'A package, opened up', category: 'devices', chapter: 'wire', step: 8,
     summary: 'Die, pads, bond wires, lead frame and board, with the ground bounce that more ground wires divide.',
-    files: ['package3d', 'package3dview', 'package3dparts'], factory: 'package3d',
+    files: ['package3d', 'package3dview', 'package3dkit'], factory: 'package3d',
     open: () => import('./package3d').then((m) => m.package3d()),
   },
   {
