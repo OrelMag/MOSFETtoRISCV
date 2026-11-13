@@ -50,7 +50,7 @@ interface Statics {
   closerPost: Geo; closerLever: Geo; closerKnob: Geo;
   poles: Geo; arms: Geo; insulators: Geo;
   lineWires: Geo; closerWires: Geo;
-  sBase: Geo; yoke: Geo; coils: Geo; cores: Geo; sPost: Geo; armature: Geo; bracket: Geo; retractor: Geo; stops: Geo;
+  sBase: Geo; yoke: Geo; coils: Geo; cores: Geo; sPost: Geo; armature: Geo; bracket: Geo; stops: Geo;
 }
 const memo = new Map<Detail, Statics>();
 function statics(d: Detail): Statics {
@@ -101,8 +101,6 @@ function statics(d: Detail): Statics {
     // the armature at angle 0 (flat), from its pivot towards the anvil; the pose turns it by armTheta about the pivot
     armature: bx(PIVOT_S[0] - ARM_L, PIVOT_S[0], PIVOT_S[1], PIVOT_S[1] + 1.8, PIVOT_S[2] - 3.5, PIVOT_S[2] + 3.5, 0.3),
     bracket: (() => { const sx = PIVOT_S[0] - SPRING_S; return merge([rodU([[72, 13, 9.2], [72, BRACKET_Y, 9.2], [sx, BRACKET_Y, 9.2], [sx, BRACKET_Y, 6.5]], 0.9, sides), cylU(sx, 6.5, BRACKET_Y - 1, BRACKET_Y + 4, 0.8, 16), cylU(sx, 6.5, BRACKET_Y + 4, BRACKET_Y + 5.2, 1.8, seg)], 'bracket'); })(),
-    // the retractor spring, unit length along y at the origin: the pose sets its place and length
-    retractor: tube(helix({ r: 0.9 * U, pitch: 0.09, from: 0, to: 1, perTurn: d === 'flat' ? 8 : 18 }), 0.12 * U, { sides: 5 }),
     // the anvil under the armature's tip, and the upper stop over it on its bracket (the second click)
     stops: (() => {
       const seat = PIVOT_S[1] + ARM_L * Math.tan(armTheta(RELAY.travel)), top = PIVOT_S[1] + ARM_L * Math.tan(armTheta(0)) + 2;
@@ -112,6 +110,18 @@ function statics(d: Detail): Statics {
   memo.set(d, s);
   return s;
 }
+
+/** The retractor spring from y = 0 up to its length (mm), at the origin: rebuilt, never scaled (a scaled helix fattens its wire
+ *  into a bar); the same point count at any length, so the drawn one is bent in place (refresh). */
+export const retractorGeo = (len: number, d: Detail): Geo => {
+  const per = d === 'flat' ? 8 : 18, n = 11 * per, r = 0.9 * U;
+  return tube(Array.from({ length: n + 1 }, (_, i): Vec3 => { const a = (2 * Math.PI * i) / per; return [r * Math.cos(a), (len * i) / n, r * Math.sin(a)]; }), 0.12 * U, { sides: 5 });
+};
+const retractors = new Map<Detail, Geo>();
+export const retractorOf = (d: Detail, len: number): Geo => { let g = retractors.get(d); if (!g) { g = retractorGeo(len, d); retractors.set(d, g); } return g; };
+export const drawnRetractor = (d: Detail): Geo | undefined => retractors.get(d);
+/** The retractor's length (mm) at armature travel x (m): from the armature up to its bracket. */
+export const retractorLen = (x: number): number => (BRACKET_Y - 1 - (PIVOT_S[1] + SPRING_S * Math.sin(armTheta(x)) + 0.9)) * U;
 
 // ---------------------------------------------------------------- materials
 
@@ -174,7 +184,7 @@ export function tgModel(p: TgPose, detail: Detail = 'full'): Model3 {
     { geo: s.sPost, mat: MATS.brass, name: 'sounder', group: 'sounder' },
     { geo: s.armature, mat: MATS.iron, name: 'armature', group: 'armature', info: { note: 'pulled onto the anvil above the pull-in current (one click), lifted onto the upper stop by the spring (the other); its gap is drawn five times its size' } },
     { geo: s.bracket, mat: MATS.brass, name: 'retractor spring', group: 'sounder' },
-    { geo: s.retractor, mat: MATS.steel, name: 'retractor spring', group: 'retractor', shadow: false, info: { note: 'its tension screw sets the current the coils must beat' } },
+    { geo: retractorOf(detail, retractorLen(p.x)), mat: MATS.steel, name: 'retractor spring', group: 'retractor', shadow: false, info: { note: 'its tension screw sets the current the coils must beat' } },
     { geo: s.stops, mat: MATS.brass, name: 'anvil and stop', group: 'sounder', info: { source: 'Electronics Notes, the Morse telegraph sounder', note: 'two stops, two clicks: down onto the anvil, back onto the upper stop' } },
   ];
   const front: Vec3 = [0, 0.3, 1], up: Vec3 = [0, 1, 0];
@@ -199,7 +209,7 @@ export function tgModel(p: TgPose, detail: Detail = 'full'): Model3 {
 /** The moving parts at the pose: key and closer levers on their pivots, the armature on its post, the retractor spring's length. */
 export function tgPose(p: TgPose): Map<string, Mat4> {
   const th = armTheta(p.x), cd = p.cd ?? 0, sx = PIVOT_S[0] - SPRING_S, aSy = PIVOT_S[1] + SPRING_S * Math.sin(th) + 0.9;
-  const spring = tr(S([sx, aSy, 6.5])); spring[5] = (BRACKET_Y - 1 - aSy) * U;
+  const spring = tr(S([sx, aSy, 6.5]));
   return new Map<string, Mat4>([
     ['key', turnZ(S(PIV), -LEVER_REST * p.kd)],
     ['closer', turnZ(S(CLOSER_PIV), (CLOSER_SHUT - CLOSER_OPEN) * cd)],

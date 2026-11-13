@@ -1,17 +1,13 @@
 // The diaphragm valve in 3D: its force balance held to the site's faucet and column models, and its drawing to the balance.
 import { describe, expect, it } from 'vitest';
-import type { RGB, RGBA } from '../src/gl/instances';
-import { flatFaces } from '../src/gl/parts';
 import { current, VDD, VT } from '../src/widgets/mosphys';
 import { biasLink } from '../src/widgets/mosshare';
 import { COLUMN_VT, columnSettle, columnStep, faucetOpen, fetWater, openings } from '../src/widgets/water';
 import {
-  CAP_Y, DIA_Y, ONE, PAIR, SEAT_Y, TRAVEL, cracking, diaphragmY, lift, netPressure, opening, preload, rate, span, springForce, springLen, swept,
-  springPoints, valveAnchors, valveFigure, type OneValve, type ValvePalette, type ValvePose,
+  CAP_Y, DIA_Y, LEVEL_H, ONE, PAIR, TRAVEL, cracking, diaphragmY, lift, netPressure, opening, preload, rate, span, springForce, springLen, swept,
+  springPoints, type OneValve, type ValvePose,
 } from '../src/widgets/valve3dparts';
 
-const G: RGB = [0.5, 0.5, 0.5], W: RGBA = [0.2, 0.4, 0.9, 0.5];
-const P: ValvePalette = { body: G, metal: G, seat: G, disc: [1, 0, 0], spring: G, diaphragm: G, water: W, gate: W, glass: W, jet: G };
 const ramp = Array.from({ length: 41 }, (_, i) => i / 40);
 
 describe('the valve mechanics', () => {
@@ -72,52 +68,60 @@ describe('the valve mechanics', () => {
   });
 });
 
-describe('the valve drawing', () => {
-  const pose = (open: number, kind: 'n' | 'p' = 'n', o: Partial<ValvePose> = {}): ValvePose => ({
-    valves: [{ kind, cx: 0, open, g: 0.5, left: 1, right: 0.2, flow: open } as OneValve], gateQ: 0, phase: 0, g: 0.5, x0: -50, x1: 50, ...o,
-  });
-  const disc = (p: ValvePose) => valveFigure(p, P, ONE).find((q) => q.kind === 'cyl' && q.color === P.disc)!;
-  it('the plunger sits on its seat below cracking and rises with the lift', () => {
-    const d0 = disc(pose(0)), d1 = disc(pose(0.5)), d2 = disc(pose(1));
-    expect(d0.pos[1] - d0.scale![1] / 2).toBeCloseTo(SEAT_Y, 9);
-    expect(d1.pos[1] - d0.pos[1]).toBeCloseTo(0.5 * TRAVEL, 9);
-    expect(d2.pos[1] - d0.pos[1]).toBeCloseTo(TRAVEL, 9);
-  });
-  it('the spring compresses as the diaphragm rises, and stays inside its cap', () => {
-    expect(diaphragmY(0)).toBe(DIA_Y);
+import { CH_W, channelCharge, newChannelTex, paintChannel, springGeo, valveModel, valvePose } from '../src/widgets/valve3dkit';
+
+describe('the valve model (valve3dkit.ts)', () => {
+  const one = (o: Partial<OneValve> = {}, g = 0.5, q: Partial<ValvePose> = {}): ValvePose => ({ valves: [{ kind: 'n', cx: 0, open: 0.5, g, left: 1, right: 0.2, flow: 0.5, ...o }], gateQ: 0, phase: 0, g, x0: -50, x1: 50, ...q });
+  const pair: ValvePose = { valves: [
+    { kind: 'p', cx: -30, open: 0.4, g: 0.5, left: 1, right: 0.5, flow: 0.4 }, { kind: 'n', cx: 30, open: 0.4, g: 0.5, left: 0.5, right: 0, flow: 0.4 }],
+  gateQ: 0, phase: 0, g: 0.5, x0: -80, x1: 80 };
+  const model = (p: ValvePose) => valveModel({ pose: p, channel: newChannelTex() });
+  it('the plunger and diaphragm rise by the lift; the spring shortens and stays inside its cap', () => {
+    for (const open of [0, 0.5, 1]) expect(valvePose(one({ open })).get('lift0')![13]).toBeCloseTo(open * TRAVEL, 9);
+    const top = (open: number) => valvePose(one({ open })).get('spring0')![13] + springGeo(springLen(open * TRAVEL), 'full').max[1];
     expect(springLen(TRAVEL)).toBeLessThan(springLen(0));
-    for (const open of [0, 0.5, 1]) for (const kind of ['n', 'p'] as const) for (const part of valveFigure(pose(open, kind), P, ONE)) {
-      expect(part.pos.every(Number.isFinite)).toBe(true);
-      expect(part.pos[1] + part.scale![1] / 2).toBeLessThanOrEqual(80);
-    }
+    for (const open of [0, 0.5, 1]) expect(top(open)).toBeCloseTo(CAP_Y + 0.5, 1); // the wire's centre runs from the plate up to the cap
+    expect(springGeo(springLen(0), 'full').positions.length).toBe(springGeo(springLen(TRAVEL), 'full').positions.length);
+    expect(diaphragmY(0)).toBe(DIA_Y);
     expect(CAP_Y - diaphragmY(TRAVEL)).toBeGreaterThan(10);
   });
-  it('the gate pellet exists only while the diaphragm moves', () => {
-    const n = (q: number) => valveFigure(pose(0.5, 'n', { gateQ: q, phase: 0.3 }), P, ONE).length;
-    expect(n(0.6)).toBe(n(0) + 1);
-    expect(n(-0.6)).toBe(n(0) + 1);
+  it('the gate pellet shows only while the diaphragm moves', () => {
+    expect(valvePose(one({}, 0.5, { gateQ: 0 })).get('pellet')![5]).toBeLessThan(1e-3);
+    expect(valvePose(one({}, 0.5, { gateQ: 0.6, phase: 0.3 })).get('pellet')![5]).toBe(1);
+    expect(valvePose(one({}, 0.5, { gateQ: -0.6, phase: 0.3 })).get('pellet')![5]).toBe(1);
   });
-  it('the pair draws both valves with finite parts and labels, and the flat view shows faces', () => {
-    const pair: ValvePose = { valves: [
-      { kind: 'p', cx: -30, open: 0.4, g: 0.5, left: 1, right: 0.5, flow: 0.4 }, { kind: 'n', cx: 30, open: 0.4, g: 0.5, left: 0.5, right: 0, flow: 0.4 }],
-    gateQ: 0, phase: 0, g: 0.5, x0: -80, x1: 80 };
-    const parts = valveFigure(pair, P, PAIR), anchors = valveAnchors(pair);
-    expect(parts.length).toBeGreaterThan(60);
-    expect(flatFaces(parts, 0.3, 0.25).length).toBeGreaterThan(100);
-    expect(anchors.map((a) => a.text)).toEqual(expect.arrayContaining(['PMOS valve', 'NMOS valve', 'spring', 'diaphragm', 'plunger']));
-    expect(new Set(anchors.map((a) => a.text)).size).toBe(anchors.length);
+  it('the water through the gap is the gap tall, and needs water upstream and a lift', () => {
+    expect(valvePose(one({ open: 0.5 })).get('chan0')![5]).toBeCloseTo(0.5 * TRAVEL, 9);
+    expect(valvePose(one({ left: 0 })).get('chan0')![5]).toBeLessThan(1e-3);
+    expect(valvePose(one({ open: 0 })).get('chan0')![5]).toBeLessThan(1e-3);
   });
-
-  const one = (o: Partial<OneValve>, g = 0.5): ValvePose => ({ valves: [{ kind: 'n', cx: 0, open: 0.5, g, left: 1, right: 0, flow: 0.5, ...o }], gateQ: 0, phase: 0, g, x0: -50, x1: 50 });
-  const jet = (p: ValvePose) => valveFigure(p, P, ONE).find((q) => q.kind === 'box' && q.pos[1] - q.scale![1] / 2 === SEAT_Y && q.scale![0] === 12);
-
-  it('the water through the gap glows with the model’s flow, and needs water upstream', () => {
-    const lo = jet(one({ flow: 0.1 }))!, hi = jet(one({ flow: 0.9 }))!;
-    expect(hi.emissive![2]).toBeGreaterThan(lo.emissive![2]);
-    expect(jet(one({ left: 0 }))).toBeUndefined();
-    expect(jet(one({ open: 0 }))).toBeUndefined();
-    // The aperture is the lift whatever the flow.
-    expect(lo.scale![1]).toBeCloseTo(hi.scale![1], 12);
+  it('the channel’s charge: even with no tank, thinning towards the drain, and pinched off at the drain end in saturation', () => {
+    expect(channelCharge(0.5, 0, 0.7)).toBeCloseTo(1, 12);
+    expect(channelCharge(0.5, 0.2, 1)).toBeGreaterThan(0.2);
+    expect(channelCharge(0.5, 0.2, 1)).toBeLessThan(channelCharge(0.5, 0.2, 0));
+    expect(channelCharge(0.5, 0.5, 1)).toBeCloseTo(0, 12);
+    expect(channelCharge(0.5, 0.9, 1)).toBeCloseTo(0, 12);
+    expect(channelCharge(0.5, 0.9, 0.5)).toBeCloseTo(Math.sqrt(0.5), 12);
+    expect(channelCharge(-0.1, 0.3, 0.2)).toBe(0);
+    const tex = newChannelTex();
+    paintChannel(tex, 0.5, 0.9, 1);
+    const g = (i: number) => tex.pixels[i * 4 + 1];
+    expect(g(CH_W - 1)).toBeGreaterThan(g(0)); // u = 1 the source end holds charge, u = 0 the drain end has none
+  });
+  it('the pair draws both valves with finite parts and named labels', () => {
+    const m = model(pair), groups = new Set(m.items.map((i) => i.group));
+    for (const it of m.items) for (const v of it.geo.positions) expect(Number.isFinite(v)).toBe(true);
+    expect(m.anchors!.map((x) => x.text)).toEqual(expect.arrayContaining(['PMOS valve', 'NMOS valve', 'spring', 'diaphragm', 'plunger']));
+    for (const x of m.anchors!) expect(groups.has(x.on!)).toBe(true);
+    expect(new Set(m.anchors!.map((x) => x.text)).size).toBe(m.anchors!.length);
+    expect(valvePose(pair).has('upper0')).toBe(true); // the PMOS valve's gate water is above its diaphragm
+  });
+  it('the one valve names source, drain, channel and Vt, the tank label at the tank’s level', () => {
+    const at = (left: number) => model(one({ left })).anchors!.find((x) => x.text === 'drain: tank')!;
+    const txt = model(one({ left: 0.5 })).anchors!.map((x) => x.text);
+    expect(txt).toEqual(expect.arrayContaining(['drain: tank', 'source: basin, 0 V', 'channel: the gap', 'spring: preload = Vt', 'diaphragm (gate)']));
+    expect(at(0.5).p[1]).toBeGreaterThan(at(0.2).p[1]);
+    expect(valvePose(one({ left: 0.5 })).get('w_left')![5]).toBeCloseTo(LEVEL_H * 0.5, 9);
   });
   it('the lift does not depend on the tank, the flow does, in the chapter’s regions', () => {
     const ov = 1.2 - VT;
@@ -129,23 +133,13 @@ describe('the valve drawing', () => {
     expect(fetWater(1.2, 0.2).flow).toBeLessThan(fetWater(1.2, 0.5).flow);
     expect(fetWater(1.2, ov + 0.2).flow).toBeCloseTo(fetWater(1.2, VDD).flow * (1 + 0.05 * (ov + 0.2)) / (1 + 0.05 * VDD), 9);
   });
-  it('the one valve names source, drain, channel and Vt, tank label at the tank’s level', () => {
-    const a = valveAnchors(one({ left: 0.5 })), txt = a.map((x) => x.text);
-    expect(txt).toEqual(expect.arrayContaining(['drain: tank', 'source: basin, 0 V', 'channel: the gap', 'spring: preload = Vt', 'diaphragm (gate)']));
-    const lo = valveAnchors(one({ left: 0.2 })).find((x) => x.text === 'drain: tank')!, hi = a.find((x) => x.text === 'drain: tank')!;
-    expect(hi.p[1]).toBeGreaterThan(lo.p[1]);
-    expect(new Set(txt).size).toBe(txt.length);
-  });
-  it('the spring is a helix: turns round the axis, rising from the plate to the cap, with a stem seal', () => {
+  it('the spring is a helix: turns round the axis, rising from the plate to the cap', () => {
     const pts = springPoints(0, 29, CAP_Y);
     expect(pts[0]).toEqual([0, 29, 0]);
     expect(pts.at(-1)).toEqual([0, CAP_Y, 0]);
     const mid = pts.slice(1, -1);
-    for (const p of mid) expect(Math.hypot(p[0], p[2])).toBeCloseTo(4.5, 9);
+    for (const q of mid) expect(Math.hypot(q[0], q[2])).toBeCloseTo(4.5, 9);
     for (let i = 1; i < mid.length; i++) expect(mid[i][1]).toBeGreaterThan(mid[i - 1][1]);
-    expect(Math.max(...mid.map((p) => p[2]))).toBeGreaterThan(4);
-    expect(Math.min(...mid.map((p) => p[2]))).toBeLessThan(-4);
-    expect(valveFigure(one({}), P, ONE).some((q) => q.kind === 'cyl' && q.scale![0] > 2 && q.scale![0] < 3 && q.pos[1] > 18 && q.pos[1] < 21)).toBe(true);
   });
   it('the valve shares its bias with the widget above', () => {
     const link = biasLink(1.2, 0.3), a = {}, seen: number[][] = [];

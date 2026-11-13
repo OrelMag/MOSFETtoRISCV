@@ -15,7 +15,8 @@ import { CELL_V, margin, ohmsPerKm, PULL_I, reachKm, SOUNDER, SOUNDER_R, SOUNDER
 import { frameLoop } from './mosfet';
 import { studioStage } from './studiostage';
 import { coilVolts, lineCurrent, pressX, pulls, releaseX, runFor, SLOW, type Line, type TgPose } from './telegraph3dparts';
-import { tgModel, tgPose, TG_HOME } from './telegraph3dkit';
+import { drawnRetractor, retractorGeo, retractorLen, tgModel, tgPose, TG_HOME } from './telegraph3dkit';
+import { refresh } from '../gl/kit/geo';
 
 /** Two short noise bursts through a high-pass: made on the first key press (a user gesture), nothing without Web Audio. */
 class Clicker {
@@ -79,7 +80,10 @@ export function telegraphView(): Widget {
     build: (detail) => tgModel(pose(), detail),
   });
   /** The pose: levers and armature moved, the retractor stretched; then a rebuild (cheap: cached geometry, the lit materials by level). */
-  const paint = () => { stage.move(tgPose(pose())); stage.refresh(); };
+  const paint = () => {
+    for (const det of ['full', 'flat'] as const) { const g = drawnRetractor(det); if (g) refresh(g, retractorGeo(retractorLen(x), det)); }
+    stage.move(tgPose(pose())); stage.refresh();
+  };
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' });
   stage.chips.append(chip);
