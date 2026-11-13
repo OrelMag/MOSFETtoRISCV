@@ -192,6 +192,13 @@ DOM-free rules are `gl/kit/names.ts` (framing, badgeForm, namesShown; tests/mode
 - Hovering a part rims it and shows a card with its name, material, size, note and source. A click keeps the card.
 - Tab walks the parts.
 
+**Wheel and touch (every 3D canvas, gl/orbit.ts; the rule is DOM-free in gl/kit/wheel.ts, tests/model-wheel.test.ts):** a
+model sits in a page that scrolls, so over a canvas nobody clicked the wheel scrolls the page and one-finger vertical swipes
+scroll it too (touch-action pan-y); the first such wheel turn on a page shows a hint once ("Click the model, then scroll to
+zoom · Ctrl + scroll works too"). A click, a tap or Tab focuses the canvas, and the wheel then zooms (touch-action none)
+until focus leaves: Esc, a click outside, tabbing away. Ctrl / ⌘ + wheel (a trackpad pinch arrives as Ctrl + wheel) and full
+screen always zoom; two fingers always orbit and pinch. The smoke's "(3D model, wheel)" route checks it.
+
 **Fallback:** with no WebGL2, or after a lost context, the same model is drawn flat in SVG, with moves, cuts and labels (`?flat3d` forces it).
 The flat view (`gl/parts.ts` `flatView`) looks from where `OrbitCamera.eye()` puts the eye: (sin yaw, cos yaw) in xz, right-hand
 (cos yaw, 0, −sin yaw). Before batch 3 it was mirrored in yaw, so a flat drawing with a home yaw other than 0 showed the far side.
