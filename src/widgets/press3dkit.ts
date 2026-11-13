@@ -140,6 +140,8 @@ export function pressModel(p: PressPose, detail: Detail = 'full'): Model3 {
   const live = (m: Material, on: boolean, k = 0.7) => (on ? M.glow(m, LIVE, k) : m);
   const ebonite = M.make({ base: [0.12, 0.1, 0.09], metal: 0, rough: 0.35, coat: 0.4, label: 'hard rubber (ebonite)' });
   const face = M.make({ base: '--pr-face', metal: 0, rough: 0.55, label: 'enamelled dial' }), ink = M.make({ base: '--pr-hand', metal: 0.4, rough: 0.4, label: 'blued steel' });
+  // japanned iron: black lacquer over cast iron, but lifted to a dark grey with a glossy coat so the silhouette reads on a dark board
+  const iron = M.make({ base: [0.3, 0.31, 0.33], metal: 0.15, rough: 0.3, coat: 0.6, label: 'japanned iron' });
   const none = { cut: 'none' as const };
 
   // the table, the dial board, the posts and the card's rails
@@ -147,8 +149,8 @@ export function pressModel(p: PressPose, detail: Detail = 'full'): Model3 {
   items.push({ geo: G.pad, mat: M.oak, at: [3, -2, 21.5], name: 'table', group: 'table' });
   items.push({ geo: G.board, mat: M.oak, at: [3, RACK_TOP / 2, 25.35], name: 'dial board', group: 'dials', explode: [0, 0, 8], ...none, info: { source: SRC.census, note: 'the real board held 40 dials; this one the ten the census card needs and the relays\' eleventh' } });
   for (const sx of [-1, 1]) {
-    items.push({ geo: G.post, mat: M.steel, at: [sx * 22, 0, -13], name: 'guide post', group: 'frame', ...none, info: { source: SRC.drawing, note: 'the pin box slides on these; the real press swung on a hinge, worked by a hand lever' } });
-    items.push({ geo: G.rail, mat: M.steel, at: [sx * 16.5, (CARD_TOP - CARD_T) / 2, 0], name: 'card rail', group: 'frame' });
+    items.push({ geo: G.post, mat: iron, at: [sx * 22, 0, -13], name: 'guide post', group: 'frame', ...none, info: { source: SRC.drawing, note: 'the pin box slides on these; the real press swung on a hinge, worked by a hand lever' } });
+    items.push({ geo: G.rail, mat: iron, at: [sx * 16.5, (CARD_TOP - CARD_T) / 2, 0], name: 'card rail', group: 'frame' });
   }
   // cups and mercury, the front row cut through
   for (const q of POSITIONS) {
@@ -160,10 +162,10 @@ export function pressModel(p: PressPose, detail: Detail = 'full'): Model3 {
 
   // the pin box: guide plate, lid, corner columns, back plate, the lever, its knob
   const head = { group: 'head', explode: [0, 22, 0] as Vec3 };
-  items.push({ geo: G.plate, mat: M.steel, at: [0, hy + 1, 0], name: 'pin box', ...head, info: { source: SRC.drawing, note: 'a guide plate the pins slide through, and a lid the springs push against' } });
-  items.push({ geo: G.plate, mat: M.steel, at: [0, hy + LID + 1, 0], name: 'pin box', ...head });
-  for (const sx of [-1, 1]) for (const z of [-11.6, 11.6]) items.push({ geo: G.column, mat: M.steel, at: [sx * 17, hy + 1 + LID / 2, z], name: 'pin box', ...head });
-  items.push({ geo: G.back, mat: M.steel, at: [0, hy + 1 + LID / 2, -12.5], name: 'pin box', ...head });
+  items.push({ geo: G.plate, mat: iron, at: [0, hy + 1, 0], name: 'pin box', ...head, info: { source: SRC.drawing, note: 'a guide plate the pins slide through, and a lid the springs push against' } });
+  items.push({ geo: G.plate, mat: iron, at: [0, hy + LID + 1, 0], name: 'pin box', ...head });
+  for (const sx of [-1, 1]) for (const z of [-11.6, 11.6]) items.push({ geo: G.column, mat: iron, at: [sx * 17, hy + 1 + LID / 2, z], name: 'pin box', ...head });
+  items.push({ geo: G.back, mat: iron, at: [0, hy + 1 + LID / 2, -12.5], name: 'pin box', ...head });
   items.push({ geo: G.lever, mat: M.brass, at: [0, hy + LID + 1, 0], name: 'lever', ...head, info: { source: SRC.drawing, note: 'pulled down by hand: one stroke reads one card' } });
   items.push({ geo: G.knob, mat: M.bakelite, at: [30, hy + LID + 15, 0], name: 'lever', ...head });
   // the pins and their springs
@@ -228,7 +230,7 @@ function anchors(p: PressPose): StudioAnchor[] {
     { text: 'card', p: [15, CARD_TOP, 8], side: 'r', n: front, on: 'card' },
     { text: 'mercury cup', p: [POSITIONS[9].x, HG_TOP, POSITIONS[9].z + 2.3], side: 'r', n: front, minor: true, on: 'cups' },
     { text: 'counter dials', p: [dialX(0) - 2.4, DIAL_Y, DIAL_Z], side: 'l', n: [0, 0, 1], on: 'dials' },
-    { text: p.wiring === 'and' ? 'relays, contacts in series' : 'relays, contacts in parallel', p: [RX + 1, 7.4, RZ[0] - 1], side: 'r', n: up },
+    { text: p.wiring === 'and' ? 'relays: AND' : 'relays: OR', p: [RX + 1, 7.4, RZ[0] - 1], side: 'r', n: up },
     { text: p.wiring === 'and' ? 'married AND abroad' : 'married OR abroad', p: [dialX(N) + 2.4, DIAL_Y, DIAL_Z], side: 'r', n: [0, 0, 1], minor: true },
   ];
 }

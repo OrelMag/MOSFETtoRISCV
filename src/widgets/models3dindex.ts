@@ -184,7 +184,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'quartz', title: 'The quartz crystal oscillator', category: 'devices', chapter: 'clocks', step: 3,
     summary: 'A 32 768 Hz tuning fork bending in antiphase, its Pierce loop, and fifteen divide-by-two stages down to 1 Hz.',
-    files: ['quartz3d', 'quartz3dview', 'quartz3dparts'], factory: 'quartz3d', codex: ['clock', 'counter', 'cdc'],
+    files: ['quartz3d', 'quartz3dview', 'quartz3dkit', 'quartz3dgeom'], factory: 'quartz3d', codex: ['clock', 'counter', 'cdc'],
     open: () => import('./quartz3d').then((m) => m.quartz3d()),
   },
   {

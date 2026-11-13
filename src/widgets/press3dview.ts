@@ -29,6 +29,7 @@ export function pressView(): Widget {
   const stage = studioStage({
     aria: 'Hollerith’s pin press in 3D: a box of spring pins above a census card, mercury cups below it and a row of counting dials',
     home: PRESS_HOME,
+    homeFrame: ['card', 'cups', 'dials', 'pin box'],
     limits: { minDist: 25, maxDist: 360, maxPan: 60 },
     note: 'A drawing of the mechanism, not a measured press: only the census card’s ten positions (a real card had 288), drawn thicker than card; the pin box slides on posts where the real press swung on a hinge worked by a hand lever; the stroke is a drawing, not a model of the forces; the wiring under the table is drawn only where it meets the relays. The real press had 40 dials of 100 divisions with two hands each (U.S. Census Bureau; The Henry Ford). The card’s size is not stated: the sources disagree (3¼ × 6⅝ in, 3¼ × 7⅜ in, 3 × 5½ in).',
     build: (detail) => pressModel(pose(), detail),
