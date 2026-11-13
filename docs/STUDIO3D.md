@@ -220,19 +220,17 @@ chosen by `spec`); see-through parts become glass items. It is how the models no
 (`widgets/modelstage.ts`, a look per family from `gl/kit/looks.ts`). When the last of them is converted, `modelstage.ts`,
 `fromParts` and the flag go.
 
-## 7. Costs (production build, gzip; this machine)
+## 7. Costs (production build, gzip; batch 3, 2026-11-13, this machine)
 
-- **Triode, the first open:** about 48 KB.
-  - studio 11.9 KB, stage 8.4, triode3dnext 9.9, triode3dview (shared physics and plots) 10.1, kit geometry 3.8, loader and CSS.
-  - Today's close-up was 16 KB.
-- **Relay, the first open:** about 40 KB (its view 13.4 KB with the kit, plus the shared studio, stage and geometry).
-- **Frame time:** 0.2–0.6 ms CPU per frame for both models at home (`?stats`). The triode is 67 draws and 87k triangles, the relay 36 draws and 22k.
-- **Rebuilds:**
-  - model rebuild 0.08 ms;
-  - geometry built once (the triode's 44 ms);
-  - pick 0.4 ms;
-  - shadow redraw about 1.4 ms, only after a change.
-- **A real phone has not been measured.** `?stats` is how to read one.
+Measured by E:/audit/release/3d/integ/sweep.mjs over every model (the table: E:/audit/release/3d/INTEG.md).
+
+- **Shared, paid once a page view:** the engine (studio.ts) 10.7 KB, the stage 7.9, geometry 4.3, scene 1.9, the lazy entry
+  (modelhost) 2.2.
+- **Each model's own chunks:** 8.1 to 22.3 KB, median 11.9 (44 models; Enigma the largest, with its wiring and stroke font).
+- **Frame time while dragging (?stats, median):** 0.2 to 0.5 ms CPU and 0.1 to 0.3 ms GPU at 1440 px; 0.7 to 2.5 ms CPU at
+  390 px with the CPU throttled 4× (GPU unchanged). Shadows are redrawn only after a change.
+- **Rebuilds:** model rebuild about 0.1 ms (geometry cached by identity); pick 0.4 ms; a shadow redraw about 1.4 ms.
+- **A real phone has not been measured.** ?stats is how to read one.
 
 ## 8. Not in this API (and what to do instead)
 
