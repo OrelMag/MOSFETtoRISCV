@@ -202,7 +202,7 @@ describe('the drawing', () => {
     expect(tiled).toBeCloseTo(SLOTS, 9);
     expect(mercuryAnchors(t, 2).length).toBeGreaterThan(5);
     expect(mercuryAnchors(t, 2).some((a) => a.text === 'backing')).toBe(true);
-    expect(mercuryAnchors(t, 2, true).map((a) => a.text).sort()).toEqual(['gate', 'sending crystal']);
+    expect(mercuryAnchors(t, 2, true).map((a) => a.text).sort()).toEqual(['mercury in a steel tube', 'sending crystal']);
   });
   it('the model: the picked word’s pulses in its colour, the tube cut open a quarter, lamps and lever from the state', () => {
     const t = new Tank();

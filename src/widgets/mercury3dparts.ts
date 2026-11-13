@@ -203,7 +203,7 @@ export function mercuryAnchors(_tank: Tank, _sel: number, compact = false): Anch
   out.push({ text: 'amplifier', p: [80, ELEC_Y - 4, ELEC_Z + 5], side: 'b', n: [0, 0, 1] });
   out.push({ text: 'reshaper', p: [15, ELEC_Y - 4, ELEC_Z + 5], side: 'b', n: [0, 0, 1] });
   out.push({ text: 'gate', p: [-50, ELEC_Y - 4, ELEC_Z + 5], side: 'b', n: [0, 0, 1] });
-  // A phone has room for two names, not seven (the view opens on the sending end).
-  return compact ? out.filter((a) => ['sending crystal', 'gate'].includes(a.text)) : out;
+  // A phone has room for two names, not seven, and opens on the sending end: the crystal, and the tube named where that view shows it.
+  return compact ? [{ ...out[0], p: [TUBE_X0 + 4, ay + TUBE_R, az] }, { text: 'mercury in a steel tube', p: [TUBE_X0 + 28, ay + TUBE_R, az], side: 't', n: [0, 1, 0] }] : out;
 }
 

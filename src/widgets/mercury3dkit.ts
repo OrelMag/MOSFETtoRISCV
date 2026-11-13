@@ -49,15 +49,17 @@ const [, AY, AZ] = ACTIVE, EZ = ELEC_Z, BOXES = [80, 15, -50] as const;
 /** The other fifteen tubes, at the battery's 4 × 4 grid. */
 export const GRID = [-7.5, -2.5, 2.5, 7.5];
 
-interface Statics { tubes: Geo; blocks: Geo; shell: Geo; mercury: Geo; ends: Geo; crystals: Geo; backing: Geo; box: Geo; chassis: Geo; wire: Geo; windowRing: Geo; slotRing: Geo; levers: Geo[] }
+interface Statics { tubes: Geo; tubesFlat: Geo; blocksFlat: Geo; blocks: Geo; shell: Geo; mercury: Geo; ends: Geo; crystals: Geo; backing: Geo; box: Geo; chassis: Geo; wire: Geo; windowRing: Geo; slotRing: Geo; levers: Geo[] }
 let memo: Statics | null = null;
 function statics(): Statics {
   if (memo) return memo;
-  const others: Geo[] = [], blocks: Geo[] = [];
+  const others: Geo[] = [], othersFlat: Geo[] = [], blocks: Geo[] = [], blocksFlat: Geo[] = [];
   for (const y of GRID) for (const z of GRID) {
     if (y === AY && z === AZ) continue;
     others.push(rodX(TUBE_X0, TUBE_X1, TUBE_R, y, z, 18));
+    othersFlat.push(rodX(TUBE_X0, TUBE_X1, TUBE_R, y, z, 6));
     blocks.push(bx(TUBE_X0 - 3, TUBE_X0, y - 1.6, y + 1.6, z - 1.6, z + 1.6, 0.25), bx(TUBE_X1, TUBE_X1 + 3, y - 1.6, y + 1.6, z - 1.6, z + 1.6, 0.25));
+    blocksFlat.push(bx(TUBE_X0 - 3, TUBE_X0, y - 1.6, y + 1.6, z - 1.6, z + 1.6, 0), bx(TUBE_X1, TUBE_X1 + 3, y - 1.6, y + 1.6, z - 1.6, z + 1.6, 0));
   }
   const shell = shellX(TUBE_X0, TUBE_X1, MERC_R, TUBE_R, AY, AZ);
   const mercury = rodX(TUBE_X0 + 0.2, TUBE_X1 - 0.2, MERC_R - 0.02, AY, AZ, 40);
@@ -77,7 +79,7 @@ function statics(): Statics {
   // the gate's lever: down on the recirculation path, over to the input when writing, open when the loop is cut
   const lx = BOXES[2];
   const levers = [0, 1, 2].map((k) => tube([[lx - 6, ELEC_Y + 4, EZ + 5.2], [lx - 6 + [6, 11, 11][k] * 0.8, ELEC_Y + 4 + [3.5, 5, 7][k], EZ + 5.2]], 0.6, { sides: 8 }));
-  memo = { tubes: merge(others, 'tubes'), blocks: merge(blocks, 'blocks'), shell, mercury, ends, crystals, backing, box, chassis, wire, windowRing, slotRing, levers };
+  memo = { tubes: merge(others, 'tubes'), tubesFlat: merge(othersFlat, 'tubes'), blocksFlat: merge(blocksFlat, 'blocks'), blocks: merge(blocks, 'blocks'), shell, mercury, ends, crystals, backing, box, chassis, wire, windowRing, slotRing, levers };
   return memo;
 }
 
@@ -102,6 +104,8 @@ export function bandInstances(tank: Tank, sel: number, c: RGB): Instance[] {
   });
 }
 export const PULSE_GEO = UNIT_CYL;
+/** The flat drawing's pulse: a six-sided unit cylinder (the SVG draws every triangle, and there are hundreds of pulses). */
+const PULSE_FLAT: Geo = lathe([[0, -0.5], [0.5, -0.5], [0.5, 0.5], [0, 0.5]], { seg: 6 });
 /** A sleeve of unit length along x round the tube. */
 export const BAND_GEO = shellX(-0.5, 0.5, TUBE_R + 0.1, TUBE_R + 0.45, 0, 0, 28);
 export const PULSE_MAT: Material = mk({ base: [1, 1, 1], metal: 0, rough: 0.4, label: 'a pulse of ultrasound (drawn as a disc across the bore)' });
@@ -127,13 +131,13 @@ export function mercuryModel(s: MercuryState, compact = false, flat?: { pulse: R
   add(S.crystals, MATS.quartz, 'quartz crystal', 'tank', { info: { note: 'turns a 13.5 MHz burst into ultrasound at the sending end, and back into a voltage at the receiving end' } });
   add(S.ends, MATS.brass, 'end block', 'tank', { cut: 'none' });
   add(S.backing, MATS.backing, 'backing', 'tank', { cut: 'none' });
-  add(S.tubes, MATS.steel, 'the other tanks', 'battery', { cut: 'none', info: { note: 'a battery of 16; EDSAC had two batteries, 32 tanks, 512 long numbers' } });
-  add(S.blocks, MATS.brass, 'the other tanks', 'battery', { cut: 'none' });
+  add(flat ? S.tubesFlat : S.tubes, MATS.steel, 'the other tanks', 'battery', { cut: 'none', info: { note: 'a battery of 16; EDSAC had two batteries, 32 tanks, 512 long numbers' } });
+  add(flat ? S.blocksFlat : S.blocks, MATS.brass, 'the other tanks', 'battery', { cut: 'none' });
   add(S.box, MATS.oak, 'the battery’s box', 'battery', { cut: 'none' });
   if (flat) {
     const asItem = (list: Instance[], geo: Geo, name: string) => list.forEach((p) =>
       add(geo, mk({ base: p.color as RGB, metal: 0, rough: 0.4, emit: p.emissive, glow: 1, label: name }), name, 'pulses', { at: p.pos, rot: p.rot, scale: p.scale, cut: 'none' }));
-    asItem(pulseInstances(tank, s.sel, flat.pulse, flat.chosen), PULSE_GEO, 'pulse');
+    asItem(pulseInstances(tank, s.sel, flat.pulse, flat.chosen), PULSE_FLAT, 'pulse');
     asItem(bandInstances(tank, s.sel, flat.band), BAND_GEO, 'the word you picked');
   }
   add(S.slotRing, MATS.window('--hg-band-b'), 'receiving slot', 'window', { cut: 'none', shadow: false });
