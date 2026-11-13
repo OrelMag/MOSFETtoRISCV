@@ -44,7 +44,7 @@ export function crtView(): Widget {
   /** The coils' glow, in steps (the model is rebuilt only when a step changes). */
   const q = (v: number) => Math.round(Math.min(1, Math.abs(v)) * 4) / 4;
   const current = () => { const c = yokeCurrent(beam()); return { h: q(c.h), v: q(c.v) }; };
-  const look = (detail: CrtLook['detail']): CrtLook => ({ detail, view, tex, cell, beam: beam(), levels: levels(), current: current(), rgb: rgb() });
+  const look = (detail: CrtLook['detail']): CrtLook => ({ detail, view, tex, cell, beam: beam(), levels: levels(), current: current(), rgb: rgb(), cut: stageRef?.knobs().cut ?? KNOBS.cut });
 
   const panel = h('div', { class: 'panel crt3d' });
   const stage = studioStage({
@@ -52,28 +52,29 @@ export function crtView(): Widget {
     home: HOME,
     homeFrame: ['tubebox'],
     // a fixed shape: a rebuild after a view button would otherwise resize the canvas and refit home over the new view
-    aspect: 1.7,
+    aspect: 0.95,
     hidden: [...FRAME_GROUPS],
     knobs: KNOBS,
     limits: { minDist: 1.5, maxDist: 3000 },
     onBeat: (i) => { view = i >= 0 ? BEAT_VIEW[i] ?? 'overview' : 'overview'; stage.refresh(); put(); },
     onKnobs: () => put(),
-    note: "Sizes, angle, the neck and the order of the electrodes are real: a 14-inch, 90° tube with the 29.1 mm conventional neck (Toshiba's 1974 catalogue lists 13V tubes at 29.1 ± 1.6 mm), an in-line gun whose beams are 5.08 mm apart (US6107729's effective S for that neck). Drawn: one smooth bend per beam about its own deflection centre (the three keep their spacing through the yoke, cross in a hole of the mask and land on three dots), the electrodes as hollow cups, the glass walls, the coils' turns; the screen is one phosphor cell per pixel (4.25 mm, about 16 triads) with an exponential fade, and the mask is a plain sheet here (the Mask view has its holes). The beams are drawn about 2 mm thick so they show: real ones are a fraction of a millimetre and invisible. Estimated: the faceplate radius (2 m), the mask-to-screen gap (derived from the triad pitch and the gun spacing), the stem's pin count (ten) and the order of the guns (R, G, B is this model's choice). The 0.27 mm triad pitch is within the 0.2 to 0.3 mm US6107729 gives for circular holes. A simplification: the round-hole dot mask was made for a delta gun (three guns in a triangle); setting the guns side by side is what let the holes become slots (the Porta-Color), and here an in-line gun is drawn with round holes. The interlaced timing is 525-line NTSC (ITU-R BT.470, SMPTE 170M) scaled to 64 rows.",
+    note: "Sizes, angle, the neck and the order of the electrodes are real: a 14-inch, 90° tube with the 29.1 mm conventional neck (Toshiba's 1974 catalogue lists 13V tubes at 29.1 ± 1.6 mm), an in-line gun whose beams are 5.08 mm apart (US6107729's effective S for that neck). Drawn: one smooth bend per beam about its own deflection centre (the three keep their spacing through the yoke, cross in a hole of the mask and land on three dots), the electrodes as hollow cups, the glass walls, the coils' turns; the screen is one phosphor cell per pixel (4.25 mm, about 16 triads) with an exponential fade, and the mask is a plain sheet here (the Mask view has its holes). The beams are drawn 3 to 4 mm thick and glowing so they can be followed from the cathodes to the screen: real ones are a fraction of a millimetre and invisible. Estimated: the faceplate radius (2 m), the mask-to-screen gap (derived from the triad pitch and the gun spacing), the stem's pin count (ten) and the order of the guns (R, G, B is this model's choice). The 0.27 mm triad pitch is within the 0.2 to 0.3 mm US6107729 gives for circular holes. A simplification: the round-hole dot mask was made for a delta gun (three guns in a triangle); setting the guns side by side is what let the holes become slots (the Porta-Color), and here an in-line gun is drawn with round holes. The interlaced timing is 525-line NTSC (ITU-R BT.470, SMPTE 170M) scaled to 64 rows.",
     build: (detail) => crtModel(look(detail)),
   });
   stageRef = stage;
   const NONE = new Float32Array(0);
-  const beamMat = M.make({ base: [1, 1, 1], metal: 0, rough: 0.5, label: 'electron beam (drawn: a real one is invisible)' });
+  const beamMat = M.make({ base: [1, 1, 1], metal: 0, rough: 0.5, bloom: 1.6, label: 'electron beam (drawn: a real one is invisible)' });
   const ghostMat = M.make({ base: [1, 1, 1], metal: 0, rough: 0.5, transmit: 0.5, label: 'the beam, blanked (cut off by the grid)' });
 
   /** What moves each frame: the screen's texels and the beams (the coils' glow by a rebuild, when its step changes). */
-  let coilKey = '', builtAt = 0, flatAt = 0;
+  let coilKey = '', builtAt = 0, flatAt = 0, wasOpen = KNOBS.cut > 0.98;
   function put(): void {
     const now = performance.now();
     if (stage.isFlat()) { if (now - flatAt > 150) { flatAt = now; stage.refresh(); } return; }
     screenPixels(run, tf, tau(), tex.pixels); tex.rev++;
-    const b = beam(), k = stage.knobs(), show = view !== 'mask' && k.explode === 0, c = current(), key = `${c.h}|${c.v}|${view === 'mask' ? levels(b).join() : ''}`;
-    if (key !== coilKey && now - builtAt > 90) { coilKey = key; builtAt = now; stage.refresh(); }
+    const b = beam(), k = stage.knobs(), show = view !== 'mask' && k.explode === 0, c = current(), key = `${c.h}|${c.v}|${view === 'mask' ? levels(b).join() : ''}`, open = k.cut > 0.98;
+    // the cut edge comes and goes at once; the coils' glow at most every 90 ms
+    if (open !== wasOpen || (key !== coilKey && now - builtAt > 90)) { wasOpen = open; coilKey = key; builtAt = now; stage.refresh(); }
     stage.instances('beam', SEG, beamMat, show ? packInstances(beamSegments(b, levels(b), rgb())) : NONE);
     stage.instances('ghost', SEG, ghostMat, show ? packInstances(ghostSegments(b, rgb())) : NONE);
     stage.studio()?.invalidate();
