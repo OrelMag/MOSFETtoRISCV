@@ -12,7 +12,7 @@ import { SENSE_OFFSET, VDD_VOLTS } from '../sim/switchsim';
 import { CELL_HALFLIFE } from '../lib/dram';
 import { DramBench, RATIO, RATIOS, safeCyclesOf, swingOf } from './dram3dbench';
 import { LINE_Z0, lineLength, Z_OF } from './dram3dparts';
-import { DRAM_ASPECT, DRAM_HOME, dramModel } from './dram3dkit';
+import { DRAM_ASPECT, DRAM_HOME, DRAM_HOME_R, dramModel } from './dram3dkit';
 import { studioStage } from './studiostage';
 
 const mv = (d: number) => (Number.isFinite(d) ? `${d >= 0 ? '+' : '−'}${Math.abs(d * VDD_VOLTS * 1000).toFixed(0)} mV` : 'unknown');
@@ -33,7 +33,7 @@ export function dramView(): Widget {
   const panel = h('div', { class: 'panel dr3' });
   const stage = studioStage({
     aria: 'A 4 by 4 DRAM array in 3D: a well of charge on every cell and a trough for every bit line, each as high as its voltage',
-    home: DRAM_HOME, aspect: DRAM_ASPECT,
+    home: DRAM_HOME, aspect: DRAM_ASPECT, homeRadius: DRAM_HOME_R,
     limits: { minDist: 20, maxDist: 900 },
     note: `Heights are the simulator’s charge levels and footprints are proportional to capacitance, so volume is charge: a 25 fF cell is a column, a bit line a trough as long as its capacitance. The chapter’s array is 4 × 4 with bit lines 4 × a cell, and each reference line is a line with no cells (on a chip it is another bit line: its folded twin or the neighbouring mat’s); real arrays hang hundreds of cells on a line and run about 10 × (Keeth, Baker, Johnson & Lin, DRAM Circuit Design, 2nd ed., ch. 2). The grid pitch is exaggerated. Leakage is exponential with a ${CELL_HALFLIFE}-cycle half-life standing for tens of milliseconds: a real array refreshes every row within 64 ms (JEDEC DDR4 tREFW). The word line of an open row is drawn up; on a chip it is boosted above VDD + VT so the access transistor passes a full 1.`,
     build: (detail) => dramModel(bench.snap(), detail),

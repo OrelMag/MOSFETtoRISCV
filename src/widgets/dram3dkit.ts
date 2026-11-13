@@ -140,6 +140,8 @@ function mergeAlike(items: Item[]): Item[] {
 export const DRAM_HOME = { yaw: 2.55, pitch: 0.62, target: [6, 2, -20] as Vec3, dist: 120 };
 /** The canvas's shape: the bit lines grow with the ratio, the canvas should not jump. */
 export const DRAM_ASPECT = 1.45;
+/** Home fits a sphere this big round the array's middle: the cells and the lines fill the canvas, the plate's corners may run off. */
+export const DRAM_HOME_R = 27;
 /** The drawn levels of a snapshot, for tests: every charge solid's height over the well floor, by where it stands. */
 export function levelsDrawn(m: Model3): { x: number; z: number; level: number }[] {
   return m.items.filter((i) => i.name?.startsWith('charge')).map((i) => ({ x: (i.geo.min[0] + i.geo.max[0]) / 2, z: (i.geo.min[2] + i.geo.max[2]) / 2, level: (i.geo.max[1] - PAD) / HMAX }));
