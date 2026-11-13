@@ -298,7 +298,7 @@ questions with their answers at the end, and a link to each step on the site. 3D
 Each 3D model becomes a numbered figure: its starting view, in the paper's light colours with its names on, whatever theme
 you use, with a link to the live model on the site.
 
-![A printed figure: "Figure P2.7. ENIAC's decade ring", with the live model's address](img/everywhere/11-print-model-figure.png)
+![A printed figure: "Figure P2.1. The 6SN7 twin triode", with the live model's address](img/everywhere/11-print-model-figure.png)
 
 The printed page is always light, whatever theme you use on screen.
 
