@@ -91,7 +91,8 @@ const kindTok: Record<Kind, `--${string}`> = { alu: '--as-alu', load: '--as-load
 
 export function asmModel(look: AsmLook): Model3 {
   const { plan, t, ctx, rgb } = look, c = plan[t], full = look.detail === 'full', items: Item[] = [];
-  const x0 = stationX(-1.4), x1 = stationX(5.4);
+  // the belt ends just past Fetch and Writeback, inside the home frame (the gutters' names stay off it)
+  const x0 = stationX(-0.68), x1 = stationX(4.58);
   const steel = M.make({ ...M.steel, base: '--as-frame', metal: 0.6, rough: 0.4, label: 'steel frame' });
   const belt = M.make({ ...M.rubber, base: '--as-belt', label: 'rubber belt' });
   const plate = M.make({ base: '--as-plate', metal: 0.4, rough: 0.35, label: 'pallet (a pipeline register’s slot)' });
@@ -159,7 +160,8 @@ export function asmModel(look: AsmLook): Model3 {
 function anchorsOf(c: Cycle): StudioAnchor[] {
   const front: Vec3 = [0, 0.3, 1], up: Vec3 = [0, 1, 0];
   // the five stations only: a pallet's instruction is on hover and in the readout ("forwarded" on a clock that forwards)
-  const out: StudioAnchor[] = STATIONS.map((n, i) => ({ text: n, p: [stationX(i), -2, 11], side: 'b', n: front, on: `st${i}` }));
+  // the first three to the left gutter, Memory and Writeback to the right one (left to themselves they sat on the rail)
+  const out: StudioAnchor[] = STATIONS.map((n, i) => ({ text: n, p: [stationX(i), -2, 11], side: 'b', n: front, on: `st${i}`, gutter: i < 3 ? 'l' : 'r' }));
   if (chutesUsed(c).size) out.push({ text: 'forwarded', p: [stationX(2.5), 30, -10], side: 't', n: up, on: 'chutes' });
   return out;
 }
