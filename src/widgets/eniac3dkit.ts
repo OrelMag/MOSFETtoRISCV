@@ -120,7 +120,7 @@ const wireOn = M.glow(M.make({ base: [1.0, 0.55, 0.2], metal: 0, rough: 0.3, lab
 // ---------------------------------------------------------------- the model
 
 /** Home: low, three-quarters along the units decade from its front panel, the tens behind and above. */
-export const ENIAC_HOME: OrbitView = { target: [stageX(4), 60, RING_Z], yaw: 0.95, pitch: 0.15, dist: 800 };
+export const ENIAC_HOME: OrbitView = { target: [stageX(5), 60, RING_Z], yaw: 0.92, pitch: 0.15, dist: 1000 };
 /** Both decades from above: the carry between them. */
 export const ENIAC_TOP: OrbitView = { target: [0, decadeY(1) / 2 + 30, decadeZ(1) / 2], yaw: 0.25, pitch: 0.75, dist: 1750 };
 
