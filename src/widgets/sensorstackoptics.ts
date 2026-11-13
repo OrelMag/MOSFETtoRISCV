@@ -9,7 +9,7 @@
 //   blue and green ones leak a little there, as pigment filters do: why a camera adds an infrared-cut filter.
 
 import { IMX183, absorptionDepth, type Cfa } from '../phys/imagesensor';
-import type { StackOptics } from './sensorstack3dparts';
+import type { StackOptics } from './sensorstack3dgeom';
 
 /** n of intrinsic silicon at 300 K (Green 2008, table 1). */
 export const N_SI: readonly (readonly [number, number])[] = [

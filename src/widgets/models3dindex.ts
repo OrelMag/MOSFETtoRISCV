@@ -250,7 +250,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'sensorstack', title: 'Four pixels, cut open', category: 'devices', chapter: 'sensors', step: 0,
     summary: 'A Bayer quad in cross-section, front- or back-side lit: rays traced through microlens, filter and metal to their absorption depth.',
-    files: ['sensorstack3d', 'sensorstack3dview', 'sensorstack3dparts', 'sensorstackoptics'], factory: 'sensorStack3d',
+    files: ['sensorstack3d', 'sensorstack3dview', 'sensorstack3dkit', 'sensorstack3dgeom', 'sensorstackoptics'], factory: 'sensorStack3d',
     open: () => import('./sensorstack3d').then((m) => m.sensorStack3d()),
   },
 ];

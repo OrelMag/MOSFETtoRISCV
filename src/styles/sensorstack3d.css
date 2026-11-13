@@ -28,3 +28,7 @@
 .ss-cv-leg span::before { content: ''; display: inline-block; width: 16px; height: 0; margin-right: 4px; vertical-align: middle; border-top: 2px solid; }
 .ss-cv-leg .f::before { border-top: 2px dashed var(--ss-cv-fsi); }
 .ss-cv-leg .b::before { border-top-color: var(--ss-cv-bsi); }
+/* studio stage (widgets/sensorstack3dview.ts): the canvas the full column, the readout and curve beside each other below it; the front row is drawn cut, so no cut or explode */
+.ss3 .r3 { grid-template-columns: minmax(0, 1fr); }
+.ss3 .r3-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 24px; align-items: start; }
+.ss3 .r3-sl:has(input[aria-label="Cutaway"]), .ss3 .r3-sl:has(input[aria-label="Exploded view"]) { display: none; }
