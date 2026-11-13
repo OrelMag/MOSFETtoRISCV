@@ -2,11 +2,12 @@
 // share them): the sum of minterms and the minimal sum as NAND circuits, the algebra laws with their gate counts, a table's cost
 // under the exact and the greedy cover, the seven-segment decoder, and the multiplexer that glitches.
 
-import { Builder } from './builder';
 import { evalBool, parseBool, type BoolEx } from './boolexpr';
+import { Builder } from './builder';
 import { andN } from './combinational';
 import { define } from './define';
-import { AND, MUX2, NOT, XOR } from './gates';
+import { AND, MUX2, XOR } from './gates';
+import { LiteralRails } from './rails';
 import { NAND3 } from './seqparts';
 import { cover, covers, literals, primes, type Term } from './sop';
 import { tableDef, tableLogic, termText, type TableLogic, type TableSpec } from './tablelogic';
@@ -14,7 +15,8 @@ import { NAND } from './transistors';
 import { flatten } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import { logicDepth, stats } from '../sim/stats';
-import type { ComponentDef } from '../sim/types';
+import { symbolGeom } from '../sim/geometry';
+import type { ComponentDef, InstanceDef, NetDef } from '../sim/types';
 
 /** The prime detector's ones: the 4-bit numbers 2, 3, 5, 7, 11, 13 (the campaign's g_sop, rv16/logic.ts PRIMES4). */
 export const PRIME_ONES = [2, 3, 5, 7, 11, 13];
@@ -76,23 +78,62 @@ export function primesOfRows(s: string): Term[] {
  */
 export function mintermDef(ones: number[], id: string, name: string, ins = ABCD): ComponentDef {
   const n = ins.length;
-  const b = new Builder(8, 10, 2);
-  b.pins(...ins);
-  const neg = ins.map((x) => b.name(b.op1(NOT, [x], `¬${x}`, `n${x}`), `${x}_n`, true));
-  b.next();
-  const and = (ds: string[], nm?: string): string => (ds.length === 1 ? ds[0] : b.op1(ds.length === 2 ? AND : andN(ds.length), ds, undefined, nm));
-  // columns: the halves of every term, the term NANDs, the halves of the output's inputs, the output NAND
-  const halves = (ds: string[], nm?: string): [string, string] => { const h = ds.length >> 1; return [and(ds.slice(0, h), nm && `${nm}l`), and(ds.slice(h), nm && `${nm}r`)]; };
-  const hs = ones.map((m) => halves(ins.map((x, i) => ((m >> (n - 1 - i)) & 1 ? x : neg[i])), `m${m}`));
-  b.next();
-  const terms = ones.map((m, k) => b.op1(NAND, hs[k], `¬m${m}`, `m${m}`));
-  b.next();
-  const oh = halves(terms);
-  b.next();
-  const y = b.op1(NAND, oh, 'y', 'or');
-  b.next();
-  b.wire(y, 'y');
-  const R = Math.max(b.right, 30);
+  if (n < 4 || ones.length < 4) throw new Error('mintermDef: needs at least 4 inputs and 4 ones (every half of a term and of the sum is a gate)');
+  // Drawn as the textbook sum of products: every input as a true and a complement rail (lib/rails.ts), one row per minterm with
+  // its two halves tapped from the rails, the term NAND, then the halves of the sum and the output NAND.
+  const instances: InstanceDef[] = [], nets: NetDef[] = [];
+  const rails = new LiteralRails(ins.map((x, i) => ({ src: x, y: 3 + 2 * i, name: x, not: `n${x}` })), 4, 4 + 2 * n);
+  instances.push(...rails.instances);
+  const portsOf = (d: ComponentDef) => ({ ins: d.ports.filter((p) => p.dir === 'in').map((p) => p.name), out: d.ports.find((p) => p.dir === 'out')!.name });
+  const gateOf = (k: number) => (k === 2 ? AND : andN(k));
+  const xA = rails.right + 4, xm = xA + 8, y0 = 4 + 2 * n + 5, ROW = 10;
+  const mOut: string[] = [], mY: number[] = [];
+  ones.forEach((m, k) => {
+    const y = y0 + ROW * k;
+    const lits = ins.map((_, i): [number, 0 | 1] => [i, ((m >> (n - 1 - i)) & 1) as 0 | 1]);
+    const h = n >> 1;
+    const half = (ls: [number, 0 | 1][], nm: string, at: number): string => {
+      ls = [...ls].sort((a, b) => rails.x(a[0], a[1]) - rails.x(b[0], b[1]));
+      const def = gateOf(ls.length), p = portsOf(def);
+      instances.push({ name: nm, def, at: [xA, at] });
+      ls.forEach(([i, v], q) => rails.use(i, v, `${nm}.${p.ins[q]}`));
+      return `${nm}.${p.out}`;
+    };
+    const lo = half(lits.slice(0, h), `m${m}l`, y), hi = half(lits.slice(h), `m${m}r`, y + 5);
+    const pn = portsOf(NAND);
+    instances.push({ name: `m${m}`, def: NAND, at: [xm, y + 3] });
+    nets.push({ name: `m${m}l`, ends: [lo, `m${m}.${pn.ins[0]}`] }, { name: `m${m}r`, ends: [hi, `m${m}.${pn.ins[1]}`] });
+    mOut.push(`m${m}.${pn.out}`); mY.push(y + 5);
+  });
+  // the halves of the sum, each beside its terms; a term line is a trunk in a lane of its own, ordered so none crosses another
+  const halfOf = [mOut.slice(0, ones.length >> 1), mOut.slice(ones.length >> 1)];
+  const yOf = [mY.slice(0, ones.length >> 1), mY.slice(ones.length >> 1)];
+  const laneX0 = xm + 6;
+  const hy = halfOf.map((_, j) => Math.round(yOf[j].reduce((s, v) => s + v, 0) / yOf[j].length - symbolGeom(gateOf(halfOf[j].length)).h / 2));
+  const lanes: { j: number; p: number; key: number }[] = [];
+  halfOf.forEach((os, j) => os.forEach((_, p) => {
+    const pin = hy[j] + 1 + 2 * p, d = yOf[j][p];
+    if (pin !== d) lanes.push({ j, p, key: pin > d ? -d : d }); // going down: the lower driver further left; going up: the higher one
+  }));
+  lanes.sort((a, b) => a.key - b.key);
+  const xh = laneX0 + 2 * lanes.length + 1;
+  const hOut: string[] = [];
+  halfOf.forEach((os, j) => {
+    const def = gateOf(os.length), p = portsOf(def), nm = `u${j}`;
+    instances.push({ name: nm, def, at: [xh, hy[j]] });
+    os.forEach((o, q) => {
+      const l = lanes.findIndex((e) => e.j === j && e.p === q);
+      nets.push({ name: `¬${o.slice(0, o.indexOf('.'))}`, ends: [o, `${nm}.${p.ins[q]}`], trunk: l >= 0 ? laneX0 + 2 * l : undefined });
+    });
+    hOut.push(`${nm}.${p.out}`);
+  });
+  const xo = xh + 8, oy = Math.round((hy[0] + hy[1] + symbolGeom(gateOf(halfOf[0].length)).h / 2 + symbolGeom(gateOf(halfOf[1].length)).h / 2) / 2) - 2;
+  const po = portsOf(NAND);
+  instances.push({ name: 'or', def: NAND, at: [xo, oy] });
+  hOut.forEach((o, j) => nets.push({ ends: [o, `or.${po.ins[j]}`] }));
+  nets.push({ name: 'y', ends: [`or.${po.out}`, 'y'] });
+  nets.push(...rails.nets());
+  const R = xo + 8;
   return define({
     id, name, category: 'gate',
     summary: `y = 1 for ${ones.join(', ')}: one AND per 1 of the truth table, ORed (NAND–NAND).`,
@@ -100,8 +141,8 @@ export function mintermDef(ones: number[], id: string, name: string, ins = ABCD)
     symbol: { kind: 'box', label: 'Σ m' },
     spec: (v) => [ones.includes(v.reduce((acc, bit) => (acc << 1) | bit, 0)) ? 1 : 0],
     netlist: () => ({
-      pins: Object.fromEntries([...ins.map((p, i) => [p, [0, 2 + 4 * i]]), ['y', [R, 6]]]),
-      instances: b.instances, nets: b.nets(),
+      pins: Object.fromEntries([...ins.map((p, i) => [p, [0, 3 + 2 * i]]), ['y', [R, oy + 2]]]),
+      instances, nets,
     }),
   });
 }

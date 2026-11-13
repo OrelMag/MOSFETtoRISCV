@@ -4,9 +4,12 @@
 // Same world axes as widgets/crt3dparts.ts: x along the tube from the gun to the screen, y up, z across the screen (pixel x grows
 // towards -z, so the raster reads left to right seen from the front).
 // Sources: the tube was the commercial CV1131, a 12-inch (300 mm) electrostatically deflected CRT (S. H. Lavington, Computer
-// History Museum timeline, ch. 7, "type CV1131 12-inch diameter"; one source: the Baby's store tubes may have been a smaller type);
+// History Museum timeline, ch. 7, "type CV1131 12-inch diameter"); the University's Computer50 pages give the Baby's store "a
+// standard single 6-inch-diameter CRT", so the size is one side of a conflict and the label says so;
 // the pick-up plate was at first a wire mesh and later a metal plate, close to the outer face (University of Manchester, Digital60,
-// "History of the Williams-Kilburn Tube"). ESTIMATED, no source found: the neck diameter, the plate and gun dimensions, the
+// "History of the Williams-Kilburn Tube"). That plate covered the face: "The plate obscures the front of the tube, so the
+// stored pattern cannot be viewed directly" (Digital60), and the operators read the store on a separate display tube that
+// copied it (Computer50). The model draws the pattern on the store tube's face anyway, so it can be seen, and says so. ESTIMATED, no source found: the neck diameter, the plate and gun dimensions, the
 // tube's length, the 6 mm spot pitch, the phosphor colour, the mesh pitch and the amplifier box. Palette tokens are the CRT model's.
 
 import type { RGB } from '../gl/instances';
@@ -176,7 +179,7 @@ export function williamsAnchors(detail: WilliamsDetail = 'overview', narrow = fa
     { text: 'screen: 32 × 32 spots', p: [fx + W.GLASS, -h - 12, -h + 10], side: 'b', n: front },
     { text: 'pick-up plate', p: [mx, h + W.MESH_MARGIN, 0], side: 't', n: front },
     { text: 'amplifier', p: [AMP.at[0], AMP.at[1] - AMP.size[1] / 2, AMP.at[2]], side: 'b', n: up },
-    { text: 'CV1131, 12-inch', p: [fx + W.GLASS / 2, W.FACE_R + 8, 0], side: 't', n: up, minor: true },
+    { text: 'CV1131: 12 or 6 inch? sources differ', p: [fx + W.GLASS / 2, W.FACE_R + 8, 0], side: 't', n: up, minor: true },
   ];
   return narrow ? all.filter((a) => !a.minor).slice(0, 3) : all;
 }

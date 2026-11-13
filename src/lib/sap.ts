@@ -6,9 +6,11 @@
 
 import { SAP_DISPLAY_ROM, SAP_ROM_HI, SAP_ROM_LO } from '../sap/isa';
 import { stats } from '../sim/stats';
-import { type ComponentDef, netlistOf, type PortDef } from '../sim/types';
+import { instPort } from '../sim/geometry';
+import { type ComponentDef, type NetDef, type Netlist, netlistOf, type PortDef } from '../sim/types';
 import { constWord } from './alu';
 import { Builder } from './builder';
+import { laid } from './layered';
 import { define, merger, ones, splitter } from './define';
 import { AND, OR } from './gates';
 import { TIE0, TIE1 } from './transistors';
@@ -22,9 +24,37 @@ const pinsAt = (names: string[], x: number, step = 4, y0 = 4): Record<string, [n
 const ins = (ps: PortDef[]) => ps.filter((p) => p.dir === 'in').map((p) => p.name);
 const outs = (ps: PortDef[]) => ps.filter((p) => p.dir === 'out').map((p) => p.name);
 
-function built(b: Builder, ports: PortDef[], step = 4) {
-  const R = b.right;
-  return () => ({ pins: { ...pinsAt(ins(ports), 0, step), ...pinsAt(outs(ports), R, step) }, instances: b.instances, nets: b.nets() });
+function built(b: Builder, ports: PortDef[], step = 4, columns = false, wired: string[] = []) {
+  if (columns) {
+    const R = b.right;
+    return () => ({ pins: { ...pinsAt(ins(ports), 0, step), ...pinsAt(outs(ports), R, step) }, instances: b.instances, nets: b.nets() });
+  }
+  // Laid out by logic depth (lib/layered.ts): the chips in signal order with wires between them, not the Builder's columns of
+  // pointers. The clock is a wire. A constant stays a pointer to the chips far from it and is wired to those beside it (within
+  // NEAR), where two of its own pointers would sit on each other.
+  const ties = new Set(b.instances.filter((i) => i.def === TIE0 || i.def === TIE1).map((i) => `${i.name}.y`));
+  // pins in the ports' order: the sandbox example's chips take their faces' pin order from the pins' heights
+  const lay = laid(b, { pinOrder: ports.map((p) => p.name), wires: Object.fromEntries(b.nets().filter((n) => n.name === 'clk' || n.name === 't' || wired.includes(n.ends[0])).map((n) => [n.ends[0], true])) });
+  return function (this: ComponentDef): Netlist {
+    const nl = lay.call(this);
+    const pos = (e: string): [number, number] => {
+      const dot = e.indexOf('.');
+      if (dot < 0) return nl.pins![e];
+      const x = nl.instances.find((q) => q.name === e.slice(0, dot))!;
+      return instPort(x.def, x.at!, x.flip, e.slice(dot + 1), x.rot).pos as [number, number];
+    };
+    const NEAR = 12;
+    return {
+      ...nl,
+      nets: nl.nets.map((n): NetDef => {
+        if (!ties.has(n.ends[0])) return n;
+        const d = pos(n.ends[0]);
+        const far = n.ends.slice(1).filter((e) => { const q = pos(e); return Math.abs(q[0] - d[0]) + Math.abs(q[1] - d[1]) > NEAR; });
+        const { tags: _, ...wire } = n;
+        return far.length === 0 ? wire : { ...wire, tags: [n.ends[0], ...far] };
+      }),
+    };
+  };
 }
 
 /** A bus split into bits (o0 = bit 0). */
@@ -348,7 +378,7 @@ export const SAP_FLAGS: ComponentDef = (() => {
     summary: 'The carry out of the adder and a zero test of the sum (74LS02 NORs on pairs of bits, then 74LS08 ANDs) go into a 74LS173 while FI = 1: CF and ZF, which the microcode\'s address takes for JC and JZ. RST clears both.',
     ports: FLAGS_PORTS,
     symbol: { kind: 'box', label: 'FLAGS' },
-    netlist: built(b, FLAGS_PORTS),
+    netlist: built(b, FLAGS_PORTS, 4, false, [ay[0], ay[1]]), // the AND's two outputs back into its own inputs: short loops
   });
 })();
 
@@ -398,7 +428,7 @@ export const SAP_DISPLAY: ComponentDef = (() => {
     summary: 'The output value in decimal: a 28C16 holding each digit\'s segments for every value. Ben multiplexes one EEPROM over the digits with a 555, a 74LS76 and a 74LS139; here three copies of it show ones, tens and hundreds at once.',
     ports: DISP_PORTS,
     symbol: { kind: 'box', label: 'DISPLAY' },
-    netlist: built(b, DISP_PORTS),
+    netlist: built(b, DISP_PORTS, 4, true), // the Builder's columns: by logic depth its three ROMs' inputs became pointers
   });
 })();
 

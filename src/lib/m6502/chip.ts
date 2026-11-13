@@ -52,19 +52,21 @@ const r = (s: Sig) => `r_${s}`;
 
 export function clockBlock(): ComponentDef {
   const L = new Logic();
+  // two rows, one per phase: its delay chain, the NOR and the two buffers (place 'slices': row 0 makes φ1, row 1 φ2)
+  L.slice(1);
   const nphi0 = L.inv('phi0');
   // each raw phase waits for the other's buffered line, delayed: the non-overlap gap
   const delay = (x: string, k: number) => { let y = x; for (let i = 0; i < k; i++) y = L.inv(y); return y; };
   const a = L.net('a'), b = L.net('b');
-  L.nor(['phi0', delay('p2', 6)], a);
-  L.nor([nphi0, delay('p1', 6)], b);
-  L.inv(a, 'np1'); L.inv('np1', 'p1');
-  L.inv(b, 'np2'); L.inv('np2', 'p2');
+  L.slice(0); L.nor(['phi0', delay('p2', 6)], a);
+  L.slice(1); L.nor([nphi0, delay('p1', 6)], b);
+  L.slice(0); L.inv(a, 'np1'); L.inv('np1', 'p1');
+  L.slice(1); L.inv(b, 'np2'); L.inv('np2', 'p2');
   return L.build({
     id: 'm65_clock', name: '6502 clock generator',
     summary: 'φ0 in, two non-overlapping phases out: φ1 while φ0 = 0, φ2 while φ0 = 1, each starting only after the other has been low for six gate delays.',
     ports: [bit('phi0'), bit('p1', 'out'), bit('p2', 'out'), bit('np1', 'out'), bit('np2', 'out')],
-    symbol: { kind: 'box', label: 'CLOCK' }, rows: 6,
+    symbol: { kind: 'box', label: 'CLOCK' }, rows: 6, place: 'slices', gap: 3,
   });
 }
 
@@ -74,7 +76,12 @@ export function decodeBlock(): ComponentDef {
   const L = new Logic();
   const rows = plaRows();
   const rowsOf = new Map<number, string[]>(SIGNALS.map((_, i) => [i, []]));
+  // rows (place 'slices'): the product terms of one signal together, its NOR level with them; a term that feeds several signals is a label
+  const count = new Map<number, number>();
+  for (const row of rows) for (const s of row.outs) count.set(s, (count.get(s) ?? 0) + 1);
+  const home = (outs: number[]) => outs.reduce((a, b) => ((count.get(b) ?? 0) > (count.get(a) ?? 0) ? b : a));
   rows.forEach((row, k) => {
+    L.slice(home(row.outs));
     const ins: string[] = [`nt[${row.t - 1}]`];
     for (let i = 0; i < 8; i++) {
       if ((row.cube.mask >> i) & 1) continue;
@@ -85,6 +92,7 @@ export function decodeBlock(): ComponentDef {
     for (const s of row.outs) rowsOf.get(s)!.push(out);
   });
   SIGNALS.forEach((s, i) => {
+    L.slice(i);
     const ins = [...rowsOf.get(i)!, ...(EXTRA[s] ?? [])];
     if (ins.length) L.nor(ins, n(s));
     else L.pullup('VDD', n(s)); // never asserted: tied off
@@ -93,7 +101,7 @@ export function decodeBlock(): ComponentDef {
     id: 'm65_decode', name: '6502 decode PLA',
     summary: `${rows.length} product terms of IR and the T state (each a NOR of complemented literals), ORed per control signal (a NOR of its rows): the control table of src/m6502/ucode.ts, minimized with the undocumented opcodes as don't-cares.`,
     ports: [bus('ir', 8, 'in'), bus('nir', 8, 'in'), bus('nt', 7, 'in'), ...EXTRA_NETS.map((x) => bit(x)), ...SIGNALS.map((s) => bit(n(s), 'out'))],
-    symbol: { kind: 'box', label: 'DECODE PLA' }, rows: 24,
+    symbol: { kind: 'box', label: 'DECODE PLA' }, rows: 24, place: 'slices', top: true, across: false, bands: 14,
   });
 }
 
@@ -134,7 +142,7 @@ export function controlBlock(): ComponentDef {
       ...PHI1.map((s) => bit(c(s), 'out')), ...HELD.map((s) => bit(h(s), 'out')), ...RAW.map((s) => bit(r(s), 'out')),
       bit('hold_pcl', 'out'), bit('hold_pch', 'out'), bit('c_ZO_ADH', 'out'), bit('c_VEC', 'out'), bit(h('PC_INC'), 'out'), bit(h('WRITE'), 'out'),
       bit('rw', 'out'), bit('wa', 'out'), bit('wx', 'out'), bit('wy', 'out'), bit('irld', 'out'), bit('sync', 'out')],
-    symbol: { kind: 'box', label: 'CONTROL' }, rows: 20,
+    symbol: { kind: 'box', label: 'CONTROL' }, rows: 20, place: 'layered',
   });
 }
 
@@ -143,6 +151,8 @@ export function controlBlock(): ComponentDef {
 export function timingBlock(): ComponentDef {
   const L = new Logic();
   const [END, END_INT, NOCROSS, NOTTAKEN, NOCROSS_BR] = ['END', 'END_INT', 'END_NOCROSS', 'END_NOTTAKEN', 'END_NOCROSS_BR'].map((s) => r(s as Sig));
+  // rows (place 'slices'): the end-of-instruction logic, one row per T state of the ring, the branch's state
+  L.slice(0);
   // branch condition: the flag picked by IR7:6, compared with IR5
   const nf = L.aoi([['nir[7]', 'nir[6]', 'fn'], ['nir[7]', 'ir[6]', 'fv'], ['ir[7]', 'nir[6]', 'fc'], ['ir[7]', 'ir[6]', 'fz']]);
   const f = L.inv(nf);
@@ -156,11 +166,13 @@ export function timingBlock(): ComponentDef {
   const nend = L.aoi([[END], [END_INT], [NOCROSS, nacr], [NOTTAKEN, ntaken], [NOCROSS_BR, ncross]], 'nendany');
   L.inv(nend, 'endany');
   // the T ring: one-hot, T1 after the last cycle (or while RES is low)
+  L.slice(1);
   const next1 = L.inv(L.nor(['endany', 'reslow']));
   const t = L.ms(next1, 'p1', 'p2', 't1', 'nt[0]');
   void t;
-  for (let k = 2; k <= 7; k++) L.ms(L.nor([`nt[${k - 2}]`, 'endany', 'reslow']), 'p1', 'p2', `t${k}`, `nt[${k - 1}]`);
+  for (let k = 2; k <= 7; k++) { L.slice(k); L.ms(L.nor([`nt[${k - 2}]`, 'endany', 'reslow']), 'p1', 'p2', `t${k}`, `nt[${k - 1}]`); }
   // the branch's state for the next fetch: within the page, crossed (and the offset's sign)
+  L.slice(8);
   const enBr = L.or([NOTTAKEN, NOCROSS_BR]);
   const nenBr = L.inv(enBr);
   const brCross = L.ms(L.inv(L.aoi([[NOCROSS_BR, cross], [nenBr, 'brcross']])), 'p1', 'p2', 'brcross', 'nbrcross');
@@ -184,7 +196,7 @@ export function timingBlock(): ComponentDef {
       bit('fn'), bit('fv'), bit('fc'), bit('fz'), bus('db', 8, 'in'), bit('carry'), bit('acr'), bit('reslow'), bit('p1'), bit('p2'),
       bus('nt', 7, 'out'), bit('t1', 'out'), bit('endany', 'out'), bit('nendany', 'out'),
       ...['brx', 'brs', 'brnx', 'brns', 'bfn', 'bfp'].map((x) => bit(x, 'out'))],
-    symbol: { kind: 'box', label: 'TIMING' }, rows: 14,
+    symbol: { kind: 'box', label: 'TIMING' }, rows: 14, place: 'slices', gap: 8,
   });
 }
 
@@ -225,7 +237,7 @@ export function intrBlock(): ComponentDef {
     ports: [bit('resb'), bit('irqb'), bit('nmib'), bit('p1'), bit('p2'), bit('r_END'), bit('r_END_NOCROSS'), bit('r_END_NOTTAKEN'), bit('r_BR_FIX'),
       bit('r_END_INT'), bit('r_VEC_SEL'), bit('endany'), bit('nendany'), bit('ni'),
       bit('reslow', 'out'), bit('nreslow', 'out'), bit('intg', 'out'), bit('nintg', 'out'), bit('resetting', 'out'), bit('nresetting', 'out'), bit('vfa', 'out')],
-    symbol: { kind: 'box', label: 'INTERRUPTS' }, rows: 12,
+    symbol: { kind: 'box', label: 'INTERRUPTS' }, rows: 12, place: 'layered', gap: 12,
   });
 }
 
@@ -234,6 +246,7 @@ export function intrBlock(): ComponentDef {
 export function irBlock(): ComponentDef {
   const L = new Logic();
   for (const i of R8) {
+    L.slice(i);
     // a reset holds a NOP ($EA) while RES is low; an interrupt sequence loads BRK ($00)
     const nin = (0xea >> i) & 1 ? L.aoi([[`din[${i}]`, 'nintg'], ['reslow']]) : L.nand([`din[${i}]`, 'nintg']);
     L.pass('irld', nin, `q${i}`);
@@ -243,7 +256,7 @@ export function irBlock(): ComponentDef {
     id: 'm65_ir', name: '6502 instruction register',
     summary: 'The opcode, loaded at the end of the fetch cycle (φ2 of T1), stored inverted and refreshed in φ1. A reset forces NOP, an interrupt BRK.',
     ports: [bus('din', 8, 'in'), bit('irld'), bit('nintg'), bit('reslow'), bit('p1'), bus('ir', 8, 'out'), bus('nir', 8, 'out')],
-    symbol: { kind: 'box', label: 'IR' }, rows: 8,
+    symbol: { kind: 'box', label: 'IR' }, rows: 8, place: 'slices',
   });
 }
 
@@ -267,6 +280,7 @@ export function regBlock(name: string, drives: string[]): ComponentDef {
   const L = new Logic();
   const cell = regBit(drives);
   for (const i of R8) {
+    L.slice(i);
     L.add(`b${i}`, cell, { ld: 'ld', p2: 'p2', sb: `sb[${i}]`, v: `v[${i}]`,
       ...Object.fromEntries(drives.map((b) => [`rd_${b}`, `rd_${b}`])), ...Object.fromEntries(drives.filter((b) => b !== 'sb').map((b) => [b, `${b}[${i}]`])) });
   }
@@ -274,7 +288,7 @@ export function regBlock(name: string, drives: string[]): ComponentDef {
     id: `m65_reg_${name.toLowerCase()}`, name: `6502 register ${name}`,
     summary: `${name}: eight register bits sharing a load line (from SB) and ${drives.length} drive line${drives.length > 1 ? 's' : ''}.`,
     ports: [bit('ld'), ...drives.map((b) => bit(`rd_${b}`)), bit('p2'), ...[...new Set(['sb', ...drives])].map((b) => bus(b)), bus('v', 8, 'out')],
-    symbol: { kind: 'box', label: name }, rows: 4,
+    symbol: { kind: 'box', label: name }, rows: 4, place: 'slices',
   });
 }
 
@@ -380,6 +394,7 @@ export function pcBlock(): ComponentDef {
   const L = new Logic();
   let cy = 'h_PC_INC';
   for (let i = 0; i < 16; i++) {
+    L.slice(i);
     const lo = i < 8, j = i & 7, busName = lo ? 'adl' : 'adh';
     // PC select (φ1): the address bus when jumping, else the PC itself; held through φ2
     const pcs = `pcs${i}`, pc = `pc${i}`;
@@ -403,7 +418,7 @@ export function pcBlock(): ComponentDef {
     summary: 'PC select (from ADL / ADH in φ1 on a jump, else the PC), a 16-bit incrementer, the PC loaded in φ2; it drives ADL / ADH (an address) and DB (a push).',
     ports: [...['c_ADL_PCL', 'c_ADH_PCH', 'hold_pcl', 'hold_pch', 'h_PC_INC', 'c_PCL_ADL', 'c_PCH_ADH', 'c_PCL_DB', 'c_PCH_DB', 'p2'].map((x) => bit(x)),
       ...busPorts('adl', 'adh', 'db')],
-    symbol: { kind: 'box', label: 'PC' }, rows: 24,
+    symbol: { kind: 'box', label: 'PC' }, rows: 24, place: 'slices',
   });
 }
 
@@ -413,6 +428,7 @@ export function addrBlock(): ComponentDef {
   const L = new Logic();
   for (let i = 0; i < 16; i++) {
     const lo = i < 8, j = i & 7;
+    L.slice(i);
     L.pass(lo ? 'c_ADL_ABL' : 'c_ADH_ABH', `${lo ? 'adl' : 'adh'}[${j}]`, `q${i}`);
     L.cell(`q${i}`, 'p2', L.net(), `a[${i}]`);
   }
@@ -420,7 +436,7 @@ export function addrBlock(): ComponentDef {
     id: 'm65_addr', name: '6502 address register',
     summary: 'ABL / ABH: loaded from ADL / ADH in φ1, refreshed in φ2, driving the address pins A0 … A15 for the whole cycle.',
     ports: [bit('c_ADL_ABL'), bit('c_ADH_ABH'), bit('p2'), ...busPorts('adl', 'adh'), bus('a', 16, 'out')],
-    symbol: { kind: 'box', label: 'ABH / ABL' }, rows: 16,
+    symbol: { kind: 'box', label: 'ABH / ABL' }, rows: 16, place: 'slices',
   });
 }
 
@@ -430,6 +446,7 @@ export function dataBlock(): ComponentDef {
   const dlq = L.nor(['np2', 'h_WRITE', 'h_DL_HOLD']);
   const nwq = L.nand(['p2', 'h_WRITE']);
   for (const i of R8) {
+    L.slice(i);
     const din = L.inv(L.inv(`d[${i}]`), `din[${i}]`);
     L.pass(dlq, din, `dl${i}`);
     const { nq } = L.cell(`dl${i}`, 'p1');
@@ -448,7 +465,7 @@ export function dataBlock(): ComponentDef {
     summary: 'DL (the byte read, latched in φ2 and driven onto DB, ADL or ADH) and DOR (the byte to write, from DB in φ1, onto the pins in φ2 of a write cycle, push–pull).',
     ports: [bit('c_DL_DB'), bit('c_DL_ADL'), bit('c_DL_ADH'), bit('c_DB_DOR'), bit('h_WRITE'), bit('h_DL_HOLD'), bit('p1'), bit('p2'), bit('np2'),
       ...busPorts('db', 'adl', 'adh', 'd'), bus('din', 8, 'out')],
-    symbol: { kind: 'box', label: 'DL / DOR' }, rows: 16,
+    symbol: { kind: 'box', label: 'DL / DOR' }, rows: 16, place: 'slices',
   });
 }
 
@@ -480,7 +497,7 @@ export function flagsBlock(): ComponentDef {
     summary: 'N V D I Z C, each a master–slave pair whose next value is chosen in φ1: from DB (a load, PLP / RTI), from the ALU, set or cleared, else kept. P is pushed onto DB with B = 0 in an interrupt.',
     ports: [...RAW.slice(0, 15).map((s) => bit(r(s))), bit('c_P_DB'), bit('intg'), bit('out7'), bit('zout'), bit('vout'), bit('carry'), bit('dbz'), bit('p1'), bit('p2'),
       bus('db'), ...flags.map((f) => bit(`f${f}`, 'out')), bit('ni', 'out')],
-    symbol: { kind: 'box', label: 'P' }, rows: 16,
+    symbol: { kind: 'box', label: 'P' }, rows: 16, place: 'layered',
   });
 }
 
@@ -489,14 +506,17 @@ export function flagsBlock(): ComponentDef {
 export function busesBlock(): ComponentDef {
   const L = new Logic();
   for (const b of ['db', 'sb', 'adl', 'adh']) for (const i of R8) {
+    L.slice(i);
     L.pullup('p2', `${b}[${i}]`);
     L.cap([`${b}[${i}]`], 20);
   }
   for (const i of R8) {
+    L.slice(i);
     L.pass('c_SB_DB', `sb[${i}]`, `db[${i}]`);
     L.pass('c_SB_ADH', `sb[${i}]`, `adh[${i}]`);
     L.pulldown(i ? 'c_ZO_ADH' : 'c_ZERO_ADH', `adh[${i}]`);
   }
+  L.slice(-1);
   // vectors on ADL: $FA / $FC / $FE (+1 for the high byte): bit 0 low for the low byte, bit 1 for RESET, bit 2 for NMI
   // DB = 0? (for N Z after a load: Z), read where the bus lives
   L.nor(R8.map((i) => `db[${i}]`), 'dbz');

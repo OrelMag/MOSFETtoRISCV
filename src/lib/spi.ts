@@ -149,7 +149,8 @@ export function spiPair(): ComponentDef {
   const W = dx + dg.w + 22;
   const rightY = (p: string) => pm(p)[1];
   for (const p of ['rx', 'busy', 'done', 'sclk', 'mosi']) pins[p] = [W, rightY(p)];
-  pins.cs0_n = [W, dy0 + dg.ports.cs_n.pos[1]]; pins.cs1_n = [W, dy1 + dg.ports.cs_n.pos[1]];
+  // cs0_n under the master's outputs (its own row was one unit from sclk's: PW-16); every right pin is a label
+  pins.cs0_n = [W, Math.max(...['rx', 'busy', 'done', 'sclk', 'mosi'].map(rightY)) + 3]; pins.cs1_n = [W, dy1 + dg.ports.cs_n.pos[1]];
   pins.miso = [W, dy1 + dg.h + 6];
   const gy = my + mg.h + 4;
   const instances = [

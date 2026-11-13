@@ -115,8 +115,10 @@ export const chAppendixBaby: Chapter = {
         seconds". At the beat of Kilburn's 1947 design, ${BEAT_US} µs (32 digits of ${DIGIT_US} µs and four of fly-back; the replica's manual gives 10 µs digits), that is
         about ${HOLD_BEATS} beats. Reading also disturbs the charge, so a read must be followed by a rewrite.</p>
         <p>The model shows the store tube with Kilburn's program on its face: the gun, the plates that steer the beam to a
-        line and a digit, and the wire-mesh pick-up plate in front of the glass with its lead to the amplifier. The tube was
-        a commercial CV1131 (the sources disagree on the size of its face, 6 or 12 inches); its dimensions here are estimates.</p>`,
+        line and a digit, and the wire-mesh pick-up plate in front of the glass with its lead to the amplifier. That plate
+        covered the face, so nobody saw the bits on a store tube: the operators read them on a separate display tube that
+        copied the store, and the model draws the pattern on the store's face only so that you can. The tube was a
+        commercial CV1131 (the sources disagree on the size of its face, 6 or 12 inches); its dimensions here are estimates.</p>`,
       widget: () => williams3d(ssemWords(FULL)),
     },
     {

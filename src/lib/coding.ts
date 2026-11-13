@@ -248,6 +248,7 @@ export function encoder(n: number): ComponentDef {
     const b = new Builder(8);
     b.pins('x');
     const s = b.op(splitter(ones(n)), ['x']);
+    for (let i = 0; i < n; i++) b.name(`${s}.o${i}`, `x${i}`); // a tap reads as the input bit it is
     b.next();
     const ys: string[] = [];
     for (let j = 0; j < k; j++) ys.push(orOf(b, Array.from({ length: n }, (_, i) => i).filter((i) => (i >> j) & 1).map((i) => `${s}.o${i}`), `bit ${j}`));

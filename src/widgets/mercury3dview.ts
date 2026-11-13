@@ -9,6 +9,7 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import type { OrbitView } from '../gl/camera';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import {
   CARRIER_HZ, CUT_LENGTH_M, LENGTH_M, OD_M, ROW_HIT_S, SLOTS, SLOTS_PER_WORD, SOUND_M_S, TANKS, TANK_C, Tank, WINDOW_TOL, WORDS, bitsInTank,
@@ -45,10 +46,11 @@ export function mercuryView(): Widget {
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.lab,
     aria: 'EDSAC’s mercury delay line in 3D: a steel tube of mercury with a quartz crystal at each end, a train of pulses travelling along it, the amplifier, reshaper and gate that feed the pulses back, and fifteen more tanks in the same housing',
     camera: startView(),
     limits: { minDist: 40, maxDist: 700 },
-    note: `Length, outside diameter, slot count and pulse timing are the 1948 report’s and the sound speed is mercury’s; the bore and wall, the crystals’ size, the housing (the report only says all tanks must be at the same temperature) with its 4 × 4 grid of tubes standing for a battery of 16, and the electronics are drawn, not modelled; the clock fixes the timing as it did in EDSAC (500 kc/s, a 2 µs slot, 576 slots = 1.152 ms) and the tube is the length that fits it: sound goes ${SOUND_M_S.toFixed(0)} m/s in mercury at the 40 °C the tanks were held at, so the crystal faces are ${CUT_LENGTH_M.toFixed(3)} m apart, ${((CUT_LENGTH_M / LENGTH_M - 1) * 100).toFixed(1)} % more than the report’s ‘approximately 5 ft 4 in’ between end blocks (the path between the crystal faces is not given: our inference). The speed and its −0.46 m/s per K slope are one handbook table’s (Karl Deutsch, ‘Sound Velocity in Liquids’), a linear fit; the backing’s material is not given, so its box is generic; the temperature slider is our model of the drift, not a measurement. The pulses move at the real speed and spacing, ${groupNum(SLOWS[0])} times slower (${groupNum(SLOWS[1])} on the slow setting), and their weakening and spreading down the tube is exaggerated.`,
+    note: `Length, outside diameter, slot count and pulse timing are the 1948 report’s and the sound speed is mercury’s; the bore and wall, the crystals’ size, the housing (the report only says all tanks must be at the same temperature) with its 4 × 4 grid of tubes standing for a battery of 16, and the electronics are drawn, not modelled; the clock fixes the timing as it did in EDSAC (500 kc/s, a 2 µs slot, 576 slots = 1.152 ms) and the tube is the length that fits it: sound goes ${SOUND_M_S.toFixed(0)} m/s in mercury at 40 °C (the temperature secondary sources give for heated mercury lines; no EDSAC source we could read states it), so the crystal faces are ${CUT_LENGTH_M.toFixed(3)} m apart, ${((CUT_LENGTH_M / LENGTH_M - 1) * 100).toFixed(1)} % more than the report’s ‘approximately 5 ft 4 in’ between end blocks (the path between the crystal faces is not given: our inference). The speed and its −0.46 m/s per K slope are one handbook table’s (Karl Deutsch, ‘Sound Velocity in Liquids’), a linear fit; the backing’s material is not given, so its box is generic; the temperature slider is our model of the drift, not a measurement. The pulses move at the real speed and spacing, ${groupNum(SLOWS[0])} times slower (${groupNum(SLOWS[1])} on the slow setting), and their weakening and spreading down the tube is exaggerated.`,
     draw: () => paint(),
   });
   const palette = (): MercuryPalette => ({

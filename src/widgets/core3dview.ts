@@ -7,6 +7,7 @@ import { h, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { FULL, HALF, HALF_MAX, HALF_MIN, IC, N, coreAnchors, coreParts, halfSelected, idle, idx, colOf, rowOf, planOp, marginOf, marginWindow, cycleFault, type CorePalette, type CorePose, type Op, type Phase } from './core3dparts';
 
@@ -23,10 +24,11 @@ export function coreView(): Widget {
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.machine,
     aria: 'A plane of sixteen ferrite cores in 3D, threaded by X and Y select wires, a sense wire and an inhibit wire; a bright wire carries current and a circulating arrow on each core shows its magnetisation',
     camera: { target: [0, -4, 4], yaw: 0.62, pitch: 0.62, dist: phone() ? 340 : 250 },
     limits: { minDist: 90, maxDist: 520 },
-    note: 'Sizes are a mid-1950s Lincoln Laboratory core’s (80 mil outside, 50 mil inside, 20 mil high) with the pitch and the wire gauge assumed; the cores are drawn as round tubes on a tilted ring, the loop as perfectly square (a real core drifts a little with every half-select), and a cycle lasts about a second here, not microseconds. The half-select current is Whirlwind’s, 0.45 A on each selected X and Y line (MIT Report R-221), so a full select is 0.90 A; the switching current, 0.65 A, is the model’s own figure between them, since R-221 gives the current that switches a core within a set time, not a threshold. Real cores switch over a range, not at one value (the drive-spread switch gives each core its own Ic, up to 20 % off). The sense wire runs diagonally through all sixteen, as in real planes, where that lets the half-select noise of a core’s neighbours cancel; the cancelling is not modelled and the pulse is drawn as a single pulse. The three-wire plane merges sense and inhibit into that wire; its current direction against each core is not modelled, the inhibit still cancels one half in every core. The faint plane below stands for the other planes of a word (Whirlwind’s stack was 32 × 32 × 17: 16 bits and a parity bit, one plane each): it shares the X and Y wires; the diodes and terminations at a plane’s edge are not drawn.',
+    note: 'Sizes are a mid-1950s Lincoln Laboratory core’s (80 mil outside, 50 mil inside, 20 mil high) with the pitch assumed and Whirlwind’s 32-gauge wire (MIT Report R-221, drawn bare); the cores are drawn as round tubes on a tilted ring, the loop as perfectly square (a real core drifts a little with every half-select), and a cycle lasts about a second here, not microseconds. The half-select current is Whirlwind’s, 0.45 A on each selected X and Y line (MIT Report R-221), so a full select is 0.90 A; the switching current, 0.65 A, is the model’s own figure between them, since R-221 gives the current that switches a core within a set time, not a threshold. Real cores switch over a range, not at one value (the drive-spread switch gives each core its own Ic, up to 20 % off). The sense wire runs diagonally through all sixteen, as in real planes, where that lets the half-select noise of a core’s neighbours cancel; the cancelling is not modelled and the pulse is drawn as a single pulse. The three-wire plane merges sense and inhibit into that wire; its current direction against each core is not modelled, the inhibit still cancels one half in every core. The faint plane below stands for the other planes of a word (Whirlwind’s stack was 32 × 32 × 17: 16 bits and a parity bit, one plane each): it shares the X and Y wires; the diodes and terminations at a plane’s edge are not drawn.',
     draw: () => paint(),
   });
   const palette = (): CorePalette => ({

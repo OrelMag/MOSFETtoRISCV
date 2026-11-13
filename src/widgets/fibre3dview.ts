@@ -8,6 +8,7 @@ import { h, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { endTau, facts, fibreAnchors, fibreParts, FIBRES, LENGTH_KM, profileOf, pulseView, rayDelayOf, SIGMA_NS, X0, type FibrePalette, type FibreState, type Kind, type Profile } from './fibre3dparts';
 import { bandwidthMHzKm, gradedDelayPsKm, stepDelayPsKm } from '../phys/fibre';
@@ -32,6 +33,7 @@ export function fibreView(initial: Kind = 'multi'): Widget {
     leak: stage.rgb('--fb-leak'), pulse: stage.rgb('--fb-pulse'), glow: stage.rgba('--fb-glow', 0.55), air: stage.rgb('--fb-air'), cut: stage.rgb('--fb-cut'),
   });
   const stage = modelStage(panel, {
+    look: LOOKS.lab,
     aria: 'An optical fibre cut away in 3D: the core, the cladding and the coating, with a ray launched at a chosen angle that is guided by total internal reflection or leaks into the cladding, and a pulse travelling down it',
     camera: { ...VIEW },
     limits: { minDist: 7, maxDist: 400 },
@@ -39,7 +41,7 @@ export function fibreView(initial: Kind = 'multi'): Widget {
       { label: 'Whole stretch', view: VIEW, pick: () => { st.look = false; paint(); } },
       { label: 'Look in', view: () => LOOK(st.kind), title: 'Close on the input end face: the core, the cladding and the coating to scale', pick: () => { st.look = true; paint(); } },
     ],
-    note: 'Scale: 12.5 µm to the unit across and along, so the drawn stretch is 1 mm of fibre, with true diameters (50 or 8 µm core, 125 µm cladding, 250 µm coating) and true ray angles (the bounce spacing and the graded ray’s 1.1 mm period are real). The delays and the pulse plot are for 1 km, and the packets’ lag is drawn 20 times too long (in a graded core it is too small to see). The rays are meridional (they cross the axis); skew rays are left out. The single-mode field is drawn as a Gaussian at the 10.4 µm mode-field diameter. Between the rays and the extreme one, a graded ray’s delay follows turning radius to the fourth power. Fresnel partial reflection, loss and bends are left out.',
+    note: `Scale: 12.5 µm to the unit across and along, so the drawn stretch is 1 mm of fibre, with true diameters (50 or 8 µm core, 125 µm cladding, 250 µm coating) and true ray angles (the bounce spacing and the graded ray’s 1.1 mm period are real). The delays and the pulse plot are for 1 km, and the packets’ lag is drawn 20 times too long (in a graded core it is too small to see). The rays are meridional (they cross the axis); skew rays are left out. The single-mode field is drawn as a Gaussian at the 10.4 µm mode-field diameter. Between the rays and the extreme one, a graded ray’s delay follows turning radius to the fourth power. Fresnel partial reflection, loss and bends are left out. The multimode core’s index (${FIBRES.multi.n1}) is illustrative: data sheets give the group index, not the core’s own.`,
     draw: () => paint(),
   });
   const paint = () => stage.paint(fibreParts(st, palette()), fibreAnchors(st));

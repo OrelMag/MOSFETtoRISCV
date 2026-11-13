@@ -13,6 +13,7 @@ import type { Widget } from '../view/stage';
 import { RELAY, relaySummary } from '../phys/relay';
 import { CELL_V, margin, ohmsPerKm, PULL_I, reachKm, SOUNDER, SOUNDER_R, SOUNDER_RELEASE, type Metal } from '../phys/telegraph';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { coilVolts, lineCurrent, pressX, pulls, releaseX, runFor, SLOW, tgAnchors, tgParts, type Line, type TgPalette, type TgPose } from './telegraph3dparts';
 
@@ -64,6 +65,7 @@ export function telegraphView(): Widget {
   const clicker = new Clicker();
   const panel = h('div', { class: 'panel tg3d' });
   const stage = modelStage(panel, {
+    look: LOOKS.machine,
     aria: 'A telegraph key with its circuit closer, a line on poles and a main-line sounder with two coils, a retractor spring, an armature and an anvil, in 3D',
     camera: { target: [2, 8, 4], yaw: 0.8, pitch: 0.85, dist: 245 },
     limits: { minDist: 90, maxDist: 440 },

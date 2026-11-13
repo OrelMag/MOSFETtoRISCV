@@ -120,14 +120,15 @@ export const WEAK_DEMO: ComponentDef = define({
   spec: ([a, d, en]) => [a, en ? d : -1],
   netlist: () => ({
     level: 'switch',
-    pins: { a: [1, 8], y: [12, 8], en: [18, 3], d: [18, 8], q: [31, 8] },
+    // the transmission gate 8 units right of the buffer: y's name and its level badge stand clear of d
+    pins: { a: [1, 8], y: [12, 8], en: [26, 3], d: [26, 8], q: [39, 8] },
     instances: [
       { name: 'vdd', def: VDD, at: [7, 0] },
       { name: 'n1', def: NMOS, at: [5, 3] },
       { name: 'p1', def: PMOS, at: [5, 9] },
       { name: 'gnd', def: GND, at: [7, 14] },
-      { name: 'tg', def: TGATE, at: [23, 6] },
-      { name: 'inv', def: INV_CMOS, at: [21, 12] },
+      { name: 'tg', def: TGATE, at: [31, 6] },
+      { name: 'inv', def: INV_CMOS, at: [29, 12] },
     ],
     nets: [
       { name: 'a', ends: ['a', 'n1.g', 'p1.g'], trunk: 3 },
@@ -135,7 +136,7 @@ export const WEAK_DEMO: ComponentDef = define({
       { name: 'y', ends: ['n1.s', 'p1.s', 'y'] },
       { name: 'gnd', ends: ['gnd.p', 'p1.d'] },
       { name: 'd', ends: ['d', 'tg.a'] },
-      { name: 'en', ends: ['en', 'tg.en', 'inv.a'], trunk: 19.5 },
+      { name: 'en', ends: ['en', 'tg.en', 'inv.a'], trunk: 27.5 },
       { name: 'en_n', ends: ['inv.y', 'tg.en_n'] },
       { name: 'q', ends: ['tg.b', 'q'] },
     ],

@@ -1053,14 +1053,14 @@ export const chMemory: Chapter = {
       title: 'The PLA',
       body: `
         <p>A ROM decodes every possible input, even when the function only cares about a few patterns. A <strong>programmable logic array</strong>
-        keeps the two planes but makes the first one flexible: true and <span data-show="u1 u2 u3 u4">complemented input rails</span>, an AND plane that builds only the product
+        keeps the two planes but makes the first one flexible: true and <span data-show="n0 n1 n2 n3">complemented input rails</span>, an AND plane that builds only the product
         terms the outputs need, and an OR plane that sums them. The terms here come from Quine–McCluskey minimization, run when the page loads.</p>
         <p>The 7-segment font needs ${plaTerms(PLA_PRESETS.seg7).terms.length} terms (more than the ROM's 16 words, because the seven outputs share few of them), but each term is a
         2- or 3-input AND, so the PLA costs ${nands(pla('seg7'))} NANDs against ${nands(romArray('seg7'))} for the ROM. Early microprocessors decoded instructions with PLAs (the 6502's
         decode ROM is one), and PALs, GALs and CPLDs are their field-programmable descendants. The other branch is the lookup table of an <span data-ahead="fpga">FPGA (a chip of small tables and switches whose
         function is loaded as configuration bits; chapter ${numOf('fpga')} puts our computer on one)</span>: a tiny ROM, 16 or 64 SRAM bits read by a mux tree on its inputs.</p>
-        <div class="try">Set x to 0–15 and read y as segments a (bit 0) to g (bit 6). Open <span data-show="u5">a term</span>, then
-        <span data-show="u33">an output's OR gate</span>.</div>`,
+        <div class="try">Set x to 0–15 and read y as segments a (bit 0) to g (bit 6). Open <span data-show="t0">a term</span>, then
+        <span data-show="o0">an output's OR gate</span>.</div>`,
       more: {
         derive: `<p>A ROM spends one AND of all the address bits per word, ${2 ** 4} here. The PLA spends one AND per <em>product term</em>, ${plaTerms(PLA_PRESETS.seg7).terms.length}, each over only the inputs the term depends on, found by merging adjacent minterms
           (Quine–McCluskey, chapter ${numOf('logic')}'s Karnaugh idea mechanized). The saving is the wide ANDs: ${nands(romArray('seg7'))} → ${nands(pla('seg7'))} NANDs.</p>`,

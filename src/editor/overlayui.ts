@@ -26,7 +26,7 @@ class SandboxOverlay {
   private bar: OverlayBar;
   private legend: HTMLElement | null = null;
   private cache = new Map<string, { design: FlatDesign; r: OverlayResult | null }>();
-  private win: { sim: GateSim; base: Uint32Array; cycles: number; changes: number; sig: string } | null = null;
+  private win: { sim: GateSim; base: Uint32Array; cycles: number; changes: number; sig: string; resets: number } | null = null;
   private last = 0;
   private lastDoc: unknown = null;
   private off: (() => void)[] = [];
@@ -112,9 +112,10 @@ class SandboxOverlay {
     if (!g || !sim) return null;
     const es = this.ed.sim;
     const sig = sim.design.root.def.ports.filter((p) => p.dir === 'in').map((p) => sim.getInputBits(p.name).join('')).join('|');
-    if (!this.win || this.win.sim !== g) {
+    // a Reset starts the window again: it sets the cycle count to 0 while the toggle counts only grow
+    if (!this.win || this.win.sim !== g || this.win.resets !== es.resets || es.cycles < this.win.cycles) {
       if (!g.toggles) g.countToggles();
-      this.win = { sim: g, base: new Uint32Array(g.toggles!), cycles: es.cycles, changes: 0, sig };
+      this.win = { sim: g, base: new Uint32Array(g.toggles!), cycles: es.cycles, changes: 0, sig, resets: es.resets };
     } else if (sig !== this.win.sig) {
       this.win.sig = sig;
       this.win.changes++;

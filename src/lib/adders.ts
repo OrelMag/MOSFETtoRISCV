@@ -4,6 +4,7 @@
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { mask } from '../sim/values';
 import { Builder } from './builder';
+import { laid } from './layered';
 import { andN, busMux2, rca } from './combinational';
 import { define, merger, ones, splitter } from './define';
 import { AND, MUX2, OR } from './gates';
@@ -143,7 +144,6 @@ export const BCD_DIGIT: ComponentDef = (() => {
   b.next();
   b.wire(`${corr}.s`, 's');
   b.wire(fix, 'cout');
-  const R = b.right;
   return define({
     id: 'bcddigit', name: 'BCD digit adder', category: 'arithmetic',
     summary: 'Adds two decimal digits (0–9, four bits each) and a carry. A binary sum above 9 (a carry out, or 1010–1111) gets 6 added, which wraps it into 0–9 and makes the decimal carry.',
@@ -153,7 +153,8 @@ export const BCD_DIGIT: ComponentDef = (() => {
       const t = a + bb + c, fix = t > 9;
       return [(t + (fix ? 6 : 0)) % 16, fix ? 1 : 0];
     },
-    netlist: () => ({ pins: { a: [0, 4], b: [0, 8], cin: [0, 12], s: [R, 4], cout: [R, 8] }, instances: b.instances, nets: b.nets() }),
+    // laid out by logic depth: the >9 detect between the two adders, the 0 beside what it feeds
+    netlist: laid(b, { wires: { [`${add}.s`]: true } }),
     hdl: {
       verilog: `wire [4:0] t = a + b + cin;
 assign cout = t > 9;

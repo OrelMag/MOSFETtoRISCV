@@ -94,9 +94,9 @@ export const chMemCtrl: Chapter = {
         refreshes. Each command has a rule about when it may come (<a href="#/c/dram/0">chapter ${numOf('dram')}</a>): tRCD after an ACT before a column command, tRP after a PRE
         before the next ACT, tRAS before a row may close, tRFC of silence after a REF. <span data-show="dev">The device</span> here checks every one: a broken rule raises its error flag and names the rule, and a
         column command that breaks one reads X.</p>
-        <p><span data-show="ctrl">The controller</span> turns "read line 5" into the right commands at the right cycles. In gates it is small: <span data-show="ctrl.st">seven state
-        flip-flops</span> (idle when none is set), <span data-show="ctrl.cnt">one wait counter</span> that every command loads with its delay, an open-row table (a valid bit and
-        a row register per bank) and a refresh counter. ${fmt(stats(dramCtrl(CFG)).nands)} NANDs. It serves one request at a time,
+        <p><span data-show="ctrl">The controller</span> turns "read line 5" into the right commands at the right cycles. In gates it is small: <span data-show="ctrl.fsm">seven state
+        flip-flops</span> (idle when none is set), <span data-show="ctrl.wait">one wait counter</span> that every command loads with its delay, <span data-show="ctrl.rows">an open-row table</span> (a valid bit and
+        a row register per bank) and <span data-show="ctrl.refresh">a refresh counter</span>. ${fmt(stats(dramCtrl(CFG)).nands)} NANDs. It serves one request at a time,
         as the cache asks: the cache holds <span data-show="pin:req"><code>req</code></span> until <code>done</code>.</p>
         <p>A request's cost is not a property of its address: line 0 is a miss on a closed bank and a hit one request later. The same
         address costs ${accessCycles('miss', TIMING)} or ${accessCycles('hit', TIMING)} cycles depending on what came before.</p>
@@ -188,8 +188,8 @@ export const chMemCtrl: Chapter = {
     {
       title: 'Refresh',
       body: `
-        <p>Every ${DDR4_3200.tREFI / 1000} µs the device needs a REF: ${TIMING.tREFI} of our cycles. <span data-show="ctrl.rc">The controller counts them</span>, and when the
-        count wraps <span data-show="ctrl.pend">a refresh is due</span>. It goes first at the next idle cycle: precharge every open bank (tRP), REF, then
+        <p>Every ${DDR4_3200.tREFI / 1000} µs the device needs a REF: ${TIMING.tREFI} of our cycles. <span data-show="ctrl.refresh">The controller counts them</span>, and when the
+        count wraps <span data-show="ctrl.refresh">a refresh is due</span>. It goes first at the next idle cycle: precharge every open bank (tRP), REF, then
         ${TIMING.tRFC} cycles in which <span data-show="dev">the device</span> takes no command. A request that arrives meanwhile waits, so its cost is no longer
         ${accessCycles('hit', TIMING)}, ${accessCycles('miss', TIMING)} or ${accessCycles('conflict', TIMING)}, but up to
         ${TIMING.tRP + TIMING.tRFC + accessCycles('miss', TIMING)}. Afterwards every bank is closed, so the next request misses.</p>

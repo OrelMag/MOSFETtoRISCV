@@ -1,11 +1,11 @@
 // The loudspeaker model against the chapter's voice: the real cone is a second-order system (mass-controlled at the voice's
-// pitch), the massless contrast sits exactly on the held (ZOH) sample, the drawn dust cap is where the model says, the stroke
+// pitch), the massless contrast sits exactly on the held (ZOH) sample, the cone is drawn where the model says and the phase plug stays put, the stroke
 // stays within Xmax, and the microphone's EMF is Bl times the cone's velocity.
 import { describe, expect, it } from 'vitest';
 import { quatRotate } from '../src/gl/math';
 import { wavSamples } from './dsp/wav';
 import {
-  BL, CMS_M_N, QMS, I_RATED, peakStrokeMm, currentA, currentForStroke, evolve, strokeForAmp, DRAW_K, FS_HZ, MMS_KG, PRESSURE_PA, SD_M2, drawnRatio, pitchHz, realMotion, realPeakUm, realUm, velocityMmS, GEOM, I_FULL, VOICE_RATE, WINDOW, XMAX_MM, coneMm, dustY, emfVolts, heldCode, loudestWindow, makeDrive, poseAt, slab,
+  BL, CMS_M_N, QMS, I_RATED, peakStrokeMm, currentA, currentForStroke, evolve, strokeForAmp, DRAW_K, FS_HZ, MMS_KG, PRESSURE_PA, SD_M2, drawnRatio, pitchHz, realMotion, realPeakUm, realUm, velocityMmS, GEOM, I_FULL, VOICE_RATE, WINDOW, XMAX_MM, coneMm, neckY, emfVolts, GEOM as G0, PLUG, heldCode, loudestWindow, makeDrive, poseAt, slab,
   speakerAnchors, speakerParts, staircase, type SpeakerPalette,
 } from '../src/widgets/speaker3dparts';
 
@@ -13,7 +13,7 @@ const w = wavSamples('public/dsp/voice-8k.wav');
 const codes = w.x.slice(loudestWindow(w.x), loudestWindow(w.x) + WINDOW);
 const col = (i: number): [number, number, number] => [i / 20, 0.5, 0.5];
 const P: SpeakerPalette = {
-  steel: col(1), magnet: col(2), basket: col(3), cone: [0.3, 0.3, 0.3, 0.8], dust: col(5), former: col(6), wire: col(7), wire2: col(16), flux: col(17), rubber: col(8), spider: col(9),
+  steel: col(1), magnet: col(2), basket: col(3), cone: [0.3, 0.3, 0.3, 0.8], plug: col(5), former: col(6), wire: col(7), wire2: col(16), flux: col(17), rubber: col(8), spider: col(9),
   stair: col(10), stairDim: [0.1, 0.1, 0.9, 0.3], trace: col(12), cursor: col(13), live: col(14), zero: col(15),
 };
 const same = (a: readonly number[], b: readonly number[]) => a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
@@ -40,15 +40,27 @@ describe('the speaker model against the chapter', () => {
     expect(staircase(d)).toEqual(codes.map((c) => c / d.peak));
   });
 
-  it('the drawn dust cap sits at the cone position (rest height plus the real stroke, the drawn magnification)', () => {
+  it('the drawn cone sits at the cone position (rest height plus the real stroke, the drawn magnification)', () => {
     expect(DRAW_K).toBe(1);
-    const d = makeDrive(codes, 'speaker', false), dust = (t: number) => speakerParts(d, t, P).filter((p) => same(p.color as number[], P.dust));
-    const lowY = (t: number) => Math.min(...dust(t).map((p) => p.pos[1] - p.scale![1] / 2));
-    expect(Math.max(...dust(0).map((p) => p.pos[1])) - Math.min(...dust(0).map((p) => p.pos[1]))).toBeGreaterThan(3); // a dome, not a disc
+    const d = makeDrive(codes, 'speaker', false), cone = (t: number) => speakerParts(d, t, P).filter((p) => same(p.color as number[], P.cone));
+    const lowY = (t: number) => Math.min(...cone(t).map((p) => p.pos[1]));
     for (const n of [0, 7, 20, 41, 63]) {
       const c = poseAt(d, n + 0.5).cone;
-      expect(lowY(n + 0.5) - lowY(0)).toBeCloseTo(dustY(c, d.mag) - dustY(poseAt(d, 0).cone, d.mag), 6);
+      expect(lowY(n + 0.5) - lowY(0)).toBeCloseTo(neckY(c, d.mag) - neckY(poseAt(d, 0).cone, d.mag), 6);
     }
+  });
+
+  it('the phase plug (Dayton: solid aluminium, no dust cap) is fixed, solid, clear of the former and above the neck', () => {
+    const d = makeDrive(codes, 'speaker', false), plug = (t: number) => speakerParts(d, t, P).filter((p) => same(p.color as number[], P.plug));
+    expect(plug(0).length).toBeGreaterThan(0);
+    for (const n of [7, 20, 41, 63]) expect(plug(n + 0.5)).toEqual(plug(0)); // the cone moves, the plug does not
+    const peak = (Math.max(...plug(0).map((p) => p.pos[1] + p.scale![1] / 2)));
+    expect(peak).toBeCloseTo(PLUG.tip, 6);
+    let top = 0;
+    for (let t = 0; t < WINDOW; t += 0.1) top = Math.max(top, neckY(poseAt(d, t).cone, d.mag));
+    expect(top).toBeGreaterThan(G0.formerTop);
+    expect(PLUG.tip).toBeGreaterThan(top + 10); // it stands well above the neck at the window's highest drawn stroke
+    expect(PLUG.r).toBeLessThan(G0.formerIn); // a clearance to the moving former
   });
 
   it('the drive is the rated power: peak current <= sqrt(2 P / Re), the real stroke <= Xmax, the drawn one too and the coil stays in its gap', () => {
@@ -144,7 +156,7 @@ describe('the speaker model against the chapter', () => {
     expect(realUm(d, 1)).toBeCloseTo(realPeakUm(d), 12);
     // The drawn stroke is Xmax × DRAW_K; the ratio the readout prints is drawn over real.
     expect(drawnRatio(d) * realPeakUm(d)).toBeCloseTo(XMAX_MM * DRAW_K * 1000, 6);
-    // The window's peak sample moves the cone by the real peak, and the drawn dust cap by Xmax × DRAW_K.
+    // The window's peak sample moves the cone by the real peak, and the drawn cone by Xmax × DRAW_K.
     expect(Math.abs(realUm(d, poseAt(d, codes.findIndex((c) => Math.abs(c) === d.peak)).cone))).toBeCloseTo(realPeakUm(d), 9);
     // The EMF of the voice stays in the millivolts a cone-and-coil of this size makes.
     for (let k = 0; k < WINDOW; k++) expect(Math.abs(emfVolts(d, k))).toBeLessThan(0.1);

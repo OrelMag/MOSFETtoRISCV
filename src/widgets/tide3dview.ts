@@ -1,7 +1,8 @@
 // Kelvin's tide predictor in 3D (loaded on demand, modelhost.ts), driven by the chapter's own harmonics: the cranks turn
 // comm/fourier.ts's series for the chosen pattern, and the pen's height is read off the cord's constant length
 // (tide3dparts.ts penTip), not from the sum. The readout sets the pen against the chapter's sumAt. A last preset swaps the
-// harmonics for ten tidal constituents at their true speeds, where the spring-neap beat appears by itself.
+// harmonics for ten tidal constituents at their true speeds, where the spring-neap beat appears by itself. A switch sets the
+// mechanism: the 1872 machine's pulleys on crank pins (the pen is the sum only nearly) or the later slotted yokes (exactly).
 
 import '../styles/tide3d.css';
 import { h } from '../ui/dom';
@@ -9,9 +10,10 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { gibbsPeak, PATTERNS } from '../comm/fourier';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import {
-  N_CRANKS, PEN_SCALE, TIDE_PRESET, angleOf, beatHours, levelOf, offsetsAt, penTip, ratioOf, throwMm, tideAnchors, tideOf, tideParts, type TidePalette,
+  N_CRANKS, PEN_SCALE, TIDE_PRESET, angleOf, beatHours, levelOf, offsetsAt, penTip, ratioOf, sidewaysAt, throwMm, tideAnchors, tideOf, tideParts, type Mech, type TidePalette,
 } from './tide3dparts';
 import type { OrbitView } from '../gl/camera';
 
@@ -23,23 +25,24 @@ const sg = (v: number, d = 3) => (v < 0 && Math.abs(v) >= 0.5 * 10 ** -d ? '−'
 const deg = (r: number) => (((r * 180) / Math.PI) % 360 + 360) % 360;
 
 export function tideView(): Widget {
-  let pat = 0, td = tideOf(0), t = 0, running = false, tauStep = 0, tuned = false, cal = 0;
+  let pat = 0, td = tideOf(0), t = 0, running = false, tauStep = 0, tuned = false, cal = 0, mech: Mech = 'pins';
   const on: boolean[] = Array(N_CRANKS).fill(true);
   const isTide = () => td.kind === 'tide';
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
-    aria: 'Kelvin’s tide predictor in 3D: ten slotted cranks driven by one hand crank through a gear each, every crank moving a pulley up and down on a slider, one cord running under every movable pulley and over a fixed pulley between them, and a pen at its end drawing on a moving band of paper between two rollers',
+    aria: 'Kelvin’s tide predictor in 3D: ten slotted cranks driven by one hand crank through a gear each, every crank carrying a pulley on its pin (or, switched, on a slotted yoke), one cord running under every movable pulley and over a fixed pulley between them, and a pen at its end drawing on a moving band of paper between two rollers',
     camera: { ...VIEW },
+    look: LOOKS.field,
     limits: { minDist: 60, maxDist: 700 },
-    note: 'Sources: Science Museum Group object 1876-1129 (the 1872 machine by A. Légé & Co. for Thomson: 1820 × 1000 × 770 mm, 86 kg, ten components); W. Thomson, “The tide gauge, tidal harmonic analyser, and tide predicter”, Proc. Inst. Civil Eng. 65 (1881); Parker, Tide Analysis and Prediction (NOAA, 2007). The record gives the count of components, not their list or the machine’s gear trains. Drawn, not measured: the layout, the Scotch-yoke cranks (the throw is a slot and scale here), the change wheels (pitch circles sized by the speed ratio, no teeth, one pair on a 48 mm centre distance), the pulleys (44 and 56 mm across, about 50 mm on the machine) and the cord, which is much thicker than a real one; the pen scale and the paper speed are chosen to show the curve. The default cranks turn the chapter’s harmonics (integer rates, so the curve repeats); “Real tide” runs ten constituents at their IHO speeds with illustrative amplitudes and phases of no real port. A crank switched off is drawn disengaged (grey) and its pulley stays at rest. A year of tide took the real machine about four hours of hand cranking.',
+    note: 'Sources: Science Museum Group object 1876-1129 (the 1872 machine by A. Légé & Co. for Thomson: 1820 × 1000 × 770 mm, 86 kg, ten components); W. Thomson, “The tide gauge, tidal harmonic analyser, and tide predicter”, Proc. Inst. Civil Eng. 65 (1881); Parker, Tide Analysis and Prediction (NOAA, 2007). The record gives the count of components; their list (M2, S2, N2, K2, Q1, K1, L2, P1, M4, MS4) and the mechanism are from P. L. Woodworth, An inventory of tide prediction machines (NOC Research & Consultancy Report 56, 2016), after Cartwright (1999): this machine’s pulley axles moved sideways as well as up and down, which made small errors, and all later machines moved them straight up and down. Neither gives the gear trains. Drawn, not measured: the layout, the cranks (the throw is a slot and scale here), the size of the crank pins’ error (it follows the drawn proportions), the change wheels (pitch circles sized by the speed ratio, no teeth, one pair on a 48 mm centre distance), the pulleys (44 and 56 mm across, about 50 mm on the machine) and the cord, which is much thicker than a real one; the pen scale and the paper speed are chosen to show the curve. The default cranks turn the chapter’s harmonics (integer rates, so the curve repeats); “Real tide” runs ten constituents at their IHO speeds with illustrative amplitudes and phases of no real port. A crank switched off is drawn disengaged (grey) and its pulley stays at rest. A year of tide took the real machine about four hours of hand cranking.',
     draw: () => paint(),
   });
   const palette = (): TidePalette => ({
     iron: stage.rgb('--td-iron'), brass: stage.rgb('--td-brass'), wood: stage.rgb('--td-wood'), steel: stage.rgb('--td-steel'), cord: stage.rgb('--td-cord'),
     paper: stage.rgb('--td-paper'), ink: stage.rgb('--td-trace'), off: stage.rgb('--td-off'), glass: stage.rgba('--td-glass', 0.55), live: stage.rgb('--m3-charge'),
   });
-  function paint(): void { stage.paint(tideParts(td, on, t, palette(), stage.isFlat()), tideAnchors(td)); }
+  function paint(): void { stage.paint(tideParts(td, on, t, palette(), stage.isFlat(), mech), tideAnchors(td, mech)); }
 
   const kv = h('div', { class: 'r3-kv' }), tab = h('table', { class: 'td-tab' });
   const live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
@@ -49,7 +52,7 @@ export function tideView(): Widget {
   const when = (x: number) => (isTide() ? `${(x / 24).toFixed(2)} days (${x.toFixed(1)} h)` : `${(x / td.n).toFixed(2)} periods (${x.toFixed(2)} bits)`);
 
   function readout(announce = false): void {
-    const d = offsetsAt(td, on, t), tip = penTip(d, td.dc), level = levelOf(tip), u = isTide() ? ' m' : '';
+    const d = offsetsAt(td, on, t), tip = penTip(d, td.dc, sidewaysAt(td, on, t, mech)), level = levelOf(tip), u = isTide() ? ' m' : '';
     // The chapter's sum for the same cranks: sumAt takes a prefix, so add the engaged harmonics one by one (dc included).
     let sum = td.dc;
     td.harms.forEach((hm, i) => { if (on[i]) sum += hm.amp * Math.cos(angleOf(hm, td.n, t)); });
@@ -58,6 +61,7 @@ export function tideView(): Widget {
       ['Cranks engaged', `${count()} of ${N_CRANKS}`],
       ['Pen, from the cord', `${sg(level, 4)}${u}`],
       [isTide() ? 'Sum of the constituents' : tuned ? 'Sum of the cranks as set' : 'Chapter’s sum', `${sg(sum, 4)}${u}`],
+      [mech === 'pins' ? 'Pen − sum: the crank pins’ error' : 'Pen − sum: the yokes are exact', `${sg(level - sum, 4)}${u}`],
     ];
     const pre = on.every((v, i) => v === (i < count()));
     if (pre && pat === 0 && !tuned && count() > 0) rows.push([`Peak of ${count()} harmonics`, `${gibbsPeak(count()).toFixed(4)} (Gibbs)`]);
@@ -157,16 +161,26 @@ export function tideView(): Widget {
     syncBtns(); syncCal();
   }
   sel.addEventListener('change', () => { pat = Number(sel.value); load(); readout(true); kick(); });
+  // The mechanism: what the 1872 machine had, or what every later machine had.
+  const mechBtns = ([['pins', '1872: pulleys on crank pins'], ['yoke', 'Later: slotted yokes']] as const).map(([m, label]) => {
+    const b = h('button', { type: 'button', class: 'btn sm' }, label) as HTMLButtonElement;
+    b.addEventListener('click', () => { mech = m; syncMech(); readout(true); kick(); });
+    return [m, b] as const;
+  });
+  function syncMech(): void { for (const [m, b] of mechBtns) { b.classList.toggle('on', m === mech); b.setAttribute('aria-pressed', String(m === mech)); } }
+  syncMech();
   load();
 
   panel.append(
     h('h3', { class: 'm3-title' }, 'The sum as a machine'),
-    h('p', { class: 'm3-sub' }, 'Kelvin’s tide predictor, 1872–73, built for Thomson by A. Légé & Co. One hand crank turned a main shaft; a change wheel on it drove each of ten cranks at its own rate, and each crank’s slot set its throw and its phase. A crank moved a pulley up and down on a slider (a Scotch yoke); one cord, fixed at one end, ran under each movable pulley and over a fixed one, and a pen hung from its other end on a band of paper that the same shaft carried past. A pulley that moves d takes up 2d of cord, so the pen moves by the sum of the pulleys’ motions, 2 Σ dᵢ. Here the ten cranks are the first ten harmonics of the step’s own pattern, and the pen is the sum above, drawn on paper. Choose “Real tide” for ten tidal constituents at their true speeds: they are not multiples of one another, so the curve never repeats, and M2 against S2 beats every 14.77 days.'),
+    h('p', { class: 'm3-sub' }, 'Kelvin’s tide predictor, 1872–73, built for Thomson by A. Légé & Co. One hand crank turned a main shaft; a change wheel on it drove each of ten cranks at its own rate, and each crank’s slot set its throw and its phase. Each movable pulley turned on its crank’s pin, so it went round with the pin: up and down, and a little sideways, which tilts the cord and puts a small error in the sum; every later machine moved its pulleys straight up and down on a slotted yoke, which is exact (the switch shows both). One cord, fixed at one end, ran under each movable pulley and over a fixed one, and a pen hung from its other end on a band of paper that the same shaft carried past. A pulley that moves d takes up 2d of cord, so the pen moves by the sum of the pulleys’ motions, 2 Σ dᵢ. Here the ten cranks are the first ten harmonics of the step’s own pattern, and the pen is the sum above, drawn on paper. Choose “Real tide” for ten tidal constituents at their true speeds: they are not multiples of one another, so the curve never repeats, and M2 against S2 beats every 14.77 days.'),
     h('div', { class: 'r3' },
       h('div', { class: 'r3-main' },
         h('div', { class: 'r3-ctl' },
           h('label', { class: 'td-lbl' }, 'Cranks ', sel),
           h('div', { class: 'r3-btns' }, runBtn, stepBtn, startBtn, stage.resetBtn)),
+        h('div', { class: 'r3-ctl' }, h('span', { class: 'td-lbl', id: 'td-mech-l' }, 'Mechanism'),
+          h('div', { class: 'r3-btns', role: 'group', 'aria-labelledby': 'td-mech-l' }, ...mechBtns.map(([, b]) => b))),
         h('div', { class: 'r3-ctl' },
           crankLbl,
           h('div', { class: 'td-cranks', role: 'group', 'aria-labelledby': 'td-cranks-l' }, ...crankBtns, allBtn, oneBtn)),

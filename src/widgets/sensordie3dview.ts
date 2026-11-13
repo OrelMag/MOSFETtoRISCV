@@ -9,6 +9,7 @@ import type { Widget } from '../view/stage';
 import { groupNum } from '../sim/numfmt';
 import { IMX183, rollingSkew } from '../phys/imagesensor';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { CELL, FRAME, RAMP_SHARE, T_ROW, captureEnd, cellRow, defaultScene, dieAnchors, dieParts, dieState, fmtTime, type DiePalette, type DiePose, type SceneKind, type Shutter } from './sensordie3dparts';
 
@@ -21,6 +22,7 @@ export function sensorDieView(): Widget {
   let now = 0, running = !reducedMotion(), hold = 0;
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.silicon,
     aria: 'An image sensor die in 3D: the pixel array, row drivers on its left, a column ADC per column below it and the readout, with a moving object’s image above the array',
     camera: { target: [0, 0, 8], yaw: 0.25, pitch: 0.95, dist: 230 },
     limits: { minDist: 60, maxDist: 600 },
@@ -34,6 +36,7 @@ export function sensorDieView(): Widget {
   const pose = (): DiePose => ({ scene, shutter, texp, now });
   function paint(): void { const q = pose(); stage.paint(dieParts(q, palette()), dieAnchors(q)); readout(); }
 
+  let kvKeys = '';
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
   stage.chips.append(chip);
   const end = () => captureEnd(shutter, texp) + CELL * T_ROW;
@@ -53,7 +56,10 @@ export function sensorDieView(): Widget {
       ['Rolling skew, top to bottom', scene.kind === 'bar' ? `${groupNum(Math.round(rollingSkew(scene.v, IMX183.rows)))} pixels` : `${Math.round(scene.rps * IMX183.rows * T_ROW * 360)}° of turn`],
       ['Counter clock for a 12-bit ramp a row', `${groupNum(Math.round(2 ** IMX183.adcBits / T_ROW / 1e6))} MHz`],
     ];
-    kv.replaceChildren(...rows.flatMap(([k, val]) => [h('span', null, k), h('span', { class: 'v' }, val)]));
+    // rebuilt only when the rows change, else their values set in place: this runs every frame of a run
+    const keys = rows.map(([k]) => k).join('\n');
+    if (keys !== kvKeys) { kvKeys = keys; kv.replaceChildren(...rows.flatMap(([k, val]) => [h('span', null, k), h('span', { class: 'v' }, val)])); }
+    else rows.forEach(([, val], i) => { const v = kv.children[2 * i + 1]; if (v.textContent !== val) v.textContent = val; });
     const text = done ? `Captured with a ${shutter} shutter: ${shutter === 'rolling' ? 'each row saw the object a row time later than the one above.' : 'every row saw the same instant.'}` : '';
     if (text && live.textContent !== text) live.textContent = text;
     runBtn.textContent = running ? 'Pause' : 'Run';

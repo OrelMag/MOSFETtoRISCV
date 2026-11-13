@@ -517,6 +517,7 @@ export class LevelPage implements Page {
     const ed = this.editor!, ch = this.ch!;
     let main = '';
     ed.editWs((ws) => { const r = importAnswer(ws, ch); main = r.main; return r.ws; });
+    ed.save(); // now: the sandbox page reads storage before this editor is destroyed (its save was 400 ms away)
     markJump();
     location.hash = `#/sandbox/${main}`;
   }

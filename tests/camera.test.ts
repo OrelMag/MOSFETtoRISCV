@@ -109,6 +109,12 @@ describe('fitting beside an overlay panel', () => {
     expect(chooseFolds(2, (m) => [1.44, 1.72, 1.69, 2.46][m], [false, null])).toBe(0);
     expect(chooseFolds(2, (m) => [0.9, 1.72, 1.69, 2.46][m], [false, null])).toBe(2);
     expect(chooseFolds(1, (m) => [1, 10][m], [false])).toBe(0);
+    // An author's data-keep holds the Controller open (bit 1) on multicycle/0 at 1440 px: measured against the best with it
+    // open (2.58) both panels pass (0.66), against every panel folded (3.45, `ref`) the CPU panel folds; the circuit drew at 0.49.
+    expect(chooseFolds(2, (m) => [1.7, 2.58, 1.9, 3.45][m], [null, false])).toBe(0);
+    expect(chooseFolds(2, (m) => [1.7, 2.58, 1.9, 3.45][m], [null, false], KEEP_SCALE, 3.45)).toBe(1);
+    // no allowed choice reaches the share: the largest of them, the held panel still open
+    expect(chooseFolds(2, (m) => [1.0, 1.5, 1.2, 3.45][m], [null, false], KEEP_SCALE, 3.45)).toBe(1);
     expect(KEEP_SCALE).toBeGreaterThan(0.5);
   });
 

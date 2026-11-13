@@ -299,7 +299,7 @@ export class Stage {
   private ovRaf = 0;
   private moreMenu: HTMLElement;
   /** The bar's buttons fitBar may move into More, in that order, with what each does there. */
-  private shedGroups: { els: HTMLElement[]; items: { label: string; hint?: string; icon: string; on?: () => boolean; run: () => void }[] }[] = [];
+  private shedGroups: { els: HTMLElement[]; items: { label: string; hint?: string; icon: string; on?: () => boolean; off?: () => string | undefined; run: () => void }[] }[] = [];
   /** Fixed clock period in gate delays (null: every edge waits for the logic to settle). */
   private period: number | null = null;
   private nextEdge = 0;
@@ -448,7 +448,7 @@ export class Stage {
       if (!moreWrap.contains(e.target as Node)) this.toggleMore(false);
     }, { signal: this.life.signal });
     moreMenu.addEventListener('keydown', (e) => {
-      const items = [...moreMenu.querySelectorAll<HTMLElement>('button')];
+      const items = [...moreMenu.querySelectorAll<HTMLElement>('button:not(:disabled)')];
       const i = items.indexOf(document.activeElement as HTMLElement);
       if (e.key === 'Escape') {
         e.stopPropagation();
@@ -476,7 +476,7 @@ export class Stage {
       { els: [this.timingBtn], items: [{ label: 'Timing diagram', icon: 'wave', on: () => pressed(this.timingBtn), run: () => this.timingBtn.click() }] },
       { els: [this.probeBtn], items: [{ label: 'Probe mode (P)', icon: 'probe', on: () => pressed(this.probeBtn), run: () => this.probeBtn.click() }] },
       { els: [this.whyBtn], items: [{ label: 'Why? (W)', icon: 'why', on: () => pressed(this.whyBtn), run: () => this.whyBtn.click() }] },
-      { els: [this.ovBar.el], items: OVERLAY_KINDS.map((k) => ({ label: `Overlay: ${OVERLAY_LABEL[k]}`, hint: this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
+      { els: [this.ovBar.el], items: OVERLAY_KINDS.map((k) => ({ label: `Overlay: ${OVERLAY_LABEL[k]}`, off: () => this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
       // the lock last: its state (a phone starts locked) has to stay in sight, as a bare icon once the labels go
       { els: [lockBtn], items: [{ label: 'Move parts by dragging', hint: 'Off: a drag on a part pans', icon: 'unlock', on: () => settings.moveParts, run: () => settings.set('moveParts', !settings.moveParts) }] },
     ];
@@ -701,20 +701,27 @@ export class Stage {
     more.setAttribute('aria-expanded', String(open));
     if (!open) return;
     menu.replaceChildren();
+    let said = '';
     for (const g of this.shedGroups) {
       if (!g.els[0].classList.contains('shed') || g.els[0].hidden) continue;
       for (const it of g.items) {
         const on = it.on?.();
+        // asked when the menu opens: what applies depends on the open level (an overlay refused there is shown with why)
+        const why = it.off?.();
+        // the same reason under every refused overlay would fill a phone: said once, the rows after it greyed alone
+        const note = why ? (why === said ? '' : why) : it.hint;
+        if (why) said = why;
         menu.append(h('button', {
+          disabled: !!why,
           role: on === undefined ? 'menuitem' : 'menuitemcheckbox', ...(on === undefined ? {} : { 'aria-checked': String(on) }),
           onclick: () => {
             this.toggleMore(false);
             it.run();
           },
-        }, icon(it.icon, 16), h('span', null, h('b', null, it.label), it.hint ? h('small', null, it.hint) : null)));
+        }, icon(it.icon, 16), h('span', null, h('b', null, it.label), note ? h('small', null, note) : null)));
       }
     }
-    menu.querySelector<HTMLElement>('button')?.focus();
+    menu.querySelector<HTMLElement>('button:not(:disabled)')?.focus();
   }
 
   private syncPanesBtn(): void {
@@ -1496,7 +1503,8 @@ export class Stage {
       openCodex: (id) => go(`#/campaign/codex/${id}`),
       openChapter: go,
       // the table is of the level the menu is on (not the part clicked): disabled, with the reason, where it cannot be made
-      breakPart: { run: () => this.why.showParts(at, c), part: !!c, why: ablationRefusal(ctx.def) },
+      // (a clocked level has storage, which the card refuses after a flatten too costly to run as the menu opens)
+      breakPart: { run: () => this.why.showParts(at, c), part: !!c, why: ablationRefusal(ctx.def) ?? (ctx.def.ports.some((p) => p.clock) ? 'it has feedback (storage)' : null) },
     } };
   }
 
@@ -2445,8 +2453,14 @@ export class Stage {
     this.tickOverlay();
     this.showInspector();
     this.updateControls();
-    if (!this.leaf) this.levelBadge.textContent = `level: ${LEVEL_NAME[this.levelOf()] ?? 'blocks'}`;
+    this.syncBadge();
     this.listeners.forEach((f) => f());
+  }
+
+  /** The LEVEL tag's text, before anything is measured against it: the fit keeps clear of it (view.badge), and an empty
+   *  tag at a scene's first fold decision was 0 px wide, so the panels were judged on room the fit then gave the tag. */
+  private syncBadge(): void {
+    if (!this.leaf) this.levelBadge.textContent = `level: ${LEVEL_NAME[this.levelOf()] ?? 'blocks'}`;
   }
 
   private levelOf(): string {
@@ -2541,6 +2555,9 @@ export class Stage {
   }
 
   private restartMeter(): void {
+    // Activity's and Energy's window starts again too: Reset sets the cycle count to 0 and Back restores an older one, while
+    // the toggle counts only grow, so the old window would divide one run's toggles by another's cycles
+    this.ovWin = null;
     if (!this.meter) return;
     this.meter.reset();
     this.meterFrom = this.cycles;
@@ -2775,7 +2792,8 @@ export class Stage {
   private ovRefusals(): Partial<Record<OverlayKind, string>> {
     const sim = this.sim, ctx = this.ctx;
     if (!sim || !ctx) return {};
-    const c = { level: sim.kind, engine: this.scene?.engine, sub: ctx.sim !== sim } as const;
+    // the level's own engine: an opened NAND is transistors inside a gate-level scene
+    const c = { level: ctx.sim.kind, engine: this.scene?.engine, sub: ctx.sim !== sim } as const;
     const out: Partial<Record<OverlayKind, string>> = {};
     for (const k of OVERLAY_KINDS) {
       const why = overlayRefusal(k, c);
@@ -2856,7 +2874,7 @@ export class Stage {
     if (!(sim instanceof GateSim)) return null;
     const ins = this.scene?.root.ports.filter((p) => p.dir === 'in') ?? [];
     const sig = ins.map((p) => sim.getInputBits(p.name).join('')).join('|');
-    if (!this.ovWin || this.ovWin.sim !== sim) {
+    if (!this.ovWin || this.ovWin.sim !== sim || this.cycles < this.ovWin.cycles) {
       if (!sim.toggles) sim.countToggles();
       this.ovWin = { sim, base: new Uint32Array(sim.toggles!), cycles: this.cycles, changes: 0, sig };
     } else if (sig !== this.ovWin.sig) {
@@ -3089,11 +3107,15 @@ export class Stage {
     const fold = this.panels.filter((p) => p.el.dataset.fold === 'narrow').slice(0, 4);
     if (W <= 0 || H <= 0 || fold.some((p) => p.el.offsetWidth <= 0)) return;
     this.foldPending = false;
+    this.syncBadge();
     const apply = (mask: number) => {
       fold.forEach((p, i) => p.el.classList.toggle('collapsed', ((mask >> i) & 1) === 1));
       this.inset = this.rightInset();
       this.drillLayout();
       this.dockOut();
+      // the how-to line as it will sit with these folds: lifted over the bottom-left panels it takes the strip above them,
+      // which the fit then leaves to the circuit no more (measured without it, widths/7 kept 0.61 of its size and drew at 0.47)
+      this.placeHint();
     };
     // the boards, while shown, are what has to fit (their extent in holes: only the aspect matters here)
     const lay = this.boardOn ? this.scene?.breadboard : undefined;
@@ -3103,7 +3125,7 @@ export class Stage {
     const scaleOf = (mask: number): number | null => {
       apply(mask);
       if (fold.some((p, i) => !((mask >> i) & 1) && p.el.dataset.dock === 'right' && startFolded(W, p.el.offsetWidth))) return null;
-      const r = freeArea(W, H, this.covers(false), bw, bh);
+      const r = freeArea(W, H, lay ? this.covers() : this.view.fitCovers(this.covers()), bw, bh);
       const s = r ? Math.min(r.w / bw, r.h / bh) : 0;
       // the boards are fine print: a panel stays open only beside boards that still read whole (a laptop folds it)
       return lay && mask !== all && s < (lay.readPx ?? BB_READ_PX) ? null : s;
@@ -3112,7 +3134,10 @@ export class Stage {
     const mine = (keep: boolean) => fold.map((p, i) => (onlyMore && shut[i] ? true : null) ?? foldChoice.get(p.el.dataset.dock ?? '') ?? (keep && p.el.dataset.keep === 'open' ? false : keep && p.el.dataset.keep === 'folded' ? true : null));
     // a level below the top (opened, or linked to): the panels may cost it less (KEEP_SCALE_OPENED)
     const keep = this.ctx && this.ctx !== this.rootCtx ? KEEP_SCALE_OPENED : KEEP_SCALE;
-    let pick = chooseFolds(fold.length, scaleOf, mine(true), keep);
+    // a panel held open by the step (data-keep), not by the learner: the others fold until the circuit keeps its share of the
+    // size it would have with every panel folded
+    const kept0 = fold.some((p) => p.el.dataset.keep === 'open' && foldChoice.get(p.el.dataset.dock ?? '') === undefined);
+    let pick = chooseFolds(fold.length, scaleOf, mine(true), keep, kept0 ? scaleOf(all) : null);
     // data-keep is a preference: where no layout with those panels open is allowed (a phone), the usual rules decide
     // ... and where they would leave the circuit under KEEP_SCALE of its size with every panel folded (three panels over a
     // pipeline left ~230 px of it): the usual rule decides, a panel the step's text is about included

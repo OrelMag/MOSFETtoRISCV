@@ -1,0 +1,68 @@
+/* ---------- The studio stage (widgets/studiostage.ts): a backdrop like a photographer's sweep, labels in gutters ---------- */
+.st {
+  --st-sky: light-dark(#c9ced8, #7d8596);
+  --st-ground: light-dark(#7a746c, #3a3836);
+  --st-key: light-dark(#f4f0e8, #e6e1d8);
+  --st-accent: light-dark(#2f7de1, #6aa8ff);
+  --st-back-1: light-dark(#fbfbfa, #2a2d33);
+  --st-back-2: light-dark(#e3e4e6, #16181c);
+  --st-lead: light-dark(rgb(40 44 52 / 0.55), rgb(220 225 235 / 0.5));
+  display: flex; flex-direction: column; gap: 8px; container-type: inline-size;
+}
+.st-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+.st-bar .r3-sl { flex: 1 1 160px; }
+.st-bar .r3-sl span { width: auto; min-width: 56px; }
+/* the model's own controls under the canvas (Ross's phone rule for .m3d, model3d.css, carried over): a long label wraps
+   rather than pushing its readout out, and a readout is as wide as its text, never clipped under the next control */
+.st-slot .r3-sl span, .st-bar .r3-sl span { flex: 0 1 auto; }
+.st-slot .r3-sl output { width: auto; min-width: 58px; white-space: nowrap; }
+.st-stage { position: relative; display: grid; grid-template-columns: 112px minmax(0, 1fr) 112px; }
+.st-view.r3-stage {
+  position: relative; aspect-ratio: 4 / 3; max-height: none; width: 100%; margin: 0 auto; overflow: hidden;
+  border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: radial-gradient(120% 90% at 50% 38%, var(--st-back-1), var(--st-back-2));
+}
+.st-gutter { position: relative; min-width: 0; }
+.st-gutter.l { text-align: right; }
+.st-lbl {
+  position: absolute; left: 0; right: 0; top: 0; padding: 0 8px; font: 600 12.5px/18px var(--font-ui); color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: transform 120ms ease-out;
+}
+.st-lbl.away { color: var(--text-2); font-weight: 500; }
+.st-leaders { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 1; }
+.st-leaders polyline { fill: none; stroke: var(--st-lead); stroke-width: 1; }
+.st-leaders circle { fill: var(--st-accent); stroke: var(--st-back-1); stroke-width: 1.2; }
+.st-leaders .away { opacity: 0.45; }
+.st-badges { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.st-badge {
+  position: absolute; left: -10px; top: -10px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  font: 700 11px var(--font-ui); color: #fff; background: var(--st-accent); box-shadow: 0 0 0 1.5px var(--st-back-1);
+}
+.st-badge.away { opacity: 0.55; }
+.st-slot:empty { display: none; }
+.st-list { display: none; margin: 0; padding: 0; list-style: none; font-size: 13.5px; line-height: 1.5; color: var(--text-2); }
+.st-list b { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font: 700 10.5px var(--font-ui); color: #fff; background: var(--st-accent); }
+.st.narrow .st-list { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.st-list li { flex: 0 0 auto; }
+.st-list li.off { opacity: 0.45; }
+.st.narrow .st-stage { grid-template-columns: minmax(0, 1fr); }
+.st.narrow .st-gutter { display: none; }
+.st-card {
+  position: absolute; left: 0; top: 0; z-index: 3; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px;
+  font-size: 12.5px; line-height: 1.35; color: var(--text); pointer-events: none;
+  background: color-mix(in srgb, var(--surface) 94%, transparent); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+}
+.st-card b { font-size: 13.5px; }
+.st-card .st-mat { color: var(--text-2); font-style: italic; }
+.st-card .st-note { color: var(--text-2); }
+.st-card .st-src { color: var(--text-2); font-size: 11.5px; border-top: 1px solid var(--border); padding-top: 3px; margin-top: 2px; }
+.st-caption { min-height: 1.4em; font-size: 14px; line-height: 1.45; max-width: 76ch; }
+.st-caption b { color: var(--st-accent); }
+.st-stats { position: absolute; left: 8px; bottom: 46px; max-width: calc(100% - 16px); font: 11px var(--font-mono); color: var(--text-2); background: color-mix(in srgb, var(--surface) 85%, transparent); padding: 1px 6px; border-radius: 4px; }
+.st-face { stroke-width: 0.35; stroke-linejoin: round; }
+.st .r3-chips { left: 8px; right: auto; }
+.st .r3-canvas { cursor: grab; }
+@media (pointer: coarse) { .st .btn.sm { min-height: 40px; } .st .r3-sl input { min-height: 40px; } }
+
+/* the triode prototype's before / after switch */

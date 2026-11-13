@@ -210,7 +210,7 @@ export function consoleChip(id: string, name: string): ChipDoc {
  */
 export function screenChip(id: string, name: string): ChipDoc {
   return chip(id, name, {
-    notes: 'An 8-bit counter sweeps the 16 × 16 screen pixel by pixel (x = count[3:0], y = count[7:4]); each rising clock edge writes the colour set on the switches (the 16-colour palette: 0 black … 15 white). Run at a high rate and flip the switches while it paints.',
+    notes: 'An 8-bit counter sweeps the 16 × 16 screen pixel by pixel (x = count[3:0], y = count[7:4]); each rising clock edge writes the colour set on the switches (the 16-colour palette: 0 black … 15 white). The switches start at 0 (black, on a black screen): flip one on, then Run at a high rate and flip them while it paints.',
     pins: [pin('clk', 'in', [2, 18], 1, { kind: 'clock' })],
     parts: [
       part('one', { const: { width: 1, value: 1 } }, [3, 7]), part('cnt', { lib: 'counter8' }, [10, 6]),
@@ -430,7 +430,7 @@ export const EXAMPLES: Example[] = [
   { id: 'fetch', group: 'first', short: 'PC register, PC + 4 and a program ROM: the fetch of a CPU.', name: 'Fetch loop', blurb: 'PC register, PC + 4 and a program ROM: the instruction fetch of a CPU.', build: (id, n) => fetchChip(id, n) },
   { id: 'counter7', group: 'first', short: 'A counter, a font ROM as the decoder, a digit.', name: '4-bit counter on a 7-segment display', blurb: 'A counter, a font ROM as the decoder, a 7-segment digit.', build: counterSeg7Chip },
   { id: 'console', group: 'first', short: 'A counter walks a ROM and prints it.', name: 'Console: hello', blurb: 'A counter walks a ROM holding a message; a console prints it, a character per clock edge.', build: consoleChip },
-  { id: 'screen', group: 'first', short: 'A counter draws on a pixel screen.', name: 'Screen: a sweeping beam', blurb: 'A counter sweeps a 16 × 16 screen pixel by pixel in the colour set on four switches.', build: screenChip },
+  { id: 'screen', group: 'first', short: 'A counter draws on a pixel screen in the colour you switch on.', name: 'Screen: a sweeping beam', blurb: 'A counter sweeps a 16 × 16 screen pixel by pixel in the colour set on four switches: they start at 0, black on black, so flip one on, then Run.', build: screenChip },
   {
     id: 'computer', group: 'computers', drawer: true, short: 'Runs a program and draws a picture.', name: 'Computer: RISC-V with a screen and a console',
     blurb: 'An RV32I core, a program ROM, 4K words of RAM, a 64 × 64 screen, a console, LEDs and switches behind a memory map. Run: it greets, then paints.',

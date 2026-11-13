@@ -7,6 +7,9 @@ import { symbolGeom } from '../../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef, SymbolSpec } from '../../sim/types';
 import { define, merger, splitter } from '../define';
 import { GND, VDD } from '../transistors';
+import { layered } from '../layered';
+import { layoutSlices } from './slices';
+import type { Builder } from '../builder';
 
 /** Width of a label as the router draws it (route.ts tagGeom), plus its stub. */
 const tagLen = (name: string) => 1.4 + name.length * 0.48 + 0.9;
@@ -22,16 +25,36 @@ export interface BlockSpec {
   rows?: number;
   /** Names of the bits of a bus pin (default name[i]): a bundle of named lines, drawn as one bus outside. */
   bits?: Record<string, string[]>;
+  /**
+   * 'layered': columns by logic depth and rows by what they connect to (lib/layered.ts), short forward nets as wires; the
+   * grid in insertion order with every net a label otherwise (the eyes pass's C5: a level of nothing but pointers).
+   */
+  place?: 'grid' | 'layered' | 'slices';
+  /** With place 'layered': nets (by name) drawn as wires although they run back a column (a loop's short return). */
+  wires?: string[];
+  /** With place 'slices': the least gap between columns (default 5). */
+  gap?: number;
+  /** With place 'slices': the parts that belong to no row stand above the rows, not below (a PLA's input bars). */
+  top?: boolean;
+  /** With place 'slices': fold the rows into this many side by side bands (rails run along each, one trunk per band). */
+  bands?: number;
+  /** With place 'slices': false draws a wire only between parts of one row (default: also to a neighbouring row). */
+  across?: boolean;
 }
 
+export interface Inst { name: string; def: ComponentDef; conns: Record<string, string | string[]>; label?: string; slice: number }
+
 export class Ckt {
-  protected insts: { name: string; def: ComponentDef; conns: Record<string, string | string[]>; label?: string }[] = [];
+  protected insts: Inst[] = [];
+  private cur = -1;
+  /** The bit slice the next parts belong to (place 'slices'): one bit of a register, its gate, pass transistor and cell; -1: none. */
+  slice(i: number): void { this.cur = i; }
   protected caps = new Map<string, number | true>();
 
   /** Add an instance; each port gets a net name (a w-bit port: w names, or one name of a w-bit net). */
   add(name: string, def: ComponentDef, conns: Record<string, string | string[]>, label?: string): string {
     for (const p of def.ports) if (!(p.name in conns)) throw new Error(`${name} (${def.id}): port ${p.name} not connected`);
-    this.insts.push({ name, def, conns, label });
+    this.insts.push({ name, def, conns, label, slice: this.cur });
     return name;
   }
   /** Mark nets as capacitive (stored charge); a number is the relative capacitance (a bus: 20). */
@@ -51,7 +74,7 @@ export class Ckt {
   }
 }
 
-function layout(spec: BlockSpec, insts: { name: string; def: ComponentDef; conns: Record<string, string | string[]>; label?: string }[],
+function layout(spec: BlockSpec, insts: Inst[],
   caps: Map<string, number | true>) {
   const ends = new Map<string, string[]>();
   const end = (net: string, e: string) => {
@@ -151,6 +174,24 @@ function layout(spec: BlockSpec, insts: { name: string; def: ComponentDef; conns
   let yl = 2, yr = 2;
   for (const p of spec.ports) {
     if (p.dir === 'out') { pins[p.name] = [Math.ceil(x + rightW + 2), yr]; yr += 2; } else { pins[p.name] = [-Math.ceil(leftW + 2), yl]; yl += 2; }
+  }
+  const dirOf = (e: string): number => {
+    const dot = e.indexOf('.');
+    if (dot < 0) return spec.ports.find((p) => p.name === e)?.dir === 'out' ? 3 : 0;
+    const i = placed.find((x) => x.name === e.slice(0, dot));
+    return i?.def.ports.find((p) => p.name === e.slice(dot + 1))?.dir === 'out' ? 1 : 2;
+  };
+  if (spec.place === 'slices') {
+    const ordered = nets.map((n) => ({ ...n, ends: [...n.ends].sort((a, b) => dirOf(a) - dirOf(b)) }));
+    const sliceOf = new Map(insts.filter((i) => i.slice >= 0).map((i) => [i.name, i.slice]));
+    const nl = layoutSlices(spec, placed, ordered, sliceOf, bitName);
+    return { level: 'switch' as const, ...nl, nets: nl.nets.map((n) => { const c = caps.get(n.name ?? ''); return c === undefined ? n : { ...n, cap: c }; }) };
+  }
+  if (spec.place === 'layered') {
+    const ordered = nets.map((n) => ({ ...n, ends: [...n.ends].sort((a, b) => dirOf(a) - dirOf(b)) }));
+    const nl = layered(spec.ports, { nets: () => ordered, instances } as unknown as Builder,
+      { room: true, gap: spec.gap, pinPitch: 4, x0: Math.ceil(2 * leftW + 4), wires: Object.fromEntries(ordered.filter((n) => spec.wires?.includes(n.name ?? '')).map((n) => [n.ends[0], true])) });
+    return { level: 'switch' as const, ...nl, nets: nl.nets.map((n) => { const c = caps.get(n.name ?? ''); return c === undefined ? n : { ...n, cap: c }; }) };
   }
   return { level: 'switch' as const, instances, nets, pins };
 }

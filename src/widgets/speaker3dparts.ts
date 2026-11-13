@@ -13,8 +13,8 @@
 // The driver is a Dayton Audio RS180-8 (7" Reference woofer), from Dayton's product page
 // (https://daytonaudio.com/product/101/rs180-8-7-reference-woofer-8-ohm): Sd 124.7 cm², voice coil 38 mm (aluminium former),
 // Xmax 6 mm, Bl 7.82 T·m, Mms 17.9 g, Fs 35.7 Hz, Cms 1.12 mm/N, black anodised aluminium cone, rubber surround,
-// cast-aluminium 6-hole frame, ferrite magnet, 180.5 mm overall, 81 mm deep. The page does not list the coil's winding
-// height, the gap height, the magnet's size or the spider: the winding (18 mm) and gap (6 mm) are chosen so that
+// cast-aluminium 6-hole frame, ferrite magnet, "a solid aluminum phase plug" (no dust cap), 180.5 mm overall, 81 mm deep.
+// The page does not list the coil's winding height, the gap height, the magnet's size, the phase plug's size or the spider: the winding (18 mm) and gap (6 mm) are chosen so that
 // Xmax = (winding − gap) / 2 = 6 mm, and the rest are proportions drawn to look like a 7" driver.
 //
 // The speaker faces +y; the front half (z > 0) is cut away so the section shows. Units are millimetres.
@@ -193,15 +193,15 @@ export const emfVolts = (d: Drive, k: number): number => BL * (velocityMmS(d, k)
 
 // ---------------------------------------------------------------- geometry
 
-/** Height of the dust cap's lower face at rest. */
-export const DUST_Y = 36;
-/** Height of the dust cap's lower face at displacement `cone` (−1 … 1), as drawn. */
-export const dustY = (cone: number, mag = DRAW_K): number => DUST_Y + cone * XMAX_MM * mag;
+/** Height of the cone's neck (where it joins the former) at rest. */
+export const NECK_Y = 36;
+/** Height of the cone's neck at displacement `cone` (−1 … 1), as drawn. */
+export const neckY = (cone: number, mag = DRAW_K): number => NECK_Y + cone * XMAX_MM * mag;
 const SEG = 12, WIND_SEG = 6, TURNS = 16;
 const phiOf = (k: number, seg = SEG) => Math.PI + ((k + 0.5) * Math.PI) / seg;
 
 export interface SpeakerPalette {
-  steel: RGB; magnet: RGB; basket: RGB; cone: RGBA; dust: RGB; former: RGB; wire: RGB; wire2: RGB; flux: RGB; rubber: RGB; spider: RGB;
+  steel: RGB; magnet: RGB; basket: RGB; cone: RGBA; plug: RGB; former: RGB; wire: RGB; wire2: RGB; flux: RGB; rubber: RGB; spider: RGB;
   stair: RGB; stairDim: RGBA; trace: RGB; cursor: RGB; live: RGB; zero: RGB;
 }
 
@@ -226,9 +226,17 @@ export const profile = (c: RGB | RGBA, pts: readonly (readonly [number, number])
 /** The surround: a half-roll (semicircle of radius R, rising) from (r0, y0) to (r0 + 2R, y0), `n` segments, shifted by dy at its inner foot. */
 export const rollPts = (r0: number, yIn: number, yOut: number, R: number, n = 4): [number, number][] =>
   Array.from({ length: n + 1 }, (_, i) => { const a = Math.PI * (1 - i / n); return [r0 + R + R * Math.cos(a), yIn + (yOut - yIn) * (i / n) + R * Math.sin(a)]; });
-/** The dust cap: a dome of rise `h` over radius R, from the neck. */
-export const domePts = (R: number, y0: number, h: number, n = 3): [number, number][] =>
-  Array.from({ length: n + 1 }, (_, i) => { const u = i / n; return [R * (1 - u), y0 + h * Math.sin((u * Math.PI) / 2)]; });
+/**
+ * The phase plug: solid aluminium on the pole piece, fixed (it does not move with the cone), so the moving mass is the cone,
+ * the coil and part of the suspension, as Mms is. Its size is not on Dayton's page: drawn, a cylinder clear of the former
+ * then an ogive to a tip above the cone's neck. (r, y) steps from the pole's top.
+ */
+export const PLUG = { r: 17, shoulder: 42, tip: 58 };
+export const plugSteps = (n = 6): [number, number, number][] => {
+  const out: [number, number, number][] = [[PLUG.r, GEOM.plateTop, PLUG.shoulder]], h = (PLUG.tip - PLUG.shoulder) / n;
+  for (let i = 0; i < n; i++) out.push([PLUG.r * Math.sqrt(1 - ((i + 0.5) / n) ** 2), PLUG.shoulder + i * h, PLUG.shoulder + (i + 1) * h]);
+  return out;
+};
 /** The spider: a corrugated ring from the former to the frame, `humps` rolls of amplitude A (zig-zag, 2 segments each). */
 export const spiderPts = (r0: number, y0: number, r1: number, y1: number, A: number, humps = 2): [number, number][] => {
   const pts: [number, number][] = [[r0, y0]], m = humps * 2;
@@ -271,13 +279,13 @@ export function speakerParts(d: Drive, t: number, P: SpeakerPalette): Part[] {
   for (const deg of [180, 240, 300, 360]) out.push(slab(P.basket, (deg * Math.PI) / 180, 0.11, G.outerR, G.plateTop, 80, 70, 4));
   out.push(...ring(P.basket, 72, 90, 70, 74));
   // Moving: the former, the winding (16 of its ~64 turns drawn, 1.1 mm pitch, alternating shade; 0.8 mm clear each side of the
-  // gap), the dust cap (a dome), the cone, the spider (corrugated) and the surround (a half-roll).
+  // gap), the cone, the spider (corrugated) and the surround (a half-roll). The phase plug stays put on the pole piece.
   out.push(...ring(P.former, G.formerIn, G.formerOut, G.windLow + dy, G.formerTop + dy));
   for (let i = 0; i < TURNS; i++) {
     const y = G.windLow + 0.05 + i * ((G.windHigh - G.windLow) / TURNS);
     out.push(...ring(i % 2 ? P.wire2 : P.wire, G.formerOut, G.windOut, y + dy, y + 0.95 + dy, WIND_SEG));
   }
-  out.push(...profile(P.dust, domePts(G.coneNeck, G.formerTop + dy, 8), 1.2));
+  for (const [r, y0, y1] of plugSteps()) out.push(...ring(P.plug, 0, r, y0, y1));
   out.push(...sheet(P.cone, G.coneNeck, G.formerTop + dy, G.coneRim, G.coneRimY + dy, 0.8));
   out.push(...profile(P.spider, spiderPts(G.formerOut, 33 + dy, G.spiderOuter, G.spiderY, 2.5), 0.9));
   out.push(...profile(P.rubber, rollPts(G.coneRim, G.coneRimY + dy, G.coneRimY, 4.5, 4), 1.4));
@@ -339,6 +347,7 @@ export function speakerAnchors(d: Drive, t: number, close = false): Anchor[] {
     { text: 'Spider', p: at(40, Math.PI * 1.7, 38 + dy * 0.4), side: 'r', n: up, minor: true },
     { text: 'Voice coil', p: [-19.2, 25 + dy, 0], side: 'r', n: front },
     { text: 'Pole piece', p: [-9, 12, 0], side: 'b', n: front },
+    { text: 'Phase plug', p: [-5, 50, 0], side: 'r', n: front, minor: true },
     { text: 'Ferrite magnet', p: [-54, 11, 0], side: 'l', n: front },
     { text: 'Top plate', p: [-54, 25, 0], side: 'l', n: front, minor: true },
     { text: 'Frame', p: at(71.4, Math.PI * 1.83, 52), side: 'r', n: front, minor: true },
