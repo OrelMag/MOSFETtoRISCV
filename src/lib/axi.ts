@@ -10,6 +10,7 @@ import type { DramConfig } from '../dram/controller';
 import { FlashDevice, FLASH_TIMES, type FlashGeometry } from '../flash/model';
 import { netlistOf, type ComponentDef, type InstanceDef, type NetDef, type Netlist, type PortDef } from '../sim/types';
 import { orientedBox, symbolGeom } from '../sim/geometry';
+import { innerSignals } from '../sim/flatten';
 import { constWord, isZero } from './alu';
 import { bigRam } from './bigmem';
 import { Builder } from './builder';
@@ -646,20 +647,17 @@ export function busBench(image: ArrayLike<number>, k = 10, wait = 0): ComponentD
   return memo(id, () => {
     const b = new Builder(10, 20);
     b.pins('req', 'we', 'addr', 'wdata', 'be', 'clk');
-    const cpu = b.op(AXI_PORT, ['req', 'we', 'addr', 'wdata', 'be', 'clk'], 'CPU port', 'cpu');
-    const dma = b.op(DMA_ENGINE, [], 'DMA', 'dma');
+    // every link packed into a request and a response bus (bundled): a link is two wires
+    // the port's own request line is req: its packed bus link is bus_req / bus_rsp
+    const cpu = b.op(packedMaster(AXI_PORT, `${AXI_PORT.id}_b`, 'bus_'), ['req', 'we', 'addr', 'wdata', 'be', 'clk'], 'CPU port', 'cpu');
+    const dma = b.op(packedBoth(DMA_ENGINE), [], 'DMA', 'dma');
     b.next();
-    const BUS = axiBus(2, [MAP.ram, MAP.flash, MAP.dma, 0xf]);
-    const bx = b.op(BUS, [], 'interconnect', 'bus');
+    const bx = b.op(packedBus(2, [MAP.ram, MAP.flash, MAP.dma, 0xf]), [], 'interconnect', 'bus');
     b.next();
-    const slaves = [b.op(axiRam(k, wait), [], 'RAM', 'ram'), b.op(FL, [], 'flash', 'flash'), 'dma', b.op(AXI_DEFAULT, [], 'default', 'def')];
+    const slaves = [b.op(packedSlave(axiRam(k, wait)), [], 'RAM', 'ram'), b.op(packedSlave(FL), [], 'flash', 'flash'), 'dma', b.op(packedSlave(AXI_DEFAULT), [], 'default', 'def')];
     // masters: 0 the CPU port, 1 the DMA's master side
-    for (const s of M_OUT) { b.wire(`${cpu}.${s}`, `${bx}.m0_${s}`); b.wire(`${dma}.m_${s}`, `${bx}.m1_${s}`); }
-    for (const s of M_IN) { b.wire(`${bx}.m0_${s}`, `${cpu}.${s}`); b.wire(`${bx}.m1_${s}`, `${dma}.m_${s}`); }
-    slaves.forEach((sl, i) => {
-      for (const s of M_OUT) b.wire(`${bx}.s${i}_${s}`, `${sl}.${s}`);
-      for (const s of M_IN) b.wire(`${sl}.${s}`, `${bx}.s${i}_${s}`);
-    });
+    [`${cpu}.bus_`, `${dma}.m_`].forEach((m, i) => { b.wire(`${m}req`, `${bx}.m${i}_req`); b.wire(`${bx}.m${i}_rsp`, `${m}rsp`); });
+    slaves.forEach((sl, i) => { b.wire(`${bx}.s${i}_req`, `${sl}.req`); b.wire(`${sl}.rsp`, `${bx}.s${i}_rsp`); });
     for (const x of [dma, bx, slaves[0], slaves[1], slaves[3]]) b.wire('clk', `${x}.clk`);
     b.wire(`${cpu}.done`, 'done'); b.wire(`${cpu}.rdataOut`, 'rdata'); b.wire(`${dma}.irq`, 'irq');
     const R = b.right;
@@ -843,14 +841,29 @@ export function axiFlashWindow(k: number, read = FLASH_TIMES.read): ComponentDef
 
 /** The sandbox's interconnect for the given slave codes: two masters, every link packed (lib/soc.ts SANDBOX_PARTS.bus; the memory-map designer's). */
 export function sandboxBus(codes: number[]): ComponentDef {
-  const BUS = axiBus(2, codes);
-  return bundled(BUS, [['m0_', 'slave'], ['m1_', 'slave'], ...codes.map((_, k): [string, 'master'] => [`s${k}_`, 'master'])], `${BUS.id}_b`);
+  return packedBus(2, codes);
 }
+
+/** An interconnect of M masters with every link packed: ports m<i>_req / m<i>_rsp and s<k>_req / s<k>_rsp. */
+export function packedBus(M: number, codes: number[]): ComponentDef {
+  const BUS = axiBus(M, codes);
+  return bundled(BUS, [...Array.from({ length: M }, (_, m): [string, 'slave'] => [`m${m}_`, 'slave']), ...codes.map((_, k): [string, 'master'] => [`s${k}_`, 'master'])], `${BUS.id}_b`);
+}
+/** A slave with its link packed (ports req in, rsp out): the computers' and the sandbox's (`<id>_b`). */
+export const packedSlave = (d: ComponentDef): ComponentDef => bundled(d, [['', 'slave']], `${d.id}_b`);
+/** A master with its link packed (req out, rsp in). */
+export const packedMaster = (d: ComponentDef, id = `${d.id}_b`, base?: string): ComponentDef => bundled(d, [['', 'master', base]], id);
+/** A part that is both: a slave on its own link and a master on m_ (the DMA engine, the NIC). */
+export const packedBoth = (d: ComponentDef, id = `${d.id}_b`): ComponentDef => bundled(d, [['', 'slave'], ['m_', 'master']], id);
 
 /** The channel signals a master drives, packed bit 0 first (M_OUT order): 105 bits. */
 export const REQ_BITS = M_OUT.reduce((s, x) => s + wOf(x), 0);
 /** What comes back (M_IN order): 37 bits. */
 export const RSP_BITS = M_IN.reduce((s, x) => s + wOf(x), 0);
+
+/** A link of a part: the prefix of its channel signals, the part's side of it, and the packed ports' base name (default: the prefix). */
+export type Link = [prefix: string, side: 'master' | 'slave', base?: string];
+const packName = (l: Link, kind: 'req' | 'rsp') => `${l[2] ?? l[0]}${kind}`;
 
 /**
  * A part with its bus ports packed: every group (a prefix, and whether the part is the master or the slave
@@ -863,43 +876,65 @@ export const RSP_BITS = M_IN.reduce((s, x) => s + wOf(x), 0);
  * `awvalid` there (sim/flatten.ts signalBits). The ports and the symbol are what the old wrapper had, so a stored
  * chip placing a `_b` part keeps its wires.
  */
-export function bundled(def: ComponentDef, groups: [string, 'master' | 'slave'][], id: string): ComponentDef {
+export function bundled(def: ComponentDef, groups: Link[], id: string): ComponentDef {
   return memo(id, () => {
-    if (def.behavior) throw new Error(`bundled: ${def.id} is a behaviour, not a drawn netlist`);
     const own = new Set(groups.flatMap(([p]) => [...M_OUT, ...M_IN].map((s) => p + s)));
     const other = def.ports.filter((p) => !own.has(p.name));
-    const reqOf = (p: string) => `${p}req`, rspOf = (p: string) => `${p}rsp`;
-    const packIn = groups.map(([p, side]) => bus(side === 'master' ? rspOf(p) : reqOf(p), side === 'master' ? RSP_BITS : REQ_BITS, 'in'));
-    const packOut = groups.map(([p, side]) => bus(side === 'master' ? reqOf(p) : rspOf(p), side === 'master' ? REQ_BITS : RSP_BITS, 'out'));
+    const packIn = groups.map((l) => bus(packName(l, l[1] === 'master' ? 'rsp' : 'req'), l[1] === 'master' ? RSP_BITS : REQ_BITS, 'in'));
+    const packOut = groups.map((l) => bus(packName(l, l[1] === 'master' ? 'req' : 'rsp'), l[1] === 'master' ? REQ_BITS : RSP_BITS, 'out'));
     const ports: PortDef[] = [...other.filter((p) => p.dir === 'in'), ...packIn, ...other.filter((p) => p.dir === 'out'), ...packOut];
     return define({
       id, name: `${def.name}, bus bundled`, category: def.category,
       summary: `${def.summary ?? def.name} Its bus ports packed: per link a request bus (the master's ${M_OUT.length} signals, ${REQ_BITS} bits) and a response bus (${M_IN.length} signals, ${RSP_BITS} bits), split and merged beside its pins.`,
       ports, symbol: { ...def.symbol, kind: 'box' },
-      netlist: () => packedNetlist(def, groups, own, ports),
+      netlist: def.behavior
+        ? function (this: ComponentDef) { innerSignals.set(this, new Map([...own].map((sg) => [sg, `core.${sg}`]))); return laid(leafLevel(def, groups, other), { keepOrder: true }).call(this); }
+        : function (this: ComponentDef) { return packedNetlist(this, def, groups, own, ports); },
     });
   });
 }
 
-/** The nets feeding a merger's inputs named after the signals they carry (a reader finds `awready` by name). */
-function nameMerged(nl: Netlist, inputs: Map<string, string>): Netlist {
-  return { ...nl, nets: nl.nets.map((n) => { if (n.name) return n; const s = n.ends.find((e) => inputs.has(e)); return s ? { ...n, name: inputs.get(s) } : n; }) };
+/**
+ * A behavioural leaf (a device with no drawing of its own: the flash) cannot take the converters into itself: its packed form
+ * is a level holding the splitters, the device and the mergers. Not a hollow level, as the device has no insides to open.
+ */
+function leafLevel(def: ComponentDef, groups: Link[], other: PortDef[]): Builder {
+  const b = new Builder(10, 14), from = new Map<string, string>();
+  for (const l of groups) {
+    const [p, side] = l, sigs = side === 'master' ? M_IN : M_OUT;
+    const s = b.op(splitter(sigs.map(wOf)), [packName(l, side === 'master' ? 'rsp' : 'req')]);
+    sigs.forEach((sg, i) => from.set(p + sg, `${s}.o${i}`));
+  }
+  b.next();
+  const core = b.op(def, def.ports.filter((pt) => pt.dir === 'in').map((pt) => from.get(pt.name) ?? pt.name), def.name, 'core');
+  b.next();
+  for (const l of groups) {
+    const [p, side] = l, sigs = side === 'master' ? M_OUT : M_IN;
+    b.wire(b.op1(merger(sigs.map(wOf)), sigs.map((sg) => `${core}.${p}${sg}`)), packName(l, side === 'master' ? 'req' : 'rsp'));
+  }
+  for (const pt of other) if (pt.dir === 'out') b.wire(`${core}.${pt.name}`, pt.name);
+  return b;
 }
 
-function packedNetlist(def: ComponentDef, groups: [string, 'master' | 'slave'][], own: Set<string>, ports: PortDef[]): Netlist {
+/** The nets feeding a merger's inputs named after the signals they carry, over any name they had (a reader finds `awready` by name). */
+function nameMerged(nl: Netlist, inputs: Map<string, string>): Netlist {
+  return { ...nl, nets: nl.nets.map((n) => { const s = n.ends.find((e) => inputs.has(e)); return s ? { ...n, name: inputs.get(s) } : n; }) };
+}
+
+function packedNetlist(self: ComponentDef, def: ComponentDef, groups: Link[], own: Set<string>, ports: PortDef[]): Netlist {
   const nl = netlistOf(def);
   if (!nl) throw new Error(`bundled: ${def.id} has no netlist`);
   // a Builder level laid out by layered(): the same level again, its splitters in the first column and mergers in the last
   const src = laidFrom.get(def);
   if (src) {
     const b = new Builder(10, 14), ren = new Map<string, string>(), merged = new Map<string, string>(), outs: [string, string, typeof M_OUT | typeof M_IN][] = [];
-    for (const [p, side] of groups) {
-      const ins = side === 'master' ? M_IN : M_OUT, name = p + (side === 'master' ? 'rsp' : 'req');
+    for (const l of groups) {
+      const [p, side] = l, ins = side === 'master' ? M_IN : M_OUT, name = packName(l, side === 'master' ? 'rsp' : 'req');
       const s = b.op(splitter(ins.map(wOf)), [name], '', `${name}_split`);
       ins.forEach((sg, k) => ren.set(p + sg, `${s}.o${k}`));
-      outs.push([p, p + (side === 'master' ? 'req' : 'rsp'), side === 'master' ? M_OUT : M_IN]);
+      outs.push([p, packName(l, side === 'master' ? 'req' : 'rsp'), side === 'master' ? M_OUT : M_IN]);
     }
-    b.pins(...groups.map(([p, side]) => p + (side === 'master' ? 'rsp' : 'req')));
+    b.pins(...groups.map((l) => packName(l, l[1] === 'master' ? 'rsp' : 'req')));
     b.next();
     for (const [p, name, sigs] of outs) sigs.forEach((sg, k) => { ren.set(p + sg, `${name}_merge.i${k}`); merged.set(`${name}_merge.i${k}`, p + sg); });
     src.b.copyInto(b, (d) => ren.get(d), (s) => ren.get(s));
@@ -912,6 +947,7 @@ function packedNetlist(def: ComponentDef, groups: [string, 'master' | 'slave'][]
       b.wire(`${name}_merge.out`, name);
     });
     // the pointers hanging off the splitters and mergers need room beside them; short wires never cross a part
+    innerSignals.set(self, ren);
     return nameMerged(layered(ports, b, { ...src.opts, room: true, avoid: true, gap: Math.max(src.opts.gap ?? 0, 20) }), merged);
   }
   {
@@ -922,10 +958,11 @@ function packedNetlist(def: ComponentDef, groups: [string, 'master' | 'slave'][]
     for (const p of Object.values(pins)) xPin = Math.max(xPin, p[0]);
     x1 = Math.max(x1, xPin);
     // each bus's converter goes where its signals' pins were: the left edge or the right
-    const plan = groups.flatMap(([p, side]) => (['in', 'out'] as const).map((dir) => {
+    const plan = groups.flatMap((l) => (['in', 'out'] as const).map((dir) => {
+      const [p, side] = l;
       const sigs = (side === 'master') === (dir === 'out') ? M_OUT : M_IN, xs = sigs.map((sg) => pins[p + sg]?.[0]).filter((x): x is number => x !== undefined);
       const right = xs.length ? xs.reduce((t, x) => t + x, 0) / xs.length > x1 / 2 : dir === 'out';
-      return { p, dir, sigs, right, name: p + (sigs === M_OUT ? 'req' : 'rsp') };
+      return { p, dir, sigs, right, name: packName(l, sigs === M_OUT ? 'req' : 'rsp') };
     }));
     const DX = plan.some((q) => !q.right) ? 10 : 0, R = x1 + DX + 12;
     const instances: InstanceDef[] = nl.instances.map((i) => ({ ...i, at: [i.at![0] + DX, i.at![1]] }));
@@ -961,9 +998,10 @@ function packedNetlist(def: ComponentDef, groups: [string, 'master' | 'slave'][]
     });
     const nets: NetDef[] = nl.nets.map((n0) => {
       const n = moved(n0), sig = n.ends.find((e) => rename.has(e));
-      return sig ? { ...n, name: n.name ?? sig, ends: n.ends.map((e) => rename.get(e) ?? e) } : n;
+      return sig ? { ...n, name: sig, ends: n.ends.map((e) => rename.get(e) ?? e) } : n;
     });
     nets.push(...added);
+    innerSignals.set(self, rename);
     return { instances, nets, pins: newPins };
   }
 }

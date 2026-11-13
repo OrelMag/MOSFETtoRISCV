@@ -9,7 +9,7 @@ import { lanSoc } from '../lib/lan';
 import { busComputer } from '../lib/soc';
 import type { RamState } from '../lib/bigmem';
 import { DualSim } from '../sim/dualsim';
-import { findNode, flatten, hintBits, type FlatDesign, type HierNode } from '../sim/flatten';
+import { findNode, flatten, hintBits, signalBits, type FlatDesign, type HierNode } from '../sim/flatten';
 import type { GateSim } from '../sim/gatesim';
 import { B0, B1 } from '../sim/types';
 import { pack } from '../sim/values';
@@ -135,7 +135,7 @@ export class GateWindow implements Endpoint {
     bench.ends[p] = this;
   }
   private out(p: string): number { return pack(this.sim.getBits(this.root.ports[p])); }
-  private np(p: string): number { return pack(this.sim.getBits(this.nicNode.ports[p])) >>> 0; }
+  private np(p: string): number { return pack(this.sim.getBits(signalBits(this.nicNode, p)!)) >>> 0; }
   get txd(): number { return this.out('txd'); }
   get txen(): number { return this.out('txen'); }
   private reg(i: number): number { return pack(this.sim.getBits(this.rf.children!.get(`w${i}`)!.ports.q)) >>> 0; }
