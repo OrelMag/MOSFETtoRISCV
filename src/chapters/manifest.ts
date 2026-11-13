@@ -35,6 +35,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A NAND from diodes", challenge: "quiz", stage: "scene" },
     { title: "One bit in one bulb", challenge: "reach", stage: "scene" },
     { title: "What it costs", challenge: "quiz", stage: "scene" },
+    { title: "Ten bulbs make a digit", stage: "widget" },
   ] },
   { id: "cards", num: 0, title: "Punch cards", blurb: "Holes in cards: a loom's pattern, a nation counted, a program a card at a time, and the reader that feeds it in.", level: "Input", prologue: "P3", builds: ["relays"], recap: {"checks":3}, steps: [
     { title: "A chain of cards", challenge: "quiz", stage: "widget" },

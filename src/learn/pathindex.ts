@@ -7,7 +7,7 @@ export const PATH_MINUTES: Record<string, number[]> = {
   "basics": [3,6,3,3,5,3,5],
   "map": [3,6,3],
   "relays": [6,4,6,6,6,6,5,5],
-  "tubes": [6,6,5,6,6,7,6],
+  "tubes": [6,6,5,6,6,7,6,3],
   "cards": [5,5,5,5,6,6],
   "mosfet": [3,5,5,5,6,4],
   "inverter": [6,3,6,6,6,5,5],

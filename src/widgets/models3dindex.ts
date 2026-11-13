@@ -236,6 +236,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./williams3d').then((m) => m.williams3d()),
   },
   {
+    id: 'eniac', title: 'ENIAC\'s decade ring', category: 'machines', chapter: 'tubes', step: 7,
+    summary: 'Two plug-in decade units: ten 6SN7 flip-flops in a ring, a neon each, the lit one moving a stage a pulse and carrying into the tens past nine.',
+    files: ['eniac3d', 'eniac3dview', 'eniac3dkit', 'eniac3dgeom'], factory: 'eniac3d', codex: ['ecclesjordan'],
+    open: () => import('./eniac3d').then((m) => m.eniac3d()),
+  },
+  {
     id: 'rope', title: 'Core rope', category: 'machines', chapter: 'appendix-agc', step: 6,
     summary: 'Cores of an Apollo rope module: a sense wire threads a core for a 1 and passes it for a 0; inhibit, set and reset wires read one core at a time.',
     files: ['rope3d', 'rope3dview', 'rope3dkit', 'rope3dgeom'], factory: 'rope3d', codex: ['corerope'],

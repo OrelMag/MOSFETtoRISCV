@@ -10,6 +10,8 @@ import {
 import { logicDepth, stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
 import { triodeCloseup } from '../widgets/triode3d';
+import { eniac3d } from '../widgets/eniac3d';
+import { ACCUMULATORS, DIGITS, STAGES, TUBES_PER_DIGIT } from '../widgets/eniac3dgeom';
 import { tubeDividerWidget } from '../widgets/tubedivider';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -425,6 +427,22 @@ export const chTubes: Chapter = {
         why: ['', 'That is a tenth of the bill: about 0.5 W per NAND, less than a single 6SN7 section\'s heater.', 'That is ten times the bill: about 49 W per NAND, ten times a brick.'],
         explain: `${thin(CPU4_NANDS)} × ${w2(BRICK.total)} W ≈ ${v(CPU4_NANDS * BRICK.total / 1e3)} kW from ${thin(CPU4_NANDS / 2)} 6SN7s and ${thin(CPU4_NANDS)} 6AL5s, most of it heaters: a tenth of ENIAC for a 4-bit CPU. In <span data-ahead="cmos">CMOS, the transistor logic of chapters ${numOf('mosfet')} to ${numOf('nand')},</span> it draws milliwatts.`,
       },
+    },
+    {
+      title: 'Ten bulbs make a digit',
+      body: `
+        <p>ENIAC did not count in binary. Each digit of an <span data-ahead="accumulator">accumulator (a register that adds
+        every number sent to it into the one it holds)</span> was a <strong>ring</strong> of ${STAGES} of the Eccles–Jordan
+        <span data-ahead="dff">flip-flops (circuits that hold one bit until told otherwise)</span> of this chapter, one 6SN7 each, with exactly one of them in its 1 state: the one that holds the digit. A
+        neon lamp on the front panel under each flip-flop showed which. A counting pulse moved the 1 on by one stage; when
+        the ring passed nine it sent one pulse to the next digit's ring: the carry.</p>
+        <p>So a decimal digit costs ${STAGES} twin triodes, ${2 * STAGES} triode sections, in the ring alone, and
+        ${TUBES_PER_DIGIT} tubes with the circuits that shape its input pulses, pass its carry and send its value out.
+        ${ACCUMULATORS} accumulators of ${DIGITS} digits: ${thin(ACCUMULATORS * DIGITS * TUBES_PER_DIGIT)} tubes counting, of
+        ENIAC's ${thin(ENIAC.tubes)}. Binary needs four flip-flops a digit; the ring bought simple counting, one stage
+        moving a pulse and no carries inside a digit, for two and a half times the flip-flops.</p>
+        <div class="try">Set 9 and pulse once: the units' neon goes back to 0 and the tens step.</div>`,
+      widget: () => eniac3d(),
     },
   ],
 };

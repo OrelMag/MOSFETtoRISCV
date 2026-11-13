@@ -66,7 +66,7 @@ const rayMat = (nm: number): Material => { const c = wavelengthRgb(nm); return M
 export function stackView(s: StackSpec, rc: number): OrbitView {
   const top = stackHeight(s) + lensHeight(s, rc), bot = -s.si - (s.beolBelow > 0 ? s.beolBelow + 1.2 : 0.8);
   const span = Math.max(top - bot, 2.2 * s.pitch) * K;
-  return { target: [0, ((top + bot) / 2) * K, -s.pitch * K * 0.3], yaw: 0.45, pitch: 0.24, dist: 2.25 * span };
+  return { target: [0, ((top + bot) / 2) * K, -s.pitch * K * 0.3], yaw: 0.45, pitch: 0.24, dist: 1.7 * span };
 }
 
 const MARK = new Map<Detail, Geo>();
