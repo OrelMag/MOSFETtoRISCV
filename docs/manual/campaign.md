@@ -128,7 +128,7 @@ Your circuit and your progress are saved in this browser as you go. To carry the
   - For a level, it shows:
     - **Why you need it**, and **Goes into**: the chain of later levels that use this block.
     - **The problem** and **What it costs**: the par and the alternatives, measured.
-    - **Used later in**: the levels that place this block.
+    - **Used later in** (the levels that place this block) and, for some levels, **Builds on**.
     - **More: without it, alternatives, pitfalls**, folded: what you would do instead, and the usual mistakes.
     - **The task**, **Success criteria**, **Grading**, **Tips** and **Codex**, as on the level screen.
     - **Go deeper**: the chapters of the journey that teach the same thing.
@@ -212,8 +212,8 @@ one at a time, so you can watch the case that fails.
 1. The table lists the cases. A red ✕ marks a wrong output, with the value it wanted (**want 1**).
 2. Move through the cases with **First test**, **Previous test**, **Next test** and the play button (**Play the
    tests on the circuit**, which stops at a failing one). Drag the scrub bar to jump.
-3. **previous failure** and **next failure** jump between the failing cases. The speed menu (**1/s** to
-   **max**) sets the play rate.
+3. **previous failure** and **next failure** jump between the failing cases. The speed menu (**5/s** at first)
+   sets the play rate.
 4. While the player is open, the canvas shows your circuit at the selected case's inputs. If you fix something, the
    current row is recomputed on your edited circuit at once, and **edited since: check again** reminds you to Check.
 5. To close the player:
