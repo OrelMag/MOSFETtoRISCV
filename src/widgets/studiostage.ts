@@ -42,6 +42,12 @@ export interface StudioStageOptions {
   /** The canvas's aspect (w / h) when the model's own would mislead: a model built only once on the page (empty at
    *  first), or one whose home view is a set camera (fit: false). */
   aspect?: number;
+  /** With fit: false, the aspect (w / h) of the canvas the home views were framed on (measured at 1440 px, gutters
+   *  included): a narrower canvas (a phone: no gutters, a minimum height) would crop the sides, so home and every goTo are
+   *  pulled back by that aspect over the canvas's own, and by `framedNarrow` (default 1.05) more where badges take the
+   *  canvas's edges. What home showed across stays across. */
+  framedAt?: number;
+  framedNarrow?: number;
   /** Groups or names hidden outside the tour and in beats that do not say (a beat's `hide: []` shows them). */
   hidden?: string[];
   /** A scale bar under the canvas following the zoom: the label for a length in model units (1-2-5 steps). */
@@ -224,8 +230,16 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   const contentAspect = () => Math.max(0.2, ((canvas.clientWidth || 4) - 2 * gutNow) / (canvas.clientHeight || 3));
   /** A home the host set with goTo is a view it chose (target and distance included): a resize keeps it, never refits it. */
   let homeGiven = false;
+  /** A set view pulled back for a canvas narrower than the one it was framed on (o.framedAt; the vertical field of view is
+   *  the camera's, the horizontal one narrows with the aspect: exact for small angles, close enough for a framing). */
+  const framed = (v: OrbitView): OrbitView => {
+    const w = canvas.clientWidth, hh = canvas.clientHeight;
+    if (!o.framedAt || o.fit !== false || !w || !hh) return v;
+    const k = Math.max(1, o.framedAt / (w / hh)) * (el.classList.contains('narrow') ? o.framedNarrow ?? 1.05 : 1);
+    return { ...v, dist: v.dist * k };
+  };
   const homeView = (): OrbitView => {
-    if (o.fit === false || homeGiven || !st) return o.home;
+    if (o.fit === false || homeGiven || !st) return framed(o.home);
     const box = homeBox();
     const radius = (isNarrow() && o.homeRadiusNarrow) || o.homeRadius;
     if (radius) {
@@ -486,9 +500,12 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     };
     tween = requestAnimationFrame(step);
   };
-  const goTo = (dest: OrbitView) => {
+  const goTo = (want: OrbitView) => {
     homeGiven = true;
-    if (!st) { o.home = dest; return; }
+    // o.home keeps the view as the host meant it; the camera gets it framed for this canvas (a resize frames it again)
+    o.home = want;
+    if (!st) return;
+    const dest = framed(want);
     const c = st.camera, from = { target: [...c.target] as Vec3, yaw: c.yaw, pitch: c.pitch, dist: c.dist };
     cancelAnimationFrame(tween);
     const dur = reducedMotion() ? 0 : 800, t0 = performance.now();
@@ -501,7 +518,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
       c.yaw = from.yaw + dy * f; c.pitch = from.pitch + (dest.pitch - from.pitch) * f; c.dist = from.dist * Math.pow(dest.dist / from.dist, f);
       st?.invalidate();
       if (f < 1) tween = requestAnimationFrame(step);
-      else { tween = 0; o.home = dest; st?.camera.rehome(dest); }
+      else { tween = 0; st?.camera.rehome(dest); }
     };
     tween = requestAnimationFrame(step);
   };
@@ -705,7 +722,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   void import('../gl/studio').then(({ createStudio, OrbitCamera }) => {
     if (dead) return;
     if (forceFlat) { setMode('flat'); return; }
-    const cam = new OrbitCamera(o.home, o.limits);
+    const cam = new OrbitCamera(framed(o.home), o.limits);
     try {
       st = createStudio(canvas, cam, {
         onRender: () => {

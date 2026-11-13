@@ -11,7 +11,6 @@ import type { OrbitView } from '../gl/camera';
 import { frameLoop } from './mosfet';
 import { packInstances } from '../gl/instances';
 import { studioStage } from './studiostage';
-import { keepWidth } from './studiowidth';
 import { BAND_GEO, BAND_MAT, HG_VIEWS, PULSE_GEO, PULSE_MAT, bandInstances, mercuryModel, pulseInstances, shownKey } from './mercury3dkit';
 import {
   CARRIER_HZ, CUT_LENGTH_M, LENGTH_M, OD_M, ROW_HIT_S, SLOTS, SLOTS_PER_WORD, SOUND_M_S, TANKS, TANK_C, Tank, WINDOW_TOL, WORDS, bitsInTank,
@@ -53,6 +52,7 @@ export function mercuryView(): Widget {
     fit: false,
     // the tube is 64 times longer than wide
     aspect: narrow() ? 1.25 : 1.9,
+    framedAt: 1.9,
     knobs: { cut: 1 },
     onBeat: () => instances(),
     build: (detail) => mercuryModel({ tank, sel }, narrow(), detail === 'flat' ? colours() : undefined),
@@ -63,7 +63,6 @@ export function mercuryView(): Widget {
   });
   // the homes are framed on the desktop canvas (aspect 1.9); a phone's narrower one pulls back so the same width shows
   let cur: OrbitView = startView();
-  const width = keepWidth(stage, 1.9, () => cur);
   ready = true;
   /** The pulses and the picked word's sleeve move every frame as instances. */
   function instances(): void {
@@ -228,7 +227,7 @@ export function mercuryView(): Widget {
   // the preset views; a phone opens on the sending end
   const viewBtns = (Object.keys(VIEWS) as (keyof typeof VIEWS)[]).map((k) => {
     const b = h('button', { type: 'button', 'aria-pressed': String(k === startKey()), class: k === startKey() ? 'on' : '' }, VIEW_NAMES[k]) as HTMLButtonElement;
-    b.addEventListener('click', () => { cur = k === 'whole' ? wholeView() : { ...VIEWS[k] } as OrbitView; stage.goTo(width.scaled(cur)); viewBtns.forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); }); });
+    b.addEventListener('click', () => { cur = k === 'whole' ? wholeView() : { ...VIEWS[k] } as OrbitView; stage.goTo(cur); viewBtns.forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); }); });
     return b;
   });
 
@@ -255,5 +254,5 @@ export function mercuryView(): Widget {
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape' && running) { running = false; readout(true); kick(); } });
   readout(true);
   paint();
-  return { el: panel, destroy() { width.stop(); loop.stop(); stage.destroy(); } };
+  return { el: panel, destroy() { loop.stop(); stage.destroy(); } };
 }

@@ -158,6 +158,11 @@ Options beyond the freeze, each for a case the conversions met:
 - `homeFrame` fits home to some parts (the subject, not its wiring); `homeRadius` to a sphere (a round model).
   `homeRadiusNarrow`: that radius when the names are badges (a phone), further out so no anchor sits under a badge at the edge.
 - `aspect` fixes the canvas's shape (a model whose own aspect would mislead, or a host that moves the camera with `goTo`).
+- `framedAt` (with `fit: false`): the canvas aspect the set views were framed on at 1440 px; on a narrower canvas home and every
+  `goTo` are pulled back by framedAt over the canvas's own aspect (and `framedNarrow`, default 1.05, more in the badge form), so what
+  home showed across stays across. It replaced the hosts' keepWidth helper (widgets/studiowidth.ts, gone): the same distances.
+- First paint: the names are made from the model before the first layout and the stage lays out in the first frame it is in the
+  page, so its box never moves after it is first drawn (the smoke's dark 3D routes fail on a layout shift inside it).
 - `noteMore`: the note's long part (sources, simplifications), folded under the hint as "Sources and simplifications"; keep `note` to the essentials.
 - `hidden`: parts hidden outside the tour and in beats that do not say.
 - `scaleBar(len)`: a 1-2-5 scale bar under the canvas following the zoom, labelled in the model's units.
