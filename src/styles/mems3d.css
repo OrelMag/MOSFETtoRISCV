@@ -1,0 +1,20 @@
+/* ---------- The MEMS microphone (widgets/mems3dview.ts) ---------- */
+.mm {
+  --mm-p: light-dark(#2d6fd0, #6aa3ff);
+  --mm-w: light-dark(#d4572a, #ff8a5c);
+  --mm-one: light-dark(#b8862a, #f0c060);
+  --mm-zero: light-dark(#c9ccd4, #3a3e48);
+  --mm-cur: light-dark(#6a7184, #aab1c4);
+}
+.mm-below { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 24px; margin-top: 8px; }
+@media (max-width: 900px) { .mm-below { grid-template-columns: minmax(0, 1fr); } }
+.mm-plot { display: block; width: 100%; height: auto; background: var(--surface-2); border-radius: 6px; }
+.mm-plot .mm-p { fill: none; stroke: var(--mm-p); stroke-width: 1.6; }
+.mm-plot .mm-w circle { fill: var(--mm-w); }
+.mm-plot .mm-zero { stroke: var(--border); }
+.mm-plot .mm-cur { stroke: var(--mm-cur); stroke-dasharray: 3 2; }
+.mm-plot .one { fill: var(--mm-one); }
+.mm-plot .zero { fill: var(--mm-zero); }
+.mm-plot .mm-l { font: 600 9.5px var(--font-ui); fill: var(--text-2); }
+.mm select { font: inherit; min-height: 28px; }
+@media (pointer: coarse) { .mm select { min-height: 40px; } }

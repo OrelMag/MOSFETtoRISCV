@@ -130,7 +130,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'tide', title: 'Kelvin\'s tide predictor', category: 'analogies', chapter: 'signals', step: 0,
     summary: 'Ten cranks turn the chapter\'s harmonics and one cord over their pulleys adds them on a pen: Fourier synthesis in brass.',
-    files: ['tide3d', 'tide3dview', 'tide3dparts'], factory: 'tide3d', codex: ['fourier'],
+    files: ['tide3d', 'tide3dview', 'tide3dparts', 'tide3dkit'], factory: 'tide3d', codex: ['fourier'],
     open: () => import('./tide3d').then((m) => m.tide3d()),
   },
   {
@@ -148,7 +148,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'telegraph', title: 'Telegraph key and sounder', category: 'comms', chapter: 'telegraph', step: 1,
     summary: 'Hold the key to send: the sounder\'s armature moves as the relay model moves it at the voltage the line leaves.',
-    files: ['telegraph3d', 'telegraph3dview', 'telegraph3dparts'], factory: 'telegraph3d', codex: ['relay'],
+    files: ['telegraph3d', 'telegraph3dview', 'telegraph3dparts', 'telegraph3dkit'], factory: 'telegraph3d', codex: ['relay'],
     open: () => import('./telegraph3d').then((m) => m.telegraph3d()),
   },
   {
@@ -172,8 +172,14 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'speaker', title: 'Loudspeaker and microphone', category: 'dsp', chapter: 'speech', step: 0,
     summary: 'A Dayton RS180-8 cut open: the DAC\'s held samples move the cone; run backwards, the coil makes the microphone\'s millivolts.',
-    files: ['speaker3d', 'speaker3dview', 'speaker3dparts'], factory: 'speaker3d',
+    files: ['speaker3d', 'speaker3dview', 'speaker3dparts', 'speaker3dkit'], factory: 'speaker3d',
     open: () => import('./speaker3d').then((m) => m.speaker3d()),
+  },
+  {
+    id: 'mems', title: 'MEMS microphone', category: 'dsp', chapter: 'converters', step: 7,
+    summary: 'An Infineon IM69D130 cut open: sound bows a membrane between two plates, and the chapter\'s sigma-delta loop and CIC turn it into bits and words.',
+    files: ['mems3d', 'mems3dview', 'mems3dkit'], factory: 'mems3d', codex: ['sigmadelta', 'cic'],
+    open: () => import('./mems3d').then((m) => m.mems3d()),
   },
   {
     id: 'cable', title: 'Twisted pair and coax', category: 'comms', chapter: 'wire', step: 6,
@@ -214,7 +220,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'williams', title: 'A store on a picture tube', category: 'machines', chapter: 'appendix-baby', step: 1,
     summary: 'The Manchester Baby\'s Williams tube: a raster of dots and dashes held as charge, read through a wire-mesh pick-up plate and rewritten before it leaks away.',
-    files: ['williams3d', 'williams3dview', 'williams3dparts'], factory: 'williams3d',
+    files: ['williams3d', 'williams3dview', 'williams3dkit', 'williams3dparts'], factory: 'williams3d',
     open: () => import('./williams3d').then((m) => m.williams3d()),
   },
   {
@@ -250,7 +256,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'valve', title: 'Inside the valve', category: 'analogies', chapter: 'mosfet', step: 1,
     summary: 'A diaphragm valve in cutaway: spring preload as the threshold, no flow through the gate at rest, and the CMOS pair.',
-    files: ['valve3d', 'valve3dview', 'valve3dparts'], factory: 'valve3d', codex: ['cmos', 'inverter'],
+    files: ['valve3d', 'valve3dview', 'valve3dparts', 'valve3dkit'], factory: 'valve3d', codex: ['cmos', 'inverter'],
     open: () => import('./valve3d').then((m) => m.valve3d()),
   },
   {

@@ -26,3 +26,5 @@
 .td-cal input[type="range"] { flex: 1 1 120px; min-width: 100px; }
 .td-val { font: 12px var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums; }
 .td-tabwrap { overflow-x: auto; }
+.td-below { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 24px; margin-top: 8px; }
+@media (max-width: 900px) { .td-below { grid-template-columns: minmax(0, 1fr); } }

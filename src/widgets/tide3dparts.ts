@@ -1,4 +1,4 @@
-// Kelvin's tide predictor as parts (DOM-free, tested). Each crank turns a harmonic of the chapter's series (comm/fourier.ts
+// Kelvin's tide predictor's motion (DOM-free, tested; tide3dkit.ts draws it). Each crank turns a harmonic of the chapter's series (comm/fourier.ts
 // seriesOf: amplitude, phase, k cycles a period); its pin sits d_i = (PEN_SCALE / 2) · A_i · cos(θ_i) below its rest height and
 // e_i = (PEN_SCALE / 2) · A_i · sin(θ_i) to the side, θ_i = 2π k t / n + φ. One cord is fixed at one end, runs under every
 // movable pulley and over a fixed one between each pair, and hangs a pen at the other end. The cord has a constant length,
@@ -21,9 +21,7 @@
 // spring-neap cycle. Both go through the same angleOf: a crank at k "cycles a period" of n turns 360 k / n a unit of time, and
 // the constituents are written with n = 360 and k = the speed in degrees an hour.
 
-import type { RGB, RGBA } from '../gl/instances';
 import type { Vec3 } from '../gl/math';
-import { box, cyl, rod, wire, type Anchor, type Part } from '../gl/parts';
 import { PATTERNS, seriesOf, type Harmonic } from '../comm/fourier';
 
 /** Ten components, as the 1872 machine. */
@@ -46,7 +44,6 @@ export const Y0 = 58, PEN_DROP = 3;
 export const PEN_X = crankX(N_CRANKS - 1) + PITCH / 2 + B_ARC;
 export const PAPER_L = 60, PAPER_Y0 = 42, PAPER_Y1 = 74, PAPER_Z = -4;
 /** Machine extent along x (base) and across it (z). */
-const RS = 4.3; // the crank slot's length
 export const BASE_X0 = -60, BASE_X1 = 122, DEPTH = 77;
 
 // ---------------------------------------------------------------- the chapter's series on the cranks
@@ -218,104 +215,3 @@ export function traceOf(td: Tide, on: readonly boolean[], t: number, m: Mech = '
 
 /** The pen's height as a level of the chapter's wave: (tip − Y0) / PEN_SCALE. */
 export const levelOf = (tip: number): number => (tip - Y0) / PEN_SCALE;
-
-// ---------------------------------------------------------------- the drawing
-
-export interface TidePalette {
-  iron: RGB; brass: RGB; wood: RGB; steel: RGB; cord: RGB; paper: RGB; ink: RGB; off: RGB; glass: RGBA; live: RGB;
-}
-
-const tiles = (out: Part[], c: RGB, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, nx: number, ny: number): void => {
-  for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
-    out.push(box(c, x0 + ((x1 - x0) * i) / nx, x0 + ((x1 - x0) * (i + 1)) / nx, y0 + ((y1 - y0) * j) / ny, y0 + ((y1 - y0) * (j + 1)) / ny, z0, z1));
-  }
-};
-const along = (c: RGB, x: number, y: number, z0: number, z1: number, r: number, spec = 0): Part => rod(c, [x, y, z0], [x, y, z1], r, spec);
-
-export function tideParts(td: Tide, on: readonly boolean[], t: number, P: TidePalette, flat = false, m: Mech = 'yoke'): Part[] {
-  // The flat view sorts faces by their centre: a big paper tile would hide the marks lying on it, so they stand off the paper.
-  const lift = flat ? 3 : 0;
-  const out: Part[] = [], d = offsetsAt(td, on, t), e = sidewaysAt(td, on, t, m), tip = penTip(d, td.dc, e), HY = hubY(m), MY = mainY(m);
-  // Wooden base, in tiles so the painter's sort does not hide the machine under it, and the cast-iron frame.
-  tiles(out, P.wood, BASE_X0, BASE_X1, 0, BASE_T, -DEPTH / 2, DEPTH / 2, 14, 3);
-  const postX = [crankX(0) - PITCH / 2 - 3, PEN_X + 3];
-  for (const x of postX) for (const z of [-4.5, 4.5]) out.push(box(P.iron, x - 1.2, x + 1.2, BASE_T, 100, z - 1.2, z + 1.2, 0.1));
-  tiles(out, P.iron, postX[0], postX[1], RAIL_Y, 100, -3, 3, 10, 1);
-  // The paper band's table: iron legs, a wooden board, the band of paper.
-  for (const z of [-30, 30]) out.push(box(P.iron, BASE_X1 - 2, BASE_X1, BASE_T, PAPER_Y0 - 2, z - 1.5, z + 1.5));
-  tiles(out, P.wood, PEN_X - 1, PEN_X + PAPER_L, PAPER_Y0 - 3, PAPER_Y1 + 3, PAPER_Z - 1.2, PAPER_Z, 8, 3);
-  // The band runs from a supply roller to a take-up drum; the drums turn by the paper that has passed, so a mark on each moves.
-  const rr = 1.6, rz = PAPER_Z + 0.2 - rr, v = paperSpeed(td), drumX = PEN_X + PAPER_L + rr, supplyX = PEN_X - 1 - rr;
-  for (const x of [supplyX, drumX]) {
-    out.push(rod(P.steel, [x, PAPER_Y0 - 2, rz], [x, PAPER_Y1 + 2, rz], rr, 0.4));
-    const a = (t * v) / rr;
-    out.push(rod(P.ink, [x, PAPER_Y1 + 2.05, rz], [x + rr * Math.cos(a), PAPER_Y1 + 2.05, rz + rr * Math.sin(a)], 0.2));
-  }
-  tiles(out, P.paper, PEN_X - 1, PEN_X + PAPER_L, PAPER_Y0, PAPER_Y1, PAPER_Z, PAPER_Z + 0.2, 8, 3);
-  // Marks every bit (a day on the tide), carried along with the paper.
-  for (let j = Math.ceil((t - PAPER_L / v) / td.mark); j <= Math.floor(t / td.mark); j++) {
-    const m = j * td.mark, x = PEN_X + (t - m) * v;
-    if (x < PEN_X || x > PEN_X + PAPER_L - 0.3 || m < 0) continue;
-    out.push(box(P.ink, x - 0.15, x + 0.15, PAPER_Y0, PAPER_Y0 + 2.2, PAPER_Z + 0.2 + lift, PAPER_Z + 0.35 + lift));
-  }
-  const tr = traceOf(td, on, t, m);
-  out.push(...wire(P.ink, tr.map((q): Vec3 => [q.x, q.y, PAPER_Z + 0.45 + lift]), 0.28));
-
-  for (let i = 0; i < N_CRANKS; i++) {
-    const h = td.harms[i], x = crankX(i), engaged = on[i], r = throwOf(h), th = angleOf(h, td.n, t), yoke = HUB_Y - d[i], c = C0 - d[i];
-    const ink = engaged ? P.brass : P.off;
-    // Crank: hub, arm to the pin. On a yoke machine the crank is in front and its pin runs in the yoke's slot; on crank pins
-    // the crank is behind the pulley and the pulley turns on the pin itself.
-    const px = x + r * Math.sin(th), py = HY - r * Math.cos(th), zc = m === 'pins' ? -2.6 : 3.4;
-    out.push(along(P.steel, x, HY, GEAR_Z - 1, zc + 0.6, 0.7, 0.4), along(ink, x, HY, zc - 0.4, zc + 0.4, 1.5, 0.4));
-    // The crank's radial slot sets the throw (a screw in the real machine) and a scale along it reads it, one tick a 10 mm.
-    const ux = Math.sin(th), uy = -Math.cos(th), zs = m === 'pins' ? zc - 0.55 : zc + 0.55;
-    out.push(rod(ink, [x, HY, zc], [x + RS * ux, HY + RS * uy, zc], 0.55, 0.4), rod(P.iron, [x + 0.4 * ux, HY + 0.4 * uy, zs], [x + (RS - 0.2) * ux, HY + (RS - 0.2) * uy, zs], 0.2));
-    for (const s of [1, 2, 3]) out.push(rod(P.steel, [x + s * ux - 0.6 * uy, HY + s * uy + 0.6 * ux, zs + 0.03], [x + s * ux + 0.6 * uy, HY + s * uy - 0.6 * ux, zs + 0.03], 0.1));
-    // The change wheels: one on the main shaft, one on this crank's shaft, meshing; a spoke on the crank wheel shows its turning.
-    const [rm, rc] = gearRadii(ratioOf(td, h));
-    out.push(along(engaged ? P.steel : P.off, x, MY, GEAR_Z - 0.6, GEAR_Z + 0.6, rm, 0.3), along(engaged ? P.brass : P.off, x, HY, GEAR_Z - 0.6, GEAR_Z + 0.6, rc, 0.3));
-    out.push(rod(P.ink, [x, HY, GEAR_Z + 0.7], [x + Math.max(rc, 0.9) * ux, HY + Math.max(rc, 0.9) * uy, GEAR_Z + 0.7], 0.15));
-    if (m === 'pins') {
-      // The pulley on the crank pin: it goes round with the pin, sideways as well as up and down.
-      out.push(along(P.steel, px, py, zc, 1.5, engaged ? 0.5 : 0.35, 0.4), along(P.brass, px, py, -1.1, 1.1, R_MOV, 0.4));
-    } else {
-      if (engaged) out.push(along(P.steel, px, py, 0.2, 4.2, 0.5, 0.4));
-      // Yoke (a bar with a slot, drawn solid) and the two cast-iron uprights carrying the pulley's axle.
-      out.push(box(P.iron, x - r - 1.4, x + r + 1.4, yoke - 0.6, yoke + 0.6, -2.4, 2.4));
-      for (const z of [-2.0, 2.0]) out.push(box(P.iron, x - 0.35, x + 0.35, yoke, c, z - 0.3, z + 0.3));
-      out.push(along(P.steel, x, c, -2.1, 2.1, 0.35, 0.4), along(P.brass, x, c, -1.1, 1.1, R_MOV, 0.4));
-    }
-    // The fixed pulley between this crank and the next, on forks from the rail.
-    const xf = x + PITCH / 2;
-    out.push(along(P.steel, xf, YF, -2.1, 2.1, 0.35, 0.4), along(P.brass, xf, YF, -1.1, 1.1, R_FIX, 0.4));
-    for (const z of [-2.0, 2.0]) out.push(box(P.iron, xf - 0.35, xf + 0.35, YF, RAIL_Y, z - 0.3, z + 0.3));
-  }
-  // The main shaft with the hand crank at its left end, on two bearings.
-  const sx0 = crankX(0) - 6, sx1 = crankX(N_CRANKS - 1) + 6, ha = handAngle(td, t);
-  out.push(rod(P.steel, [sx0, MY, GEAR_Z], [sx1, MY, GEAR_Z], 0.5, 0.4));
-  for (const x of [sx0 + 0.8, sx1 - 0.8]) out.push(box(P.iron, x - 1, x + 1, BASE_T, MY + 1.4, GEAR_Z - 1.4, GEAR_Z + 1.4));
-  const hz = GEAR_Z + 5 * Math.sin(ha), hy = MY + 5 * Math.cos(ha);
-  out.push(rod(P.iron, [sx0 - 0.5, MY, GEAR_Z], [sx0 - 0.5, hy, hz], 0.45), rod(P.wood, [sx0 - 0.5, hy, hz], [sx0 - 3.5, hy, hz], 0.8));
-  // The clamp the cord starts from, hung from the rail by a steel rod.
-  const ay = anchorY(td.dc), ax = crankX(0) - A_ARC;
-  out.push(box(P.brass, ax - 0.9, ax + 0.9, ay, ay + 1.4, -0.9, 0.9), rod(P.steel, [ax, ay + 1.4, 0], [ax, RAIL_Y, 0], 0.3, 0.4));
-  // The cord, then the hanging weight: ink bottle and a glass pen touching the paper.
-  out.push(...wire(P.cord, cordPath(d, td.dc, e), R_CORD));
-  const bt = tip + PEN_DROP;
-  out.push(cyl(P.ink, PEN_X, 0, tip + 0.6, bt, 1.1), rod(P.glass, [PEN_X, tip + 1.2, 0], [PEN_X, tip, PAPER_Z + 0.5 + lift], 0.3));
-  return out;
-}
-
-export function tideAnchors(td: Tide, m: Mech = 'yoke'): Anchor[] {
-  const front: Vec3 = [0, 0.1, 1], pins = m === 'pins';
-  return [
-    { text: td.kind === 'tide' ? 'slotted cranks, one a constituent' : 'slotted cranks, one a harmonic', p: [crankX(2), hubY(m) - 5, pins ? -2.6 : 3.4], side: 'b', n: front },
-    { text: 'hand crank and main shaft', p: [crankX(0) - 9, mainY(m), GEAR_Z], side: 'l', n: front, minor: true },
-    { text: pins ? 'pulley on its crank pin' : 'slider and movable pulley', p: [crankX(6), C0 - 2, 2], side: 'b', n: front, minor: true },
-    { text: 'fixed pulleys', p: [crankX(1) + PITCH / 2, YF - 4, 0], side: 'b', n: front, minor: true }, // below the row: above it the text runs off a phone's canvas
-    { text: 'cord, fixed here', p: [crankX(0) - A_ARC, YF + 4, 0], side: 'r', n: front, minor: true },
-    { text: 'ink bottle and pen', p: [PEN_X, Y0 + 2, 0], side: 'l', n: front },
-    { text: td.kind === 'tide' ? 'paper, a mark a day' : 'moving paper', p: [PEN_X + 40, PAPER_Y0 - 1, PAPER_Z], side: 'b', n: front, minor: true },
-  ];
-}

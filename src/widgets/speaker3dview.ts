@@ -1,6 +1,7 @@
 // The loudspeaker / microphone in 3D (loaded on demand, modelhost.ts). The samples are the chapter's voice (loadClip, the
 // recording the Speech chapter plays at 8 kHz): a loud window of it is the DAC's codes, each held for one period. The pose
-// comes from speaker3dparts.ts (poseAt: the cone's second-order response to the held current); the motion is slowed down.
+// comes from speaker3dparts.ts (poseAt: the cone's second-order response to the held current) and speaker3dkit.ts draws it on
+// the studio renderer; the plot of the held codes and the cone's trace is SVG under the canvas. The motion is slowed down.
 
 import '../styles/speaker3d.css';
 import { numOf } from '../chapters/order';
@@ -9,53 +10,87 @@ import { groupNum } from '../sim/numfmt';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage, type ModelStage } from './modelstage';
+import { refresh } from '../gl/kit/geo';
+import { studioStage } from './studiostage';
 import { loadClip } from './dspaudio';
-import type { OrbitView } from '../gl/camera';
+import { bentAt, bentOf, dyOf, speakerModel, speakerPose, SPEAKER_HOME, type SpeakerState } from './speaker3dkit';
 import {
   BL, CMS_MM_N, DRAW_K, I_FULL, I_RATED, P_RMS_W, RE_OHM, peakStrokeMm, QMS, SPL_DB, FS_HZ, VOICE_RATE, WINDOW, XMAX_MM, coneMm, currentA, currentForStroke, strokeForAmp, drawnRatio, emfVolts, loudestWindow, makeDrive, pitchHz, poseAt, realPeakUm, realUm, velocityMmS,
-  speakerAnchors, speakerParts, type Drive, type Mode, type SpeakerPalette,
+  coneEdges, staircase, type Drive, type Mode,
 } from './speaker3dparts';
 
 /** Sample periods a second on Run (the voice runs at 8 000 a second, so it is slowed 500 times), and a step's motion. */
 const RATE = 16, STEP_MS = 420;
-const VIEW: OrbitView = { target: [10, 74, -20], yaw: 0.3, pitch: 0.16, dist: 340 };
-const CLOSE: OrbitView = { target: [-19, 28, 0], yaw: 0.12, pitch: 0.08, dist: 95 };
 // Never "−0.0": a value that rounds to zero at `d` places is zero.
 const fmt = (v: number, d = 2) => (Math.abs(v) < 0.5 * 10 ** -d ? 0 : v).toFixed(d).replace('-', '−');
+const SVGNS = 'http://www.w3.org/2000/svg';
+const svgEl = <K extends keyof SVGElementTagNameMap>(k: K, a: Record<string, string> = {}): SVGElementTagNameMap[K] => {
+  const e = document.createElementNS(SVGNS, k);
+  for (const [n, v] of Object.entries(a)) e.setAttribute(n, v);
+  return e;
+};
 
 export function speakerView(): Widget {
-  const panel = h('div', { class: 'panel' }, h('h3', { class: 'm3-title' }, 'The loudspeaker and the microphone'), h('p', { class: 'm3-sub' }, 'Loading the recording…'));
-  let alive = true, stage: ModelStage | null = null, loop: ReturnType<typeof frameLoop> | null = null;
+  const panel = h('div', { class: 'panel m3d' }, h('h3', { class: 'm3-title' }, 'The loudspeaker and the microphone'), h('p', { class: 'm3-sub' }, 'Loading the recording…'));
+  let alive = true, stage: ReturnType<typeof studioStage> | null = null, loop: ReturnType<typeof frameLoop> | null = null;
   loadClip('voice').then((v) => { if (alive) build(v.x, v.rate); }).catch((e: Error) => { panel.lastElementChild!.textContent = `The recording would not load: ${e.message}`; });
 
   function build(x: readonly number[], rate: number): void {
     const start = loudestWindow(x), codes = x.slice(start, start + WINDOW), f0 = pitchHz(x, start, rate);
     let tone = 'f0';
-    let mode: Mode = 'speaker', massless = false, running = false, t = 0, stepFrom = -1, stepT0 = 0, close = false;
+    let mode: Mode = 'speaker', massless = false, running = false, t = 0, stepFrom = -1, stepT0 = 0;
     let d: Drive = makeDrive(codes, mode, massless, rate, f0);
     const ratio = Math.round(drawnRatio(d));
-    const draw = () => paint();
-    const probeHost = h('span', { class: 'sp-host', 'aria-hidden': 'true' }); // the colour probe lives here: it must outlast replaceChildren below
-    const st = modelStage(probeHost, {
-      aria: 'A cut-away moving-coil loudspeaker in 3D with a plot of the held samples behind it: cone, surround, spider, voice coil in the magnet gap, pole piece with its phase plug, ferrite ring, top plate and frame',
-      camera: { ...VIEW },
-      look: LOOKS.machine,
-      limits: { minDist: 120, maxDist: 1200 },
-      note: `Drawn to a Dayton RS180-8: the cone, coil diameter, Xmax and force factor are the datasheet's; the winding and gap heights, the magnet's size, the phase plug's and the spider are proportions chosen to fit Xmax. Speaker: the loudest sample is the rated power's peak current, √(2 · ${P_RMS_W} W / ${RE_OHM} Ω) = ${fmt(I_RATED, 1)} A (Dayton: 60 W RMS, Re ${RE_OHM} Ω, Qms ${QMS}); the cone follows the held current through Mms · x'' + Rms · x' + x / Cms = Bl · i and moves ${fmt(peakStrokeMm(d), 2)} mm at most, so its motion is drawn ×${d.mag} (the numbers shown are real). Microphone: the sound is ${SPL_DB} dB SPL (1 Pa rms, 1.41 Pa peak) at the cone, whose real stroke is about ${realPeakUm(d).toFixed(1)} µm at the voice's ${Math.round(f0)} Hz; it is drawn at Xmax × ${DRAW_K}, ${groupNum(ratio)} times larger than real. This is the woofer run backwards in a sealed box, a simplification: a real dynamic microphone has a light diaphragm and a small coil and is flat to several kHz, where this one falls 6 dB per octave. The coil is drawn with 16 of its roughly 64 turns (an estimate from Bl); field arrows and the current's direction are shown for a positive current. Time is slowed 500 times.`,
-      draw,
+    const state = (): SpeakerState => ({ d, t });
+    const st = studioStage({
+      aria: 'A moving-coil loudspeaker in 3D, cut in half: cone, rubber surround, spider, voice coil in the magnet gap, pole piece with its phase plug, ferrite ring, top plate and the cast six-spoke frame',
+      home: SPEAKER_HOME,
+      // a round driver fitted as a sphere, close: the cut driver fills the width, the frame's far rim may touch the edge
+      homeRadius: 64,
+      knobs: { cut: 1 },
+      scaleBar: (len) => `${len} mm`,
+      limits: { minDist: 60, maxDist: 1600 },
+      note: `Drawn to a Dayton RS180-8: the cone, coil diameter, Xmax, force factor, the phase plug (no dust cap), the rubber surround and the cast six-hole frame are the datasheet's; the winding and gap heights, the magnet's size, the phase plug's and the spider are proportions chosen to fit Xmax, and the six holes sit on a 168 mm bolt circle from a seller's listing. Speaker: the loudest sample is the rated power's peak current, √(2 · ${P_RMS_W} W / ${RE_OHM} Ω) = ${fmt(I_RATED, 1)} A (Dayton: 60 W RMS, Re ${RE_OHM} Ω, Qms ${QMS}); the cone follows the held current through Mms · x'' + Rms · x' + x / Cms = Bl · i and moves ${fmt(peakStrokeMm(d), 2)} mm at most, so its motion is drawn ×${d.mag} (the numbers shown are real). Microphone: the sound is ${SPL_DB} dB SPL (1 Pa rms, 1.41 Pa peak) at the cone, whose real stroke is about ${realPeakUm(d).toFixed(1)} µm at the voice's ${Math.round(f0)} Hz; it is drawn at Xmax × ${DRAW_K}, ${groupNum(ratio)} times larger than real. This is the woofer run backwards in a sealed box with the baffle ignored, a simplification: a real dynamic microphone has a light diaphragm and a small coil and is flat to several kHz, where this one falls 6 dB per octave. The coil is drawn with 16 of its roughly 64 turns (an estimate from Bl), glowing with the current; the blue arrows are the field across the gap and the amber one the force on the coil. Dayton names two short-circuit paths in the motor; their shape is not given, so they are not drawn. Time is slowed 500 times.`,
+      build: (detail) => speakerModel(state(), detail),
     });
     stage = st;
-    const palette = (): SpeakerPalette => ({
-      steel: st.rgb('--sp-steel'), magnet: st.rgb('--sp-magnet'), basket: st.rgb('--sp-frame'), cone: st.rgba('--sp-cone', 0.85), plug: st.rgb('--sp-plug'),
-      former: st.rgb('--sp-former'), wire: st.rgb('--sp-wire'), wire2: st.rgb('--sp-wire2'), flux: st.rgb('--sp-flux'), rubber: st.rgb('--sp-rubber'), spider: st.rgb('--sp-spider'),
-      stair: st.rgb('--sp-stair'), stairDim: st.rgba('--sp-stair', 0.3), trace: st.rgb('--sp-trace'), cursor: st.rgb('--sp-cursor'),
-      live: st.rgb('--m3-charge'), zero: st.rgb('--sp-cursor'),
-    });
-    function paint(): void { st.paint(speakerParts(d, t, palette()), speakerAnchors(d, t, close)); }
+
+    // The plot: the held codes (speaker: the DAC's; mic: the ADC's) as a staircase, the part already played solid, the cone's
+    // own position over it, and a cursor at now.
+    const PW = 360, PH = 110, PY = PH / 2, PA = 44;
+    const done = svgEl('path', { class: 'sp-st' }), todo = svgEl('path', { class: 'sp-st dim' }), coneP = svgEl('polyline', { class: 'sp-tr' });
+    const cur = svgEl('line', { class: 'sp-cur', y1: '4', y2: String(PH - 4) });
+    const plot = svgEl('svg', { class: 'sp-plot', viewBox: `0 0 ${PW} ${PH}`, role: 'img', 'aria-label': 'The held samples as a staircase and the cone position over them' });
+    plot.append(svgEl('line', { class: 'sp-zero', x1: '0', x2: String(PW), y1: String(PY), y2: String(PY) }), todo, done, coneP, cur);
+    const plotTitle = h('h4', null, '');
+    function drawPlot(): void {
+      const n = d.n, w = PW / n, s0 = staircase(d), k = poseAt(d, t).k, Y = (v: number) => (PY - v * PA).toFixed(1);
+      const stair = (a: number, b: number) => { let p = ''; for (let i = a; i < b; i++) p += `${i === a ? 'M' : 'L'}${(i * w).toFixed(1)},${Y(s0[i])}H${((i + 1) * w).toFixed(1)}`; return p; };
+      done.setAttribute('d', stair(0, k + 1));
+      todo.setAttribute('d', k + 1 < n ? stair(k + 1, n) : '');
+      const e = coneEdges(d), pts: string[] = [];
+      for (let i = 0; i <= k; i++) pts.push(`${(i * w).toFixed(1)},${Y(e[i])}`);
+      const x = (((t % n) + n) % n) * w;
+      pts.push(`${x.toFixed(1)},${Y(poseAt(d, t).cone)}`);
+      coneP.setAttribute('points', pts.join(' '));
+      cur.setAttribute('x1', x.toFixed(1)); cur.setAttribute('x2', x.toFixed(1));
+      plotTitle.textContent = mode === 'speaker' ? 'Held DAC codes (blue), the cone (orange)' : 'The cone (orange), the ADC’s held samples (blue)';
+    }
+    /** The pose: the cone and coil moved, the spider, surround and lead bent in place, the plot redrawn; then a rebuild (cheap). */
+    function paint(): void {
+      const s = state(), dy = dyOf(s);
+      for (const det of ['full', 'flat'] as const) {
+        const g = bentOf(det);
+        if (g) { const nb = bentAt(dy, det); refresh(g.spider, nb.spider); refresh(g.surround, nb.surround); refresh(g.lead, nb.lead); }
+      }
+      st.move(speakerPose(s));
+      st.refresh();
+      drawPlot();
+    }
 
     const kv = h('div', { class: 'r3-kv' }), live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
+    const chip = h('span', { class: 'r3-chip good' });
+    st.chips.append(chip);
     const runBtn = h('button', { type: 'button', class: 'btn sm primary', 'aria-pressed': 'false' }, 'Run') as HTMLButtonElement;
     function readout(announce = false): void {
       const p = poseAt(d, t);
@@ -70,6 +105,7 @@ export function speakerView(): Widget {
         rows.push(['Xmax', `±${XMAX_MM} mm`], [`Current for Xmax at ${fmt(f, f < 100 ? 1 : 0)} Hz`, `${fmt(currentForStroke(f), 2)} A`], [`Stroke from 1 A at ${fmt(f, f < 100 ? 1 : 0)} Hz`, `${fmt(strokeForAmp(f), 2)} mm`]);
       } else rows.push(['Sound at the cone', `${SPL_DB} dB SPL, ${Math.round(f0)} Hz`]);
       kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
+      chip.textContent = mode === 'speaker' ? `sample ${p.k + 1} · ${fmt(currentA(d, p.drive), 1)} A · cone ${fmt(coneMm(p.cone), 2)} mm` : `sample ${p.k + 1} · ${fmt(emfVolts(d, p.k) * 1000, 2)} mV`;
       runBtn.textContent = running ? 'Pause' : 'Run';
       runBtn.setAttribute('aria-pressed', String(running));
       live.setAttribute('aria-live', running && !announce ? 'off' : 'polite');
@@ -140,26 +176,18 @@ export function speakerView(): Widget {
       h('li', null, 'Ferrite ring magnet; steel back plate, top plate and pole piece'),
       h('li', null, 'Phase plug: solid aluminium, fixed on the pole piece (no dust cap)'),
       h('li', null, 'Frame: cast aluminium, six spokes'));
-    const closeBtn = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false' }, 'Close-up of the gap') as HTMLButtonElement;
-    closeBtn.addEventListener('click', () => {
-      close = !close; closeBtn.setAttribute('aria-pressed', String(close)); closeBtn.classList.toggle('on', close);
-      closeBtn.textContent = close ? 'Whole driver' : 'Close-up of the gap';
-      st.setView({ ...(close ? CLOSE : VIEW) });
-      kick();
-    });
     const restartBtn = h('button', { type: 'button', class: 'btn sm' }, 'Back to sample 1');
     restartBtn.addEventListener('click', () => { running = false; t = 0; stepFrom = -1; readout(true); kick(); });
+    st.slot.append(h('div', { class: 'r3-ctl' },
+      h('div', { class: 'seg sp-seg', role: 'group', 'aria-label': 'Speaker or microphone' }, ...modeBtns),
+      h('div', { class: 'r3-btns' }, runBtn, stepBtn, smoothBtn, restartBtn)));
     panel.replaceChildren(
-      probeHost,
       h('h3', { class: 'm3-title' }, 'The loudspeaker and the microphone'),
       h('p', { class: 'm3-sub' }, `A Dayton RS180-8 woofer cut open, driven by this chapter's voice: ${WINDOW} samples of the recording above at ${VOICE_RATE} a second, one period (125 µs) each. Time is slowed so each hold can be seen.`),
-      h('div', { class: 'r3' },
-        h('div', { class: 'r3-main' },
-          h('div', { class: 'r3-ctl' },
-            h('div', { class: 'seg sp-seg', role: 'group', 'aria-label': 'Speaker or microphone' }, ...modeBtns),
-            h('div', { class: 'r3-btns' }, runBtn, stepBtn, smoothBtn, restartBtn, closeBtn, st.resetBtn)),
-          st.el, st.hint, live),
-        h('div', { class: 'r3-side' }, h('h4', null, 'This driver ', h('span', { class: 'r3-badge' }, 'RS180-8')), kv, toneRow, explain, mats)));
+      st.el, live,
+      h('div', { class: 'sp-below' },
+        h('div', null, plotTitle, plot, h('h4', null, 'This driver ', h('span', { class: 'r3-badge' }, 'RS180-8')), kv, toneRow),
+        h('div', null, explain, mats)));
     panel.addEventListener('keydown', (e) => { if (e.key === 'Escape' && running) { running = false; readout(true); kick(); } });
     readout(true); paint();
   }

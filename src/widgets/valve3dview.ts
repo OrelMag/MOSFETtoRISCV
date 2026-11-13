@@ -8,23 +8,19 @@ import '../styles/watertoggle.css';
 import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
-import type { OrbitView } from '../gl/camera';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
+import { studioStage } from './studiostage';
+import { refresh } from '../gl/kit/geo';
+import { drawnSpring, newChannelTex, paintChannel, springGeo, valveModel, valvePose, VALVE_HOME } from './valve3dkit';
 import { VDD, VT } from './mosphys';
 import type { BiasLink } from './mosshare';
 import { COLUMN_VOLTS, columnSettle, columnStep, fetWater, wasted } from './water';
 import {
-  ONE, PAIR, TRAVEL, cracking, preload, rate, springForce, swept, valveAnchors, valveFigure,
-  type OneValve, type ValvePalette, type ValvePose, type ValveSpec,
+  ONE, PAIR, TRAVEL, cracking, preload, rate, springForce, springLen, swept,
+  type OneValve, type ValvePose, type ValveSpec,
 } from './valve3dparts';
 
 type Mode = 'one' | 'pair';
-const VIEWS: Record<Mode, OrbitView> = {
-  one: { target: [4, 34, 0], yaw: 0.35, pitch: 0.28, dist: 142 },
-  pair: { target: [10, 28, 0], yaw: 0.3, pitch: 0.25, dist: 215 },
-};
 const LAG = 0.12; // s: the diaphragm's drawn travel time
 const pct = (x: number) => `${Math.round(x * 100)} %`;
 
@@ -35,18 +31,13 @@ export function valveView(link?: BiasLink): Widget {
   const volts = () => (mode === 'one' ? VDD : COLUMN_VOLTS);
   const col = () => ({ vin, short: false, weak: false });
 
-  const panel = h('div', { class: 'panel' });
-  const stage = modelStage(panel, {
-    look: LOOKS.field,
+  const panel = h('div', { class: 'panel' }), channel = newChannelTex();
+  const stage = studioStage({
     aria: 'A pressure-operated diaphragm valve in cutaway: a gate line feeding a diaphragm that pushes a plunger off its seat against a spring, between a tank and a basin',
-    camera: { ...VIEWS.one },
-    limits: { minDist: 70, maxDist: 420 },
-    note: 'The lift (the gap) is linear in the gate pressure, as in a real diaphragm valve; the glow of the water is the MOSFET model’s flow (square law in saturation, rising with the tank’s level in the linear region), which a real valve’s linear area would not give. Stem packing is drawn; travel stops, the yoke and the spring seats are left out. A valve needs steady pressure to stay open and a gate needs none once charged; a shut valve seals where a transistor leaks; the PMOS is not a reversed valve (it is referenced to the supply); the diaphragm’s lag and the pellet in the gate line are drawn, with no inertia or water hammer.',
-    draw: () => paint(),
-  });
-  const palette = (): ValvePalette => ({
-    body: stage.rgb('--vl-body'), metal: stage.rgb('--m3-metal'), seat: stage.rgb('--vl-seat'), disc: stage.rgb('--vl-disc'), spring: stage.rgb('--vl-spring'),
-    diaphragm: stage.rgb('--vl-diaphragm'), water: stage.rgba('--vl-water', 0.6), gate: stage.rgba('--vl-gate', 0.8), glass: stage.rgba('--vl-body', 0.16), jet: stage.rgb('--vl-jet'),
+    home: VALVE_HOME.one,
+    limits: { minDist: 30, maxDist: 600 },
+    note: 'The lift (the gap) is linear in the gate pressure, as in a real diaphragm valve; the glow of the water is the MOSFET model’s flow (square law in saturation, rising with the tank’s level in the linear region), which a real valve’s linear area would not give. The colour along the gap is the channel’s charge from the same model’s gradual-channel picture (Vov − V(x)): it thins towards the drain and, in saturation, reaches zero at the drain end; a gap of water has no such thing, so this is the transistor drawn on the valve. Stem packing is drawn; travel stops, the yoke and the spring seats are left out. A valve needs steady pressure to stay open and a gate needs none once charged; a shut valve seals where a transistor leaks; the PMOS is not a reversed valve (it is referenced to the supply); the diaphragm’s lag and the pellet in the gate line are drawn, with no inertia or water hammer.',
+    build: (detail) => valveModel({ pose: pose(), channel }, detail),
   });
 
   /** What the site's models say the valves do at the gate's value, held (not the lagged drawing). */
@@ -62,7 +53,15 @@ export function valveView(link?: BiasLink): Widget {
       : [{ kind: 'p', cx: -30, open: open.p, g: vin, left: 1, right: out, flow: t.p }, { kind: 'n', cx: 30, open: open.n, g: vin, left: out, right: 0, flow: t.n }];
     return { valves: v, gateQ, phase, g: vin, x0: mode === 'one' ? -50 : -80, x1: mode === 'one' ? 50 : 80 };
   }
-  function paint(): void { const p = pose(); stage.paint(valveFigure(p, palette(), spec()), valveAnchors(p)); }
+  /** The pose moved, the channel's charge painted (one valve: the faucet's MOSFET at this gate and tank; the pair: even), a rebuild. */
+  function paint(): void {
+    const p = pose();
+    if (mode === 'one') { const f = fetWater(vin * VDD, vds * VDD); paintChannel(channel, vin * VDD - VT, vds * VDD, f.flow); }
+    else paintChannel(channel, 1, 0, Math.max(...p.valves.map((v) => v.flow)));
+    p.valves.forEach((vv, i) => { for (const det of ['full', 'flat'] as const) { const g = drawnSpring(i, det); if (g) refresh(g, springGeo(springLen(vv.open * TRAVEL), det)); } });
+    stage.move(valvePose(p));
+    stage.refresh();
+  }
 
   const chip = h('span', { class: 'r3-chip', 'aria-live': 'polite' }), regionChip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv vl-kv' }), hintP = h('p', { class: 'r3-hint' });
   stage.chips.append(chip, regionChip);
@@ -139,8 +138,9 @@ export function valveView(link?: BiasLink): Widget {
     mode = m; out = 0;
     if (m === 'one' && link) { vin = link.vg / VDD; vds = link.vd / VDD; } open = { n: 0, p: 0 }; gateQ = 0; firstDraw = true;
     oneBtn.setAttribute('aria-pressed', String(m === 'one')); pairBtn.setAttribute('aria-pressed', String(m === 'pair'));
-    stage.setView(VIEWS[m]);
+    stage.endTour(); // the pair has its own beats: the one valve's tour would leave its text behind
     repaint();
+    stage.goTo(VALVE_HOME[m]);
   }
   oneBtn.addEventListener('click', () => setMode('one'));
   pairBtn.addEventListener('click', () => setMode('pair'));
@@ -148,15 +148,14 @@ export function valveView(link?: BiasLink): Widget {
   panel.append(
     h('h3', { class: 'm3-title' }, 'Inside the valve'),
     h('p', { class: 'm3-sub' }, 'The faucet above has a handle; this kind of valve has a diaphragm. The gate line is a separate, dead-ended pipe: its pressure pushes a diaphragm against a preloaded spring. The preload is the threshold, since below that pressure nothing moves; past it the plunger lifts off its seat and opens a channel from tank to basin, wider with more pressure. Water moves in the gate line only while the diaphragm does. In the transistor’s terms: the tank is the drain (its level is Vds), the basin the source at 0 V, the diaphragm the gate, the spring’s preload the threshold Vt and the gap under the plunger the channel. The pair is the inverter chapter’s “Two faucets on one column”: an NMOS valve that pressure opens and a PMOS valve that pressure closes, on one gate line.'),
-    h('div', { class: 'r3' },
-      h('div', { class: 'r3-main' },
-        seg,
-        h('div', { class: 'r3-ctl' }, h('label', { class: 'r3-sl vl-gate' }, h('span', null, 'Gate'), slider, sout), tankSl, h('div', { class: 'r3-btns' }, toggle, stage.resetBtn)),
-        stage.el, stage.hint, hintP,
+    stage.el, hintP,
+    h('div', { class: 'vl-below' },
+      h('div', null,
         h('details', { class: 'r3-hint' }, h('summary', null, 'Predict, then see: the opening'),
           h('p', null, 'Vt is ' + VT + ' V. At Vgs = 0.90 V, how far open is the valve? The lift is the pressure past the preload over the span: (0.90 − ' + VT + ') ÷ (' + VDD + ' − ' + VT + ') = ' + Math.round(((0.9 - VT) / (VDD - VT)) * 100) + ' % of the travel. Then lower the tank below Vgs − Vt = 0.45 V: the flow falls with it. Raise it past: the flow stops growing.')),
         h('p', { class: 'r3-hint' }, 'Mechanics: a spring-opposed diaphragm actuator, as in Emerson’s Fisher 657 / 667 bulletins: the spring’s preload sets the pressure at which the stem starts to move, its rate sets the pressure span for the full travel. Thresholds and swings are the site’s (the faucet and column figures).')),
-      h('div', { class: 'r3-side' }, h('h4', null, 'This valve ', h('span', { class: 'r3-badge' }, 'model')), kv)));
+      h('div', null, h('h4', null, 'This valve ', h('span', { class: 'r3-badge' }, 'model')), kv)));
+  stage.slot.append(seg, h('div', { class: 'r3-ctl' }, h('label', { class: 'r3-sl vl-gate' }, h('span', null, 'Gate'), slider, sout), tankSl, h('div', { class: 'r3-btns' }, toggle)));
   readout();
   paint();
   loop.kick();

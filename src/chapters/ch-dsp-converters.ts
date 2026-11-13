@@ -10,6 +10,9 @@ import { adcApi, adcScene, CHAIN, chainEnob, clipWidget, dacHoldWidget, jitterWi
 import { numOf } from './order';
 import type { Chapter } from './types';
 import { groupNum } from '../sim/numfmt';
+import { mems3d } from '../widgets/mems3d';
+import { withModel } from '../widgets/modelhost';
+import { IM69, MEMBRANE, MIC_CHAIN, PCM_RATE, deflection } from '../phys/memsmic';
 
 const n0 = (x: number) => groupNum(Math.round(x));
 const minus = (t: string) => t.replace(/^-/, '−');
@@ -209,9 +212,10 @@ v  = + full scale if y₂ ≥ 0, else − full scale</pre>
         return `
         <p>Now measure the chain. At ${CHAIN.R} times the rate, order ${CHAIN.order} and a CIC of order ${CHAIN.N}, a tone at half of full scale gives ${chainEnob().toFixed(1)} effective bits, read from words at the low rate. At ÷ 128 it is ${chainEnob(128).toFixed(1)}, and at ÷ 256 it is ${chainEnob(256).toFixed(1)}, past the 16 bits of this chapter's opening question, at about ${(((chainEnob(256) - chainEnob()) / 2) * 6.02).toFixed(0)} dB a doubling. Being judged on a half-scale tone, these read about a bit lower than the same noise would against full scale. Those are figures for this chain, this input and this digital arithmetic. A real part has analogue noise in its integrators that this one lacks, and that is usually what stops it. The ${n0(WHOLE())} NANDs at ÷ ${CHAIN.R} take the place of the 2^b − 1 matched comparators a b-bit flash would need.</p>
         <p>You can hear what the filter does. Both clips below come from the same bits. Keeping every ${CHAIN.R}th bit and nothing else folds all that high-frequency noise down over the tone. Through the CIC, the noise goes and the tone stays. Those are model clips. The gates two steps back are the same design at ${SCENE_CHAIN.w} bits and ÷ ${SCENE_CHAIN.R}, and were checked equal to the same model.</p>
-        <p>Audio converters do this because high rates are cheap and matching is not, and, like any trade here, it has a price: this design only reaches low frequencies, and its answers come at a fraction of the sample rate.</p>`;
+        <p>Audio converters do this because high rates are cheap and matching is not, and, like any trade here, it has a price: this design only reaches low frequencies, and its answers come at a fraction of the sample rate.</p>
+        <p>The microphone in a phone is this chain, in a can ${4} × ${3} mm across (below, an Infineon IM69D130). Sound bows a silicon membrane between two perforated plates, by about ${(deflection(MEMBRANE, Math.SQRT2, 0) * 1e9).toFixed(1)} nm at the middle for a loud voice at 94 dB SPL, on a typical design, against gaps of ${MEMBRANE.gap * 1e6} µm. The chip beside it turns the plates' voltage into one bit a clock, at ${IM69.clock / 1e6} MHz, with a sigma-delta loop, and sends the bits out on one wire. Whatever reads them runs a filter like this CIC, ÷ ${MIC_CHAIN.R}, to get words at ${(PCM_RATE / 1e3).toFixed(0)} kHz. The model below drives this chapter's own loop and CIC from the membrane.</p>`;
       },
-      widget: clipWidget,
+      widget: () => withModel(clipWidget(), mems3d()),
       challenge: {
         kind: 'quiz', question: 'Why does keeping every 64th bit sound so much worse than the CIC, from the same bits?',
         options: ['The noise folds down over the tone', 'It has fewer bits per second', 'It has lost the tone itself along the way', 'The CIC adds its own signal'],
