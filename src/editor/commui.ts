@@ -139,10 +139,9 @@ function uartProps(ed: Editor, p: PartDoc, isCore: boolean): HTMLElement {
 }
 
 // ---- the NIC -----------------------------------------------------------------------------------------------------------
-
-/** The first node at or below `n` (a few levels) whose definition has this id: the bundled parts hold the real one a level down. */
+/** The first node at or below `n` (a few levels) that is this part: its own id, or its bus-packed `<id>_b`, which holds the same blocks at its level. */
 function findDef(n: HierNode, id: string, depth = 0): HierNode | null {
-  if (n.def.id === id) return n;
+  if (n.def.id === id || n.def.id === `${id}_b`) return n;
   if (depth > 2) return null;
   for (const c of n.children?.values() ?? []) { const r = findDef(c, id, depth + 1); if (r) return r; }
   return null;

@@ -8,7 +8,8 @@
 import { MAP } from '../bus/model';
 import type { DramConfig } from '../dram/controller';
 import { FlashDevice, FLASH_TIMES, type FlashGeometry } from '../flash/model';
-import type { ComponentDef, PortDef } from '../sim/types';
+import { netlistOf, type ComponentDef, type InstanceDef, type NetDef, type Netlist, type PortDef } from '../sim/types';
+import { orientedBox, symbolGeom } from '../sim/geometry';
 import { constWord, isZero } from './alu';
 import { bigRam } from './bigmem';
 import { Builder } from './builder';
@@ -20,7 +21,7 @@ import { arbiterN } from './mpdecode';
 import { DFF, register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { bitwise, orN } from './wide';
-import { laid } from './layered';
+import { laid, laidFrom, layered } from './layered';
 
 import { numOf } from '../chapters/order';
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
@@ -380,7 +381,7 @@ export function axiDram(c: DramConfig = BUS_DRAM): ComponentDef {
     const rqr = b.op(register(c.k + 1), [g.merge([wa, wrHs], [c.k, 1]), hs, 'clk'], 'request', 'req');
     const [lw, la, wr] = g.split(`${rqr}.q`, [2, c.k - 2, 1]);
     const wdr = b.op(register(36), [g.merge(['wdata', 'wstrb'], [32, 4]), wrHs, 'clk'], 'write data', 'wd');
-    const [wdata, strb] = g.split(`${wdr}.q`, [32, 4]);
+    const [wdata, strb0] = g.split(`${wdr}.q`, [32, 4]), strb = b.name(strb0, 'strb', true);
     b.next();
     const ctrl = b.op(dramCtrl(c), [`${act}.q`, wr, la, 'clk'], 'controller', 'ctrl');
     b.next();
@@ -389,7 +390,7 @@ export function axiDram(c: DramConfig = BUS_DRAM): ComponentDef {
     const dm = g.gate(strb, 4, g.and(`${ctrl}.wv`, mine));
     const dev = b.op(dramDevice(c, undefined, true), [`${ctrl}.cmd`, `${ctrl}.ba`, `${ctrl}.ra`, `${ctrl}.ca`, wdata, dm, 'clk'], 'DRAM', 'dev');
     b.next();
-    const rdr = b.op(register(32), [`${dev}.rd`, g.and(`${ctrl}.dv`, mine), 'clk'], 'read data', 'rdr');
+    const rdr = b.op(register(32), [`${dev}.rd`, g.and(b.name(`${ctrl}.dv`, 'dv', true), mine), 'clk'], 'read data', 'rdr');
     const done = `${ctrl}.done`;
     b.wire(g.or(hs, g.and(`${act}.q`, g.not(done))), `${act}.d`);
     b.wire(g.or(g.and(done, wr), g.and(`${bq}.q`, g.not('bready'))), `${bq}.d`);
@@ -854,37 +855,117 @@ export const RSP_BITS = M_IN.reduce((s, x) => s + wOf(x), 0);
 /**
  * A part with its bus ports packed: every group (a prefix, and whether the part is the master or the slave
  * of that link) becomes two buses, `<prefix>req` (the master's signals, REQ_BITS) and `<prefix>rsp` (the
- * slave's, RSP_BITS). A link is then two wires: the sandbox's System on a bus draws it so.
+ * slave's, RSP_BITS). A link is then two wires: the computers and the sandbox's System on a bus draw it so.
+ *
+ * Native, not a wrapper: the part's own drawing, moved right, with a splitter beside each incoming bus's pin and
+ * a merger beside each outgoing one, at the same level (a wrapper level holding one box was a hollow level a
+ * learner had to open for nothing). The channel signals stay named nets inside it, so a reader can find
+ * `awvalid` there (sim/flatten.ts signalBits). The ports and the symbol are what the old wrapper had, so a stored
+ * chip placing a `_b` part keeps its wires.
  */
 export function bundled(def: ComponentDef, groups: [string, 'master' | 'slave'][], id: string): ComponentDef {
   return memo(id, () => {
-    const b = new Builder(10, 14);
+    if (def.behavior) throw new Error(`bundled: ${def.id} is a behaviour, not a drawn netlist`);
     const own = new Set(groups.flatMap(([p]) => [...M_OUT, ...M_IN].map((s) => p + s)));
     const other = def.ports.filter((p) => !own.has(p.name));
-    const from = new Map<string, string>();
-    for (const [p, side] of groups) {
-      const sigs = side === 'master' ? M_IN : M_OUT;
-      const s = b.op(splitter(sigs.map(wOf)), [side === 'master' ? `${p}rsp` : `${p}req`]);
-      sigs.forEach((sg, i) => from.set(p + sg, `${s}.o${i}`));
-    }
-    b.next();
-    const core = b.op(def, def.ports.filter((pt) => pt.dir === 'in').map((pt) => from.get(pt.name) ?? pt.name), def.name, 'core');
-    b.next();
-    for (const [p, side] of groups) {
-      const sigs = side === 'master' ? M_OUT : M_IN;
-      b.wire(b.op1(merger(sigs.map(wOf)), sigs.map((sg) => `${core}.${p}${sg}`)), side === 'master' ? `${p}req` : `${p}rsp`);
-    }
-    for (const pt of other) if (pt.dir === 'out') b.wire(`${core}.${pt.name}`, pt.name);
-    const packIn = groups.map(([p, side]) => bus(side === 'master' ? `${p}rsp` : `${p}req`, side === 'master' ? RSP_BITS : REQ_BITS, 'in'));
-    const packOut = groups.map(([p, side]) => bus(side === 'master' ? `${p}req` : `${p}rsp`, side === 'master' ? REQ_BITS : RSP_BITS, 'out'));
+    const reqOf = (p: string) => `${p}req`, rspOf = (p: string) => `${p}rsp`;
+    const packIn = groups.map(([p, side]) => bus(side === 'master' ? rspOf(p) : reqOf(p), side === 'master' ? RSP_BITS : REQ_BITS, 'in'));
+    const packOut = groups.map(([p, side]) => bus(side === 'master' ? reqOf(p) : rspOf(p), side === 'master' ? REQ_BITS : RSP_BITS, 'out'));
     const ports: PortDef[] = [...other.filter((p) => p.dir === 'in'), ...packIn, ...other.filter((p) => p.dir === 'out'), ...packOut];
     return define({
       id, name: `${def.name}, bus bundled`, category: def.category,
-      summary: `${def.summary ?? def.name} Its bus ports packed: per link a request bus (the master's ${M_OUT.length} signals, ${REQ_BITS} bits) and a response bus (${M_IN.length} signals, ${RSP_BITS} bits).`,
+      summary: `${def.summary ?? def.name} Its bus ports packed: per link a request bus (the master's ${M_OUT.length} signals, ${REQ_BITS} bits) and a response bus (${M_IN.length} signals, ${RSP_BITS} bits), split and merged beside its pins.`,
       ports, symbol: { ...def.symbol, kind: 'box' },
-      netlist: laid(b, { keepOrder: true }),
+      netlist: () => packedNetlist(def, groups, own, ports),
     });
   });
+}
+
+/** The nets feeding a merger's inputs named after the signals they carry (a reader finds `awready` by name). */
+function nameMerged(nl: Netlist, inputs: Map<string, string>): Netlist {
+  return { ...nl, nets: nl.nets.map((n) => { if (n.name) return n; const s = n.ends.find((e) => inputs.has(e)); return s ? { ...n, name: inputs.get(s) } : n; }) };
+}
+
+function packedNetlist(def: ComponentDef, groups: [string, 'master' | 'slave'][], own: Set<string>, ports: PortDef[]): Netlist {
+  const nl = netlistOf(def);
+  if (!nl) throw new Error(`bundled: ${def.id} has no netlist`);
+  // a Builder level laid out by layered(): the same level again, its splitters in the first column and mergers in the last
+  const src = laidFrom.get(def);
+  if (src) {
+    const b = new Builder(10, 14), ren = new Map<string, string>(), merged = new Map<string, string>(), outs: [string, string, typeof M_OUT | typeof M_IN][] = [];
+    for (const [p, side] of groups) {
+      const ins = side === 'master' ? M_IN : M_OUT, name = p + (side === 'master' ? 'rsp' : 'req');
+      const s = b.op(splitter(ins.map(wOf)), [name], '', `${name}_split`);
+      ins.forEach((sg, k) => ren.set(p + sg, `${s}.o${k}`));
+      outs.push([p, p + (side === 'master' ? 'req' : 'rsp'), side === 'master' ? M_OUT : M_IN]);
+    }
+    b.pins(...groups.map(([p, side]) => p + (side === 'master' ? 'rsp' : 'req')));
+    b.next();
+    for (const [p, name, sigs] of outs) sigs.forEach((sg, k) => { ren.set(p + sg, `${name}_merge.i${k}`); merged.set(`${name}_merge.i${k}`, p + sg); });
+    src.b.copyInto(b, (d) => ren.get(d), (s) => ren.get(s));
+    // a splitter's outputs stand where the input pins were: their nets drawn as the pins' were, as named pointers
+    for (const [sig, d] of ren) if (d.includes('_split.')) b.name(d, sig, true);
+    // copied instances keep their own places; the mergers go in a column after the rightmost of them
+    const right = Math.max(...b.instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 14;
+    outs.forEach(([, name, sigs], k) => {
+      b.instances.push({ name: `${name}_merge`, def: merger(sigs.map(wOf)), at: [right, 2 + 40 * k], label: '' });
+      b.wire(`${name}_merge.out`, name);
+    });
+    // the pointers hanging off the splitters and mergers need room beside them; short wires never cross a part
+    return nameMerged(layered(ports, b, { ...src.opts, room: true, avoid: true, gap: Math.max(src.opts.gap ?? 0, 20) }), merged);
+  }
+  {
+    const pins = nl.pins ?? {};
+    // the old drawing's extent: instances and pins
+    let x1 = 0, xPin = 0;
+    for (const i of nl.instances) { const g = symbolGeom(i.rot && i.rot % 2 ? orientedBox(i.def, i.flip, i.rot) : i.def); x1 = Math.max(x1, i.at![0] + g.w); }
+    for (const p of Object.values(pins)) xPin = Math.max(xPin, p[0]);
+    x1 = Math.max(x1, xPin);
+    // each bus's converter goes where its signals' pins were: the left edge or the right
+    const plan = groups.flatMap(([p, side]) => (['in', 'out'] as const).map((dir) => {
+      const sigs = (side === 'master') === (dir === 'out') ? M_OUT : M_IN, xs = sigs.map((sg) => pins[p + sg]?.[0]).filter((x): x is number => x !== undefined);
+      const right = xs.length ? xs.reduce((t, x) => t + x, 0) / xs.length > x1 / 2 : dir === 'out';
+      return { p, dir, sigs, right, name: p + (sigs === M_OUT ? 'req' : 'rsp') };
+    }));
+    const DX = plan.some((q) => !q.right) ? 10 : 0, R = x1 + DX + 12;
+    const instances: InstanceDef[] = nl.instances.map((i) => ({ ...i, at: [i.at![0] + DX, i.at![1]] }));
+    const newPins: Record<string, [number, number]> = {};
+    for (const [k, q] of Object.entries(pins)) if (!own.has(k)) newPins[k] = [q[0] === 0 ? 0 : q[0] + DX, q[1]];
+    const rename = new Map<string, string>(), added: NetDef[] = [];
+    // each at its signals' pins' height, pushed down past the one above it on its side when two would overlap
+    let lowL = -Infinity, lowR = -Infinity, wR = 0;
+    for (const { p, dir, sigs, right, name } of plan) {
+      const ys = sigs.map((sg) => pins[p + sg]?.[1]).filter((y): y is number => y !== undefined);
+      const want = ys.length ? Math.round(ys.reduce((t, y) => t + y, 0) / ys.length) : 2;
+      const part = dir === 'in' ? splitter(sigs.map(wOf)) : merger(sigs.map(wOf)), g = symbolGeom(part);
+      // a splitter on the right and a merger on the left face the other way: mirrored, the bus at the outer edge
+      const flip = (dir === 'in') === right, pos = g.ports[dir === 'in' ? 'in' : 'out'].pos, px = flip ? g.w - pos[0] : pos[0];
+      let top = want - pos[1];
+      const low = right ? lowR : lowL;
+      if (top < low + 2) top = low + 2;
+      if (top < 0) top = 0;
+      if (right) { lowR = top + g.h; wR = Math.max(wR, g.w); } else lowL = top + g.h;
+      const x = right ? R : 4, inst = `${name}_${dir === 'in' ? 'split' : 'merge'}`;
+      instances.push({ name: inst, def: part, at: [x, top], flip: flip || undefined, label: '' });
+      newPins[name] = [right ? x + px + 4 + (flip ? 0 : 0) : 0, top + pos[1]];
+      sigs.forEach((sg, k) => rename.set(p + sg, dir === 'in' ? `${inst}.o${k}` : `${inst}.i${k}`));
+      added.push(dir === 'in' ? { name, ends: [name, `${inst}.in`] } : { name, ends: [`${inst}.out`, name] });
+    }
+    // the right-hand pins (the old right edge's, the new buses') all on one line
+    const W = wR ? R + wR + 4 : xPin + DX;
+    for (const [k, q] of Object.entries(newPins)) if ((q[0] === xPin + DX && xPin > 0) || (wR && q[0] >= R)) newPins[k] = [W, q[1]];
+    // the drawing moved right by DX: its trunks (x of a horizontal driver's vertical trunk) and corner points too
+    const moved = (n: NetDef): NetDef => (n.trunk === undefined && !n.via ? n : {
+      ...n, trunk: n.trunk === undefined ? undefined : n.trunk + DX,
+      via: n.via && Object.fromEntries(Object.entries(n.via).map(([k, ps]) => [k, ps?.map(([x, y]): [number, number] => [x + DX, y])])),
+    });
+    const nets: NetDef[] = nl.nets.map((n0) => {
+      const n = moved(n0), sig = n.ends.find((e) => rename.has(e));
+      return sig ? { ...n, name: n.name ?? sig, ends: n.ends.map((e) => rename.get(e) ?? e) } : n;
+    });
+    nets.push(...added);
+    return { instances, nets, pins: newPins };
+  }
 }
 
 /** One of each generated part, registered for the library-wide checks (and the workbench). */
