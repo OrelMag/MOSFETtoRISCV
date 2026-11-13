@@ -131,6 +131,32 @@ That is the whole pattern of every chapter: read, try the circuit, open what you
 4. **HDL**: the part as Verilog you can copy or download.
 5. **Open on workbench** opens the part on its own page in the Workbench.
 
+### Ask why a wire has its value
+
+1. Click **Why?** on the bar above the circuit (the light bulb), or press **W**.
+2. Click a wire. A card explains the value step by step back to the inputs that decide it, for example "g3 = 1
+   because g2 = 0: one 0 into a NAND is enough". Hover a line to light its part; open a box to follow the trace inside it.
+3. The card's **Each part** tab says what each part of this level is for.
+4. **Esc** leaves Why? mode.
+
+![The Why? card for the output y: three numbered reasons back to the input b, the parts involved lit](img/journey/21-why.png)
+
+### Use a part's menu
+
+Right-click a part (or select it and press the menu key) for everything you can do with it: **Look inside**
+(the same as a double-click) and **Inspect** (its datasheet and cost in the Inspector), then three groups:
+
+- **Measure ▸**: its **Slack** (how far its slowest path is from the critical one), **Light the critical path through
+  it**, and **Power**.
+- **Explain ▸**: its **Truth table**, its **Codex** entry, the **Chapter** that teaches it, **Break a part** (what goes
+  wrong without it) and **Where it is used**.
+- **Take it elsewhere ▸**: **Open in Sandbox**, **Copy Verilog**, **Save an image as SVG** or **PNG**, **Copy a link to
+  this view** (with this part picked out).
+
+Right-click a wire or the empty circuit for their own menus.
+
+![The menu of the gate g3: Look inside, Inspect, Measure, Explain, Take it elsewhere](img/journey/22-part-menu.png)
+
 ### Follow the text on the circuit
 
 - Underlined words in the text are parts: hover one to light it on the circuit, click it to keep it lit.
