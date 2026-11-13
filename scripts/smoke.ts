@@ -887,14 +887,25 @@ const PRINT_DRIVE = `(async () => {
   const figs = [...page.querySelectorAll('.pd-fig-body')];
   if (figs.length < 3) bad.push('only ' + figs.length + ' figures');
   for (const f of figs) {
-    if (!f.querySelector('svg')) bad.push('a figure is not drawn: ' + f.textContent.trim().slice(0, 80));
-    else if (f.querySelector('svg').getBoundingClientRect().width < 20) bad.push('a figure is collapsed');
+    // a circuit is an svg; a 3D model (ui/pages/printmodel.ts) an img of its picture, or the flat svg without WebGL2
+    const pic = f.querySelector('img.pd-model, svg');
+    if (!pic) bad.push('a figure is not drawn: ' + f.textContent.trim().slice(0, 80));
+    else if (pic.getBoundingClientRect().width < 20) bad.push('a figure is collapsed');
+    else if (pic.tagName === 'IMG' && !(pic.complete && pic.naturalWidth > 0)) bad.push('a model figure is an empty image');
   }
   if (page.querySelector('.pd-wait')) bad.push('a figure is still waiting');
   if (page.querySelector('.lz, [aria-busy="true"]')) bad.push('a figure number is still a placeholder (' + page.querySelectorAll('.lz').length + ')');
   if (window.__printed !== 1) bad.push('window.print was called ' + window.__printed + ' times');
   if (!page.querySelector('.pd-q') || !page.querySelector('.pd-answers li')) bad.push('no questions and answers');
   if (document.querySelector('.topbar') && document.documentElement.getAttribute('data-palette') === 'print') bad.push('the figures left <html> in the paper palette');
+  // a chapter with 3D models: each a numbered figure, its Try lines after it for the site, and no model left on the page (WebGL released)
+  if (window.__printModels) {
+    const models = [...page.querySelectorAll('.pd-fig-model')];
+    if (models.length < window.__printModels) bad.push('only ' + models.length + ' 3D model figures');
+    for (const m of models) if (!/^Figure [\\w.]+\\./.test(m.querySelector('figcaption')?.textContent ?? '')) bad.push('a model figure has no number');
+    if (!page.querySelector('.pd-onsite')) bad.push('no "On the site" line after a model');
+    if (document.querySelector('.r3-stage')) bad.push('a 3D stage was left mounted after the figures');
+  }
   return bad;
 })()`;
 
@@ -1525,6 +1536,8 @@ function routes(): Route[] {
   add(`#/c/${printCh.id}/print`, light, ` (${VIEWPORTS[VIEWPORTS.length - 1].name})`, VIEWPORTS[VIEWPORTS.length - 1], PRINT_DRIVE);
   // a chapter whose numbers are computed by the page (ui/lazy.ts): none may print as a placeholder
   add('#/c/sdr/print', light, '', undefined, PRINT_DRIVE.replace('if (figs.length < 3)', 'if (false)'));
+  // a chapter with 3D models (the triode and ENIAC's decade ring): pictures in paper's look although the theme is dark
+  add('#/c/tubes/print', themed('dark'), ' (3D models)', undefined, PRINT_DRIVE.replace('if (figs.length < 3)', 'window.__printModels = 2; if (figs.length < 2)'));
   // The first-run coach marks over a chapter step, the workbench and the sandbox, in both themes and on a phone.
   for (const theme of ['light', 'dark'] as const) {
     for (const hash of [`#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/sandbox']) add(hash, firstRun(theme), ` (first run, ${theme})`);

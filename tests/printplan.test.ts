@@ -7,6 +7,7 @@ import { classify, figureNo, planChapter, truthEligible, truthTable } from '../s
 import { chapterById } from '../src/chapters';
 import { resolveComponent } from '../src/lib/resolve';
 import { tick } from './yieldtick';
+import { MODELS_3D } from '../src/widgets/models3dindex';
 
 describe('print plan', () => {
   it('figure numbers carry the chapter number the way the chapter shows it', () => {
@@ -21,13 +22,16 @@ describe('print plan', () => {
     for (const c of chapters) {
       const plan = planChapter(c);
       expect(plan.steps.length, c.id).toBe(c.steps.length);
-      const figs = plan.steps.filter((s) => s.figure !== undefined);
-      expect(figs.map((s) => s.figure), c.id).toEqual(figs.map((_, i) => i + 1));
+      // every figure in reading order: a step's scene, then its 3D models
+      const figs = plan.steps.flatMap((s) => [...(s.figure !== undefined ? [s.figure] : []), ...s.models.map((m) => m.figure)]);
+      expect(figs, c.id).toEqual(figs.map((_, i) => i + 1));
       expect(plan.figures, c.id).toBe(figs.length);
       for (const s of plan.steps) {
         const st = c.steps[s.step];
         if (s.mode === 'sim' || s.mode === 'top') expect(s.scene && st.scene, `${c.id} ${s.step}`).toBeTruthy();
-        if (s.mode === 'live') expect(st.widget && !st.scene, `${c.id} ${s.step}`).toBeTruthy();
+        if (s.mode === 'live') expect(st.widget && !st.scene && !s.models.length, `${c.id} ${s.step}`).toBeTruthy();
+        if (s.mode === 'model') expect(st.widget && !st.scene && s.models.length, `${c.id} ${s.step}`).toBeTruthy();
+        for (const m of s.models) expect(m.label, `${c.id} ${s.step}`).toBe(`Figure ${figureNo(c, m.figure)}`);
         if (s.mode === 'none') expect(st.scene || st.widget, `${c.id} ${s.step}`).toBeFalsy();
         if (s.mode === 'link') expect(s.reason, `${c.id} ${s.step}`).toBeTruthy();
         if (s.truth) expect(s.mode, `${c.id} ${s.step}`).toBe('sim');
@@ -35,6 +39,17 @@ describe('print plan', () => {
       expect(plan.questions.map((q) => q.n), c.id).toEqual(plan.questions.map((_, i) => i + 1));
       await tick();
     }
+  });
+
+  it('every 3D model is planned as a figure, at the step that mounts it', () => {
+    for (const m of MODELS_3D) {
+      const plan = planChapter(chapterById(m.chapter)!);
+      expect(plan.steps[m.step].models.map((x) => x.id), m.id).toContain(m.id);
+    }
+    // the ENIAC decade ring is chapter P2's eighth step, and the chapter's only figure there
+    const tubes = planChapter(chapterById('tubes')!);
+    expect(tubes.steps[7].mode).toBe('model');
+    expect(tubes.steps[7].models[0].id).toBe('eniac');
   });
 
   it('big designs are never simulated for a figure; small ones are', () => {

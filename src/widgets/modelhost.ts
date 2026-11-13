@@ -3,6 +3,7 @@
 
 import type { Widget } from '../view/stage';
 import type { BiasLink } from './mosshare';
+import { whenAsked } from './modelshot';
 
 /** A placeholder of about the loaded height until `load` answers. */
 export function lazyModel(what: string, load: () => Promise<Widget>): Widget {
@@ -11,14 +12,14 @@ export function lazyModel(what: string, load: () => Promise<Widget>): Widget {
   el.style.minHeight = '520px';
   el.textContent = `Loading ${what}…`;
   let inner: Widget | null = null, dead = false;
-  load()
+  whenAsked(el, what, () => load()
     .then((w) => {
       if (dead) { w.destroy?.(); return; }
       inner = w;
       el.style.minHeight = '';
       el.replaceChildren(w.el);
     })
-    .catch((e: unknown) => { if (!dead) el.textContent = `${what[0].toUpperCase()}${what.slice(1)} did not load (${String(e)}).`; });
+    .catch((e: unknown) => { if (!dead) el.textContent = `${what[0].toUpperCase()}${what.slice(1)} did not load (${String(e)}).`; }));
   return {
     el,
     update: () => inner?.update?.(),
