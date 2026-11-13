@@ -329,7 +329,7 @@ void main() {
 interface GpuGeo { vbo: WebGLBuffer; ibo: WebGLBuffer; vao: WebGLVertexArrayObject; count: number; cbo: WebGLBuffer | null; ubo: WebGLBuffer | null; rev: number }
 interface Draw { item: Item; geo: GpuGeo; src: Geo; mat: ResolvedMat; glass: boolean; key: string[] }
 interface ResolvedMat { base: RGB; emit: RGB; tint: RGB; metal: number; rough: number; coat: number; transmit: number; glow: number; bloom: number; beam: boolean; data: DataTex | null }
-interface InstSet { casts: boolean; geo: Geo; mat: ResolvedMat; vao: WebGLVertexArrayObject | null; buf: WebGLBuffer | null; data: Float32Array; count: number; gpu: GpuGeo | null }
+interface InstSet { casts: boolean; geo: Geo; src: Material; mat: ResolvedMat; vao: WebGLVertexArrayObject | null; buf: WebGLBuffer | null; data: Float32Array; count: number; gpu: GpuGeo | null }
 interface Target { fb: WebGLFramebuffer; tex: WebGLTexture; w: number; h: number }
 
 const SHADOW_SIZE_HI = 2048, SHADOW_SIZE_LO = 1024;
@@ -473,6 +473,16 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
     draws = [];
     if (!model) return;
     for (const it of model.items) draws.push({ item: it, src: it.geo, geo: upGeo(it.geo), mat: resolveMat(it.mat), glass: (it.mat.transmit ?? 0) > 0.3 && !it.mat.beam, key: keysOf(it) });
+    // free what no item and no instance set draws any more: a model that builds a geometry per frame (a growing beam)
+    // would otherwise keep every one of them on the GPU
+    const used = new Set<Geo>(model.items.map((i) => i.geo));
+    for (const s of inst.values()) used.add(s.geo);
+    for (const [g, r] of geos) if (!used.has(g) && r !== floorGeo) {
+      gl.deleteVertexArray(r.vao); gl.deleteBuffer(r.vbo); gl.deleteBuffer(r.ibo);
+      if (r.cbo) gl.deleteBuffer(r.cbo);
+      if (r.ubo) gl.deleteBuffer(r.ubo);
+      geos.delete(g);
+    }
     shadowDirty = true;
   };
 
@@ -843,6 +853,8 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
     camera, canvas, flags, render, invalidate,
     setModel(m, r) {
       model = m; resolve = r;
+      // instance sets resolved before this resolver came (a model filling them while it builds) take its colours now
+      for (const s of inst.values()) s.mat = resolveMat(s.src);
       if (m.look?.exposure !== undefined) env.exposure = m.look.exposure;
       const dir = m.look?.keyDir ? norm3(m.look.keyDir) : homeDir;
       if (dir.some((v, i) => v !== env.dir[i])) { env.dir = dir; shadowDirty = true; }
@@ -863,14 +875,16 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
     setInstances(key, geo, mat, data, count, casts = false) {
       let s = inst.get(key);
       const rm = resolveMat(mat);
-      if (!s || s.geo !== geo) { s = { casts, geo, mat: rm, vao: null, buf: null, data, count: count ?? data.length / INSTANCE_FLOATS, gpu: null }; inst.set(key, s); }
-      s.mat = rm; s.data = data; s.count = count ?? data.length / INSTANCE_FLOATS; s.casts = casts;
+      if (s && s.geo !== geo && !lost) { if (s.vao) gl.deleteVertexArray(s.vao); if (s.buf) gl.deleteBuffer(s.buf); }
+      if (!s || s.geo !== geo) { s = { casts, geo, src: mat, mat: rm, vao: null, buf: null, data, count: count ?? data.length / INSTANCE_FLOATS, gpu: null }; inst.set(key, s); }
+      s.src = mat; s.mat = rm; s.data = data; s.count = count ?? data.length / INSTANCE_FLOATS; s.casts = casts;
       if (!lost && s.vao && s.buf) { gl.bindBuffer(gl.ARRAY_BUFFER, s.buf); gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW); }
       if (casts) shadowDirty = true;
       invalidate();
     },
     showParts(scene, r) {
       resolve = r;
+      for (const s of inst.values()) s.mat = resolveMat(s.src);
       model = { ...(model ?? {}), items: scene.items };
       if (!lost) build();
       for (const x of scene.sets) self.setInstances(x.key, x.geo, x.mat, x.data, undefined, true);
