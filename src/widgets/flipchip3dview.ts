@@ -4,6 +4,7 @@
 // the heat is phys/flipchip.ts's series stack over the die's area.
 
 import '../styles/flipchip3d.css';
+import { groupDigits } from '../sim/numfmt';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { groundBounce, VIL } from '../phys/line';
@@ -46,7 +47,7 @@ export function flipchipView(): Widget {
       ['Bond wire', `${BOND.l} mm of ${BOND.r * 2000} µm gold: ${f2(lb)} nH`],
       ['Solder bump', `${Math.round(BUMP.h * 1000)} µm tall, ${Math.round(BUMP.r * 2000)} µm across: ${(lu * 1000).toFixed(0)} pH, ${Math.round(lb / lu)} times less`],
       [`${n} outputs, ${RISE_NS} ns`, `bounce ${f2(vb)} V on a wire, ${(vu * 1000).toFixed(1)} mV on a bump (V_IL ${f2(VIL)} V)`],
-      ['Bumps under the die', `about ${BUMPS.toLocaleString('en')} at ${Math.round(BUMP.pitch * 1000)} µm pitch: hundreds can be grounds`],
+      ['Bumps under the die', `about ${groupDigits(BUMPS)} at ${Math.round(BUMP.pitch * 1000)} µm pitch: hundreds can be grounds`],
       ['Not modelled', 'the substrate’s vias and planes from bump to ball: more than the bump, still far less than a wire'],
       ...STACK.map((l, k): [string, string] => [['Silicon', 'TIM (polymer)', 'Copper lid'][k] ?? l.name, `${Math.round(l.tMm * 1000)} µm, k ${l.k} W/m·K: ${(layerR(l, area) * 1000).toFixed(1)} mK/W`]),
       ['Die to lid top', `${(r * 1000).toFixed(1)} mK/W over ${area.toFixed(0)} mm²: ${(watts * r).toFixed(1)} K at ${watts} W`],

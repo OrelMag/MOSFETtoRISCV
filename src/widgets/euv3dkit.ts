@@ -12,6 +12,7 @@
 // mask (asin(NA / M)) and at the wafer (asin NA); the mask's field and the wafer's to scale with each other.
 
 import { lathe, merge, roundedBox, sphere, transform, tube, type Geo } from '../gl/kit/geo';
+import { groupDigits } from '../sim/numfmt';
 import { M, type Material } from '../gl/kit/materials';
 import type { Beat, GlowLight, Item, Model3, StudioAnchor } from '../gl/kit/scene';
 import type { Mat4, Quat, Vec3 } from '../gl/math';
@@ -26,9 +27,9 @@ export const MATS = {
   steel: mat({ ...M.steel, label: 'steel' }),
   tin: mat({ ...M.solder, base: '--euv-tin', metal: 0.5, rough: 0.3, label: 'liquid tin' }),
   euv: (k: number) => M.beam('--euv-light', k, '13.5 nm light (invisible; drawn violet)'),
-  laser: M.beam('--euv-laser', 1.1, 'CO₂ laser main pulse, 10.6 µm (infrared; drawn red)'),
+  laser: M.beam('--euv-laser', 0.45, 'CO₂ laser main pulse, 10.6 µm (infrared; drawn red)'),
   pre: M.beam('--euv-pre', 1.4, 'pre-pulse'),
-  plasma: mat({ base: '--euv-plasma', metal: 0, rough: 1, emit: '--euv-plasma', glow: 3, bloom: 2, label: 'tin plasma (about 30 eV)' }),
+  plasma: mat({ base: '--euv-plasma', metal: 0, rough: 1, emit: '--euv-plasma', glow: 1.4, bloom: 1.1, label: 'tin plasma (about 30 eV)' }),
   mask: mat({ base: '--euv-mask', metal: 0.2, rough: 0.3, label: 'mask blank (low-expansion glass)' }),
   absorber: mat({ base: '--euv-abs', metal: 0.3, rough: 0.5, label: 'the mask’s multilayer and absorber pattern' }),
   wafer: mat({ ...M.silicon, base: '--m3-si', rough: 0.15, label: 'silicon wafer, 300 mm' }),
@@ -144,11 +145,11 @@ export function sourceModel(s: SrcState, detail: 'full' | 'flat' = 'full'): Mode
   if (on) {
     items.push({ geo: S.laser, mat: MATS.laser, name: 'main pulse', group: 'laser', cut: 'none', shadow: false, info: { note: 'more than 20 kW on average, through the hole in the collector' } });
     items.push({ geo: transform(sphere(1, 16, 10), tr([0, 0, 0], [0.25, 0.25, 0.25])), mat: MATS.plasma, name: 'plasma', group: 'plasma', cut: 'none', shadow: false, info: { note: 'the target heated to a plasma that radiates at 13.5 nm; its 5 % or so (in band, into the half space) is the conversion efficiency' } });
-    items.push({ geo: transform(sphere(1, 16, 10), tr([0, 0, 0], [7, 7, 7])), mat: M.beam('--euv-plasma', 1.6 * fade, 'the plasma’s glow (drawn far larger than its ~0.3 mm)'), name: 'plasma', group: 'plasma', cut: 'none', shadow: false });
     const rays: Geo[] = [];
     for (const ps of RAY_PSI) for (const sg of [1, -1]) {
       const q = collectorAt(ps), p: Vec3 = [q[0], sg * q[1], 0];
-      rays.push(tube([[0, 0, 0], p, [IF_X, 0, 0], add([IF_X, 0, 0], scl(unit(sub([IF_X, 0, 0], p)), 260))], 1.6, { sides: 6 }));
+      // from 8 mm out: at the droplet's scale the rays leave the frame instead of filling it
+      rays.push(tube([scl(unit(p), 8), p, [IF_X, 0, 0], add([IF_X, 0, 0], scl(unit(sub([IF_X, 0, 0], p)), 260))], 1.6, { sides: 6 }));
     }
     items.push({ geo: merge(rays, 'rays'), mat: MATS.euv(1.4 * fade + 0.1), name: '13.5 nm light', group: 'light', cut: 'none', shadow: false, info: { note: 'from the plasma to the collector and back through the intermediate focus: each ray drawn obeys the ellipse’s focal property' } });
   }
@@ -162,10 +163,11 @@ export function sourceModel(s: SrcState, detail: 'full' | 'flat' = 'full'): Mode
   const lights: GlowLight[] = on && !flat ? [{ p: [0, 0, 0], colour: [0.75, 0.55, 1], power: 6 * fade, range: 400 }] : [];
   const v = (yaw: number, pitch: number, target: Vec3, dist: number) => ({ yaw, pitch, target, dist });
   const beats: Beat[] = [
-    { title: 'A mirror round a spark', text: `A laser comes in through a hole in the middle of a curved mirror and strikes tin falling across the mirror’s focus, ${s.fKhz} 000 times a second. The tin flashes into a plasma; the mirror catches its 13.5 nm light over ${COLLECT_SR} sr and brings it to a second focus, the small hole the scanner looks through. Cut in half; the vessel’s size is schematic.`, view: v(0.5, 0.35, [IF_X / 2 - 200, 0, 0], 2600), frame: ['collector', 'if', 'tin'] },
-    { title: 'Droplets, to scale', text: `At the focus, to scale: ${DROP.dUm} µm drops of liquid tin, ${spacingMm(s.vMs, s.fKhz).toFixed(1)} mm apart at ${s.vMs} m/s. Time here runs ${SLOW.toLocaleString('en')} times slower: one droplet every ${periodUs(s.fKhz)} µs.`, view: v(0.6, 0.2, [0, 1.4, 0], 4.5), labels: false },
+    { title: 'A mirror round a spark', text: `A laser comes in through a hole in the middle of a curved mirror and strikes tin falling across the mirror’s focus, ${groupDigits(s.fKhz * 1000)} times a second. The tin flashes into a plasma; the mirror catches its 13.5 nm light over ${COLLECT_SR} sr and brings it to a second focus, the small hole the scanner looks through. Cut in half; the vessel’s size is schematic.`, view: v(0.35, 0.18, [IF_X / 2 - 200, 0, 0], 2600), frame: ['collector', 'if'] },
+    { title: 'Droplets, to scale', text: `At the focus, to scale: ${DROP.dUm} µm drops of liquid tin, ${spacingMm(s.vMs, s.fKhz).toFixed(1)} mm apart at ${s.vMs} m/s. Time here runs ${groupDigits(SLOW)} times slower: one droplet every ${periodUs(s.fKhz)} µs.`, view: v(0.6, 0.2, [0, 1.4, 0], 4.5), labels: false },
     { title: 'The pre-pulse', text: `A first, weaker pulse hits each droplet just above the focus and flattens it into a thin target about ${TARGET_UM} µm across, closer to the size of the main beam’s spot, with more surface for it to heat. The delay drawn is illustrative.`, view: v(0.9, 0.15, [0, 0.12, 0], 2.2), labels: false },
-    { title: 'The main pulse', text: 'The CO₂ laser’s main pulse turns the target into a plasma at the collector’s focus. About 5 % of the laser’s energy comes out as light in the 2 % band round 13.5 nm into the half space the mirror faces; the mirror brings what it catches to the intermediate focus.', view: v(0.5, 0.35, [IF_X / 2 - 200, 0, 0], 2600), frame: ['collector', 'if'] },
+    { title: 'The main pulse, up close', text: `At the target's own scale: the main pulse's focus, about 400 µm across, the size of the ${TARGET_UM} µm target the pre-pulse made; the target becomes a plasma a few tenths of a millimetre across, at the collector's focus.`, view: v(0.12, 0.1, [0, 0, 0], 2.4), labels: false },
+    { title: 'The main pulse', text: 'The CO₂ laser’s main pulse turns the target into a plasma at the collector’s focus. About 5 % of the laser’s energy comes out as light in the 2 % band round 13.5 nm into the half space the mirror faces; the mirror brings what it catches to the intermediate focus.', view: v(0.35, 0.18, [IF_X / 2 - 200, 0, 0], 2600), frame: ['collector', 'if'] },
     { title: 'Twenty kilowatts for two hundred watts', text: 'Each factor costs: conversion, the share of the half space the mirror covers, the mirror’s reflectivity, the hydrogen’s absorption. The readout multiplies them; the published figure is more than 20 kW of laser for 200 W at the intermediate focus.', view: v(-0.35, 0.3, [-60, 0, 0], 1500), frame: ['collector'], hide: [] },
   ];
   return {
@@ -175,8 +177,8 @@ export function sourceModel(s: SrcState, detail: 'full' | 'flat' = 'full'): Mode
     look: { exposure: 0.95 },
   };
 }
-export const SRC_HOME = { yaw: 0.5, pitch: 0.35, target: [IF_X / 2 - 200, 0, 0] as Vec3, dist: 2600 };
-export const SRC_FRAME = ['collector', 'if', 'tin'];
+export const SRC_HOME = { yaw: 0.35, pitch: 0.18, target: [IF_X / 2 - 200, 0, 0] as Vec3, dist: 2600 };
+export const SRC_FRAME = ['collector', 'if'];
 
 // ================================================================ the scanner
 

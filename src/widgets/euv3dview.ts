@@ -3,6 +3,7 @@
 // numbers are phys/euv.ts's; the source's droplets move at their real speed slowed SLOW times.
 
 import '../styles/euv3d.css';
+import { groupDigits } from '../sim/numfmt';
 import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
@@ -60,7 +61,7 @@ export function euvView(initial: Scene = 'source'): Widget {
       chip.className = `r3-chip ${t >= m && t - m < 0.25 ? 'warn' : ''}`;
       rows = [
         ['Droplets', `${src.fKhz} kHz at ${src.vMs} m/s: ${sp.toFixed(2)} mm apart, one every ${f1(periodUs(src.fKhz))} µs`],
-        ['Shown', `${SLOW.toLocaleString('en')} times slower`],
+        ['Shown', `${groupDigits(SLOW)} times slower`],
         ['Conversion (in band, into 2π)', pc(CHAIN.ce)],
         ['Collected', `${CHAIN.sr} sr of 2π (${pc(CHAIN.sr / (2 * Math.PI))}), the rim at ${RIM_DEG.toFixed(0)}°`],
         ['Collector reflectivity', `${pc(CHAIN.rColl)} (at best)`],
@@ -104,7 +105,7 @@ export function euvView(initial: Scene = 'source'): Widget {
         const m = mainAt(src);
         if (i <= 1) { setPlaying(!reducedMotion()); return; }
         setPlaying(false);
-        src.tau = i === 2 ? m * 0.7 : m + 0.03;
+        src.tau = i === 2 ? m * 0.7 : i === 3 ? m + 0.004 : m + 0.03;
         tauIn.value = String(src.tau); stage?.refresh(); readout();
       } : undefined,
       note: isSrc
