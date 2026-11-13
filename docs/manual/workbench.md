@@ -325,8 +325,8 @@ Click **Statistics** in the left pane. **Hardware statistics** lists every part:
 - boxes inside.
 
 Use the tabs to see it built in **CMOS**, **Relays** or **Tubes**. Click a column heading to sort by it; the table
-starts sorted by **NAND gates**. Click a name to open that part on the workbench. The buttons above the table keep
-one category (**Logic gate**, **Arithmetic**, **Memory**, …); **Group sizes** puts a part's sizes on one row, and
+starts sorted by **NAND gates**. Click a name to open that part on the workbench. Click a category above the table
+(**Logic gate**, **Arithmetic**, **Memory**, …) to hide its parts, and again to show them; **Group sizes** puts a part's sizes on one row, and
 **Show splitters, mergers and wire parts** adds the wiring parts.
 
 ![Hardware statistics](img/workbench/20-statistics.png)
