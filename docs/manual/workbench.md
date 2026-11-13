@@ -23,7 +23,7 @@ Two minutes: pick a part, change its size, try it, read its cost and truth table
 
    ![The top bar with Chapters, Campaign, Workbench and Sandbox](img/workbench/01-home-top-bar.png)
 
-   The first time, two cards point out the controls ("1 of 2"); read them, or click **Skip**.
+   The first time, two cards point out the controls ("1 of 2"); read them, or click **Skip the tour**.
 
    The workbench opens on the **4-bit ripple-carry adder**. The list of parts is on the left, the circuit is in the
    middle, and its details (the inspector) are on the right.
