@@ -11,6 +11,7 @@ import type { OrbitView } from '../gl/camera';
 import { frameLoop } from './mosfet';
 import { packInstances } from '../gl/instances';
 import { studioStage } from './studiostage';
+import { keepWidth } from './studiowidth';
 import { BAND_GEO, BAND_MAT, HG_VIEWS, PULSE_GEO, PULSE_MAT, bandInstances, mercuryModel, pulseInstances, shownKey } from './mercury3dkit';
 import {
   CARRIER_HZ, CUT_LENGTH_M, LENGTH_M, OD_M, ROW_HIT_S, SLOTS, SLOTS_PER_WORD, SOUND_M_S, TANKS, TANK_C, Tank, WINDOW_TOL, WORDS, bitsInTank,
@@ -59,6 +60,9 @@ export function mercuryView(): Widget {
     limits: { minDist: 25, maxDist: 700, maxPan: 200 },
     note: `Length, outside diameter, slot count and pulse timing are the 1948 report’s and the sound speed is mercury’s; the bore and wall, the crystals’ size, the housing (the report only says all tanks must be at the same temperature) with its 4 × 4 grid of tubes standing for a battery of 16, and the electronics are drawn, not modelled; the clock fixes the timing as it did in EDSAC (500 kc/s, a 2 µs slot, 576 slots = 1.152 ms) and the tube is the length that fits it: sound goes ${SOUND_M_S.toFixed(0)} m/s in mercury at 40 °C (the temperature secondary sources give for heated mercury lines; no EDSAC source we could read states it), so the crystal faces are ${CUT_LENGTH_M.toFixed(3)} m apart, ${((CUT_LENGTH_M / LENGTH_M - 1) * 100).toFixed(1)} % more than the report’s ‘approximately 5 ft 4 in’ between end blocks (the path between the crystal faces is not given: our inference). The speed and its −0.46 m/s per K slope are one handbook table’s (Karl Deutsch, ‘Sound Velocity in Liquids’), a linear fit; the backing’s material is not given, so its box is generic; the temperature slider is our model of the drift, not a measurement. The pulses move at the real speed and spacing, ${groupNum(SLOWS[0])} times slower (${groupNum(SLOWS[1])} on the slow setting), and their weakening and spreading down the tube is exaggerated.`,
   });
+  // the homes are framed on the desktop canvas (aspect 1.9); a phone's narrower one pulls back so the same width shows
+  let cur: OrbitView = startView();
+  const width = keepWidth(stage, 1.9, () => cur);
   ready = true;
   /** The pulses and the picked word's sleeve move every frame as instances. */
   function instances(): void {
@@ -223,7 +227,7 @@ export function mercuryView(): Widget {
   // the preset views; a phone opens on the sending end
   const viewBtns = (Object.keys(VIEWS) as (keyof typeof VIEWS)[]).map((k) => {
     const b = h('button', { type: 'button', 'aria-pressed': String(k === startKey()), class: k === startKey() ? 'on' : '' }, VIEW_NAMES[k]) as HTMLButtonElement;
-    b.addEventListener('click', () => { stage.goTo(k === 'whole' ? wholeView() : { ...VIEWS[k] } as OrbitView); viewBtns.forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); }); });
+    b.addEventListener('click', () => { cur = k === 'whole' ? wholeView() : { ...VIEWS[k] } as OrbitView; stage.goTo(width.scaled(cur)); viewBtns.forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); }); });
     return b;
   });
 
@@ -250,5 +254,5 @@ export function mercuryView(): Widget {
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape' && running) { running = false; readout(true); kick(); } });
   readout(true);
   paint();
-  return { el: panel, destroy() { loop.stop(); stage.destroy(); } };
+  return { el: panel, destroy() { width.stop(); loop.stop(); stage.destroy(); } };
 }
