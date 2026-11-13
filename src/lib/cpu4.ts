@@ -499,7 +499,8 @@ const cpus = new Map<string, ComponentDef>();
  * (the word is JUN to its own address), then Decode over the index registers, the ALU over the accumulator, the PC &
  * stack over the I/O ports (which run straight out). The PC also goes to `pcSinks` (the ROM's address, or a pin).
  */
-function cpu4Body(b: Builder, instr: string, pcSinks: string[]): void {
+/** `wired`: Decode's ALU controls drawn as wires (cpu4() places the ALU level with them), not labels. */
+function cpu4Body(b: Builder, instr: string, pcSinks: string[], wired = false): void {
   const fl = b.op(splitter([8, 4, 4], 4), [instr], 'fields');
   const lo = b.name(`${fl}.o0`, 'lo', true), opa = b.name(`${fl}.o1`, 'opa', true);
   // Halt: the word is JUN (0x40) to its own address.
@@ -508,7 +509,8 @@ function cpu4Body(b: Builder, instr: string, pcSinks: string[]): void {
   const self = b.op(equal(8), [lo, ''], 'to itself?');
   b.next();
   const dec = b.op(CPU4_DECODE, [instr, '', '', 'test', ''], 'Decode', 'dec');
-  const c = (n: string) => b.name(`${dec}.${n}`, n, true);
+  const WIRED = new Set(wired ? ['xa', 'inv', 'bk', 'k', 'cin', 'f', 'csel', 'orcy', 'cconst'] : []);
+  const c = (n: string) => b.name(`${dec}.${n}`, n, !WIRED.has(n));
   const regs = b.op(CPU4_REGS, [opa, '', lo, c('rwe'), c('winc'), c('pwe'), 'clk'], 'Index regs', 'regs');
   const r = b.name(`${regs}.r`, 'r', true), pair = b.name(`${regs}.pair`, 'pair', true);
   b.wire(b.name(`${regs}.rz`, 'rz', true), `${dec}.rz`);
@@ -541,7 +543,13 @@ export function cpu4(words: ArrayLike<number>): ComponentDef {
   // Four columns: the ROM and its fields (with the halt detector), Decode over the index registers,
   // the ALU over the accumulator, the PC & stack over the I/O ports (which run straight out).
   const rom = b.op(R0, [''], 'program', 'rom');
-  cpu4Body(b, b.name(`${rom}.data`, 'instr', true), [`${rom}.addr`]);
+  cpu4Body(b, b.name(`${rom}.data`, 'instr', true), [`${rom}.addr`], true);
+  // Decode's csel / orcy / cconst level with the ALU's, xa … f two rows above theirs (a staircase of short wires); the
+  // accumulator under the ALU
+  const at = (n: string, xy: [number, number]) => { b.instances.find((i) => i.name === n)!.at = xy; };
+  const decAt = b.instances.find((i) => i.name === 'dec')!.at!;
+  at('alu', [decAt[0] + 26, decAt[1] + 12]);
+  at('acc', [decAt[0] + 26, decAt[1] + 42]);
   const R = b.right;
   d = define({
     id: `cpu4_${R0.id.slice('cpu4_rom_'.length)}`, name: '4-bit CPU (4004-inspired)', category: 'cpu',
