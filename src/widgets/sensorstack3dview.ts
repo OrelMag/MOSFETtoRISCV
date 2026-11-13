@@ -6,6 +6,7 @@ import '../styles/sensorstack3d.css';
 import { h, s as svg } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { studioStage } from './studiostage';
+import { keepWidth } from './studiowidth';
 import { stackModel, stackView, type StackPose } from './sensorstack3dkit';
 import { angleCurve, BAYER, FATES, K, fmtUm, PITCHES, pctOf, siReflectance, spotSize, tenths, stackHeight, stackSpec, traceStack, type Illum, type StackOptics } from './sensorstack3dgeom';
 import { STACK_OPTICS } from './sensorstackoptics';
@@ -30,7 +31,8 @@ export function sensorStackView(optics: StackOptics = STACK_OPTICS): Widget {
     scaleBar: (len) => fmtUm(len / K),
     note: 'To scale, with representative layer thicknesses, not one product’s. 2.4 µm is the chapter’s IMX183 over its 3 µm of collecting silicon; 1.0 µm is a phone pixel, its BSI silicon 2.7 µm as TechInsights measured on early 1.0 µm pixels with deep trench isolation (R. Fontaine, “The State-of-the-Art of Smartphone Imagers”, IISW 2019). FSI at 1.0 µm is drawn for comparison only: no one made it. Its stack, 3.7 µm from lens to silicon, is far taller than the pixel is wide, so tilted 15° the focal spot lands on the metal at the pixel’s edge; Lee et al. (“SNR Performance Comparison of 1.4 µm Pixel: FSI, Light-guide, and BSI”, IISW 2011) measured FSI losing over 20 % to its metal already at 1.4 µm, and BSI’s response at oblique light far better for its low stack. FSI products of that size added light guides over the diode, not drawn. Geometric rays in the cut’s plane: the orange bar is the diffraction-limited spot (2.44 λ N) the lens cannot beat, so at 1 µm the sharp edges seen here are blurred over the pixel. Reflection at the silicon is Fresnel’s at normal incidence, through a quarter-wave film when the anti-reflection coating is on; the reflection off the metal behind BSI’s silicon, which gives near-infrared a second pass, is not traced. The diode’s n region is drawn on the metal side, under its p+ pinning layer, about two thirds of the silicon deep; charge made below it still diffuses to it, so the whole silicon counts. A ray counts in the pixel where it reaches its mean absorption depth; the filters’ curves are illustrative; no microlens shift towards the sensor’s corners.',
     build: (detail) => stackModel(shown, detail),
-  });
+  });  const width = keepWidth(stage, 1.45, frame, 1.1); // its home's canvas at 1440 px (a square content between the gutters)
+
   function paint(): void { shown = pose(); stage.refresh(); readout(shown); }
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
@@ -92,7 +94,7 @@ export function sensorStackView(optics: StackOptics = STACK_OPTICS): Widget {
     });
     return h('div', { class: 'seg', role: 'group', 'aria-label': label }, ...btns);
   };
-  const illumSeg = seg('Illumination', [['fsi', 'Front-side (FSI)'], ['bsi', 'Back-side (BSI)']], () => illum, (v) => { illum = v as Illum; stage.goTo(frame()); });
+  const illumSeg = seg('Illumination', [['fsi', 'Front-side (FSI)'], ['bsi', 'Back-side (BSI)']], () => illum, (v) => { illum = v as Illum; stage.goTo(width.scaled(frame())); });
   const pitchSeg = seg('Pixel pitch', PITCHES.map((p): [string, string] => [String(p), `${p.toFixed(1)} µm${p === PITCHES[0] ? ' (IMX183)' : ''}`]), () => String(pitch), (v) => { pitch = Number(v); stage.goTo(frame()); });
   const arSeg = seg('Anti-reflection coating', [['1', 'AR coating'], ['0', 'Bare silicon']], () => (ar ? '1' : '0'), (v) => { ar = v === '1'; });
   const rowSeg = seg('Row cut', [['0', 'Cut red · green'], ['1', 'Cut green · blue']], () => String(row), (v) => { row = Number(v) as 0 | 1; });
@@ -118,5 +120,5 @@ export function sensorStackView(optics: StackOptics = STACK_OPTICS): Widget {
       h('div', { class: 'r3-main' }, stage.el),
       h('div', { class: 'r3-side' }, h('h4', null, 'Where the light goes ', h('span', { class: 'r3-badge' }, 'traced')), kv, curve)));
   paint();
-  return { el: panel, destroy() { stage.destroy(); } };
+  return { el: panel, destroy() { width.stop(); stage.destroy(); } };
 }

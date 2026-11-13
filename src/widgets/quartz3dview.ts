@@ -9,6 +9,7 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
 import { studioStage } from './studiostage';
+import { keepWidth } from './studiowidth';
 import { QZ_HOME, quartzModel, type QuartzState, type QuartzView } from './quartz3dkit';
 import {
   atPpm, atThicknessMm, AT_BLANK_MM, AT_ELEC_MM, AT_F, AT_N, AT_T_DRAWN, DIVIDE, driftOf, realPerScreen, screenSlip, SLIP_S, driveCurrent, DRIVE_W, F_WATCH, fmtTime, freqAt, inWindow,
@@ -59,7 +60,8 @@ export function quartzView(): Widget {
     scaleBar: (len) => (view === 'loop' ? `${len} mm` : len >= 10 ? `${len / 10} mm` : `${Math.round(len * 100)} µm`),
     note: `Drawn, not modelled. ${VIEWS.map((v) => NOTES[v]).join(' ')}`,
     build: (detail) => quartzModel(state(), detail),
-  });
+  });  const width = keepWidth(stage, 1.45, () => QZ_HOME[view]);
+
   // A phone-width canvas: the divider's LEDs larger, the two crystals' names minor.
   const ro = new ResizeObserver(() => { const w = stage.el.clientWidth === 0 || stage.el.clientWidth >= 480; if (w !== wide) { wide = w; paint(); } });
   ro.observe(stage.el);
@@ -153,7 +155,7 @@ export function quartzView(): Widget {
     view = v;
     panel.dataset.view = v;
     repaint();
-    stage.goTo(QZ_HOME[v]);
+    stage.goTo(width.scaled(QZ_HOME[v]));
   }
   const runBtn = mk('Run', 'Run or pause the crystal', () => {
     if (reducedMotion()) { running = false; n = Math.floor(n) + 1; repaint(); return; } // a calm Run: one cycle a press
@@ -212,5 +214,5 @@ export function quartzView(): Widget {
       h('div', { class: 'r3-side' }, h('h4', null, 'This crystal ', h('span', { class: 'r3-badge' }, 'model')), kv)));
   readout();
   paint();
-  return { el: panel, destroy() { ro.disconnect(); loop.stop(); stage.destroy(); } };
+  return { el: panel, destroy() { width.stop(); ro.disconnect(); loop.stop(); stage.destroy(); } };
 }

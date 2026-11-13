@@ -27,7 +27,7 @@ export function agcModuleView(): Widget {
     note: `The flatpack is to MIT / MSC drawing 1006321 (the dual NOR gate's specification control drawing): body 0.275 × 0.190 in at most, 0.070 in high, ten gold-plated leads 0.050 in apart, a keying stripe at the pin 1 end, pin 5 ground and pin 10 the supply. Two boards of sixty chips, 240 NOR gates a module, and A8–A11 as the four arithmetic modules are from Ken Shirriff's study of the AGC (2019); the module's outline, 5/8 × 9 5/8 × 1 3/4 in, from the Computer History Museum's record of one. Typical, and drawn: the packages' spacing on the board, the board's layers (one slab here), the connector's pins, the potting's colour, the tray around the modules, the die's size and layout (a gate as R-700 and drawing 2005011 describe it: three NPN transistors, collectors joined under one collector resistor, a base resistor on each input), drawn ${MAG} times life. The adder's packages are the first ${ADDER_PACKAGES} on the board: which ones they are is not known here.`,
     build: (detail) => agcModel(st, detail),
   });
-  const width = keepWidth(stage, 2.2, () => AGC_HOME[st.view]); // the canvas's width / height at 1440 px, gutters included
+  const width = keepWidth(stage, 2.2, () => AGC_HOME[st.view]); // its homes' canvas at 1440 px
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
   stage.chips.append(chip);
   function readout(): void {
