@@ -50,9 +50,9 @@ can take on the current page.
 2. Type a few words, for example `full adder`.
    The results are grouped: workbench parts, chapters and steps, campaign levels and codex entries. A level
    or codex entry you have not reached yet is listed and marked **locked**.
-3. Use **↑** and **↓** to move, and **Enter** to open the highlighted result.
+3. Use **↑** and **↓** to move, and **Enter** to open the highlighted result. **Shift Enter** opens it in a new tab.
 
-![The search box with "full adder" typed: chapter steps, workbench parts and campaign levels, grouped](img/everywhere/01-search.png)
+![The search box with "full adder" typed: workbench parts, chapter steps and campaign levels, grouped](img/everywhere/01-search.png)
 
 **Search one kind of thing.** Press **Tab** in the search box to step through the scope chips (**All**, **Chapters**,
 **Workbench**, **Campaign**, **Codex**, **Actions** and **Notes**). Only that kind of result is listed.
@@ -376,7 +376,9 @@ These work on every page. Press **?** for the full list of the page you are on.
 On a circuit, once it has the focus (press **S**): **F** folds every panel, **P** probes wires, **W** asks *Why?* of a wire,
 **Esc** or **Backspace** goes up one level, the arrow keys move a cursor between parts and pins, **Space** toggles the input
 under the cursor, **Enter** toggles an input, opens a part or reads out an output, **Ctrl Enter** runs or pauses the clock,
-and **Ctrl Z** / **Ctrl Y** undo and redo moving parts.
+**Ctrl Z** / **Ctrl Y** undo and redo moving parts, **.** runs one clock cycle (Pulse), **>** one gate delay (Step) and **,**
+goes back a step, **+**, **−** and **0** zoom in, zoom out and fit, **O** shows the next overlay (slack, activity, load and
+more; **Shift O** turns it off), and **Shift F10** (or the menu key) opens the menu of the selected wire or part.
 
 | Gesture | Mouse | Touch |
 |---|---|---|
