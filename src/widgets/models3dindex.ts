@@ -82,7 +82,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'dram', title: 'The DRAM array', category: 'memory', chapter: 'dram', step: 4,
     summary: 'The chapter\'s 4 × 4 array on the switch-level simulator: every cell\'s charge as a height, step by step through the protocol.',
-    files: ['dram3d', 'dram3dview', 'dram3dparts', 'dram3dbench'], factory: 'dram3d', codex: ['senseamp', 'dramtiming'],
+    files: ['dram3d', 'dram3dview', 'dram3dkit', 'dram3dparts', 'dram3dbench'], factory: 'dram3d', codex: ['senseamp', 'dramtiming'],
     open: () => import('./dram3d').then((m) => m.dram3d()),
   },
   {
