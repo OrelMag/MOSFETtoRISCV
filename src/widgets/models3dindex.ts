@@ -100,7 +100,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'press', title: 'Hollerith\'s pin press', category: 'machines', chapter: 'cards', step: 1,
     summary: 'The census card under the press: pins reach mercury through the holes and the dials count.',
-    files: ['press3d', 'press3dview', 'press3dparts'], factory: 'press3d', codex: ['hollerith'],
+    files: ['press3d', 'press3dview', 'press3dkit', 'press3dgeom'], factory: 'press3d', codex: ['hollerith'],
     open: () => import('./press3d').then((m) => m.press3d()),
   },
   {
