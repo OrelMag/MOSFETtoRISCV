@@ -696,6 +696,25 @@ const WHEEL_DRIVE = `(async () => {
   return bad;
 })()`;
 
+/** A 3D model's stage holds its box from first paint (studiostage.ts: the names made from the model before the first layout,
+ *  laid out in the first frame it is in the page, the scale bar unseen until it has a length): every layout shift since the
+ *  page loaded (buffered) whose source is the stage or inside it fails, named. Shifts elsewhere on the page are not this check's. */
+const STAGE_SHIFT_DRIVE = `(async () => {
+  const entries = await new Promise((res) => {
+    let got = [];
+    try { new PerformanceObserver((l, o) => { got = l.getEntries(); o.disconnect(); res(got); }).observe({ type: 'layout-shift', buffered: true }); } catch { res([]); }
+    setTimeout(() => res(got), 400);
+  });
+  const bad = [];
+  for (const e of entries) for (const s of e.sources ?? []) {
+    const n = s.node, el = n && n.nodeType === 1 ? n : n?.parentElement;
+    if (!el || !el.closest('.st-view, .st-stage')) continue;
+    const r = (q) => Math.round(q.width) + 'x' + Math.round(q.height) + '@' + Math.round(q.x) + ',' + Math.round(q.y);
+    bad.push('the 3D stage shifted after first paint: ' + (el.className.baseVal ?? el.className) + ' ' + r(s.previousRect) + ' -> ' + r(s.currentRect) + ' at ' + Math.round(e.startTime) + ' ms');
+  }
+  return bad;
+})()`;
+
 const GALLERY_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
@@ -1560,7 +1579,7 @@ function routes(): Route[] {
   // and on the narrowest phone, where the corner buttons (turn, save image, full screen) take the most of the stage
   for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ' (3D model, 360px phone)', { width: 360, height: 740, mobile: true, name: '360px phone' });
   // Every 3D model (all on the studio renderer, gl/studio.ts), dark and on a phone.
-  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, themed('dark'), ' (3D model, studio, dark)');
+  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, themed('dark'), ' (3D model, studio, dark)', undefined, STAGE_SHIFT_DRIVE);
   for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ` (3D model, studio, ${phoneVp.name})`, phoneVp);
   // the Names switch off (settings.modelNames): nothing named on the stage, no overflow, on a phone and wide
   const namesOff = { [SETTINGS_KEY]: JSON.stringify({ theme: 'light', modelNames: false, coachDone: { stage: true, sandbox: true } }) };

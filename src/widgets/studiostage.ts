@@ -109,6 +109,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   const stats = h('div', { class: 'st-stats' });
   const scaleLbl = h('span'), scaleBar = h('div', { class: 'st-scale', 'aria-hidden': 'true' }, h('i'), scaleLbl);
   if (!o.scaleBar) scaleBar.style.display = 'none';
+  // unseen until it has a length (it grew from nothing on the first frame: a shift)
+  scaleBar.style.visibility = 'hidden';
   stats.style.display = /stats/.test(location.hash + location.search) ? '' : 'none';
   // the gutters lie over the canvas's side bands: the canvas takes the column's width and the model is fitted between them
   const view = h('div', { class: 'st-view r3-stage' }, canvas, flat, gutL, gutR, leaders, badges, card, chips, stats, scaleBar);
@@ -203,6 +205,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   const layout = () => {
     const C = el.clientWidth;
     if (!C) return;
+    // the gutters' width needs the names' font, so the stage in the page: measured at its first layout, not after GL is up
+    if (gutterStale) measureGutter();
     const fr = frameNow(), narrow = fr.form, g = fr.size, maxH = Math.max(MIN_CANVAS_H, Math.min(window.innerHeight * 0.78, 760));
     let wc = C - 2 * g, hh = Math.max(MIN_CANVAS_H, wc / aspect);
     if (hh > maxH) { hh = maxH; wc = Math.min(wc, hh * aspect); }
@@ -245,9 +249,11 @@ export function studioStage(o: StudioStageOptions): StudioStage {
 
   // ---------------------------------------------------------------- labels: gutters, leaders, phone badges
 
-  let lblKey = '', gutterW = 112;
-  /** The gutter width the longest name needs, from the label's own font. */
+  let lblKey = '', gutterW = 112, gutterStale = true;
+  /** The gutter width the longest name needs, from the label's own font (once the stage is in the page). */
   const measureGutter = () => {
+    if (!el.isConnected) { gutterStale = true; return; }
+    gutterStale = false;
     const probe = h('span', { class: 'st-lbl', style: 'position:absolute;visibility:hidden;left:auto;right:auto;width:auto;overflow:visible' });
     el.append(probe);
     let w = 0;
@@ -349,6 +355,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     const len = (fits.length ? fits : [0.1 * p]).reduce((a, b) => (Math.abs(Math.log(b / want)) < Math.abs(Math.log(a / want)) ? b : a));
     (scaleBar.firstChild as HTMLElement).style.width = `${(len / u).toFixed(1)}px`;
     scaleLbl.textContent = o.scaleBar(len);
+    scaleBar.style.visibility = '';
   };
 
   /** The corner tools' width (they sit bottom right, over the canvas). */
@@ -584,6 +591,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   const refresh = () => {
     if (dead) return;
     model = o.build(mode === 'flat' ? 'flat' : 'full');
+    makeLabels();
     shape();
     if (mode === 'flat') { drawFlat(); readyDone(); return; }
     st?.setModel(model, resolve);
@@ -682,8 +690,17 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   // a column that changes width (a window resize, a drawer) re-lays the canvas out; the render that follows refits home
   const ro = new ResizeObserver(() => { layout(); st?.invalidate(); });
   ro.observe(el);
+  // The observer's first call can come a frame after the stage was first painted at the stylesheet's size (a shift the
+  // reader sees, CLS): lay out in an animation frame as soon as the stage is in the page, before that frame paints.
+  // (a stage kept out of the page longer than ~10 s is left to the observer)
+  let mountRaf = 0, mountTries = 0;
+  const mounted = () => { mountRaf = 0; if (dead) return; if (el.isConnected && el.clientWidth) layout(); else if (++mountTries < 600) mountRaf = requestAnimationFrame(mounted); };
+  mountRaf = requestAnimationFrame(mounted);
 
   const forceFlat = /flat3d/.test(location.hash + location.search);
+  // the names from the model built above, before the first layout: framing() sizes the canvas from their count and width, so
+  // the box is final at first paint (it was laid out without gutters, then again once GL made the names: CLS 0.075 on the CRT)
+  makeLabels();
   shape();
   void import('../gl/studio').then(({ createStudio, OrbitCamera }) => {
     if (dead) return;
@@ -727,6 +744,6 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     rgb: (t) => colors.rgb(t),
     knobs: () => knobs(),
     setKnobs(k) { if (k.cut !== undefined) cutIn.value = String(k.cut); if (k.explode !== undefined) exIn.value = String(k.explode); applyKnobs(); },
-    destroy() { dead = true; cancelAnimationFrame(tween); cancelAnimationFrame(hoverRaf); ro.disconnect(); frame.destroy(); unwatch(); unnames(); st?.destroy(); st = null; colors.destroy(); },
+    destroy() { dead = true; cancelAnimationFrame(mountRaf); cancelAnimationFrame(tween); cancelAnimationFrame(hoverRaf); ro.disconnect(); frame.destroy(); unwatch(); unnames(); st?.destroy(); st = null; colors.destroy(); },
   };
 }
