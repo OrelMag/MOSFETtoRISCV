@@ -136,7 +136,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'telegraph', title: 'Telegraph key and sounder', category: 'comms', chapter: 'telegraph', step: 1,
     summary: 'Hold the key to send: the sounder\'s armature moves as the relay model moves it at the voltage the line leaves.',
-    files: ['telegraph3d', 'telegraph3dview', 'telegraph3dparts'], factory: 'telegraph3d', codex: ['relay'],
+    files: ['telegraph3d', 'telegraph3dview', 'telegraph3dparts', 'telegraph3dkit'], factory: 'telegraph3d', codex: ['relay'],
     open: () => import('./telegraph3d').then((m) => m.telegraph3d()),
   },
   {
