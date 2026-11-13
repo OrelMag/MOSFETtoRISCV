@@ -404,11 +404,13 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
     const pitches: [number, number] = Array.isArray(opts.pinPitch) ? opts.pinPitch : [opts.pinPitch ?? 2, opts.pinPitch ?? 2];
     const pins: Record<string, [number, number]> = {};
     const outX = width + Math.max(6, Math.ceil(Math.max(0, ...ports.filter((p) => p.dir === 'out').map((p) => tagWidth(p.name))) + 12));
+    // pinOrder holds folded too: a level drawn as a chip compiles its ports in pin order, and a bench may bind them by position
+    const rank = (n: string) => opts.pinOrder?.indexOf(n) ?? -1;
     const place = (side: PortDef[], px: number, pitch: number) => {
       const want = side.map((p) => {
         const ys = nl.nets.filter((n) => n.ends.includes(p.name)).flatMap((n) => n.ends.map(portAt)).filter((q): q is [number, number] => !!q).map((q) => q[1]);
         return { p: p.name, y: ys.length ? ys.reduce((a, v) => a + v, 0) / ys.length : 2 };
-      }).sort((a, b) => a.y - b.y);
+      }).sort((a, b) => (rank(a.p) >= 0 && rank(b.p) >= 0 ? rank(a.p) - rank(b.p) : a.y - b.y));
       let yy = 2;
       for (const q of want) { const t = Math.max(yy, Math.round(q.y)); pins[q.p] = [px, t]; yy = t + pitch; }
     };

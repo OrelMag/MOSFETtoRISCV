@@ -621,7 +621,7 @@ export function installFiles(ed: Editor): FilesUi {
     const shown = others.slice(0, 5).join(', ') + (others.length > 5 ? ` and ${others.length - 5} more` : '');
     const el = banner('info', 'share', [
       `This link contains ${plural(chips.length, 'chip')}: `, h('b', null, top.name), others.length ? ` (with ${shown})` : '', '. ',
-      h('span', { class: 'sb-muted' }, 'Importing adds copies to your sandbox; your chips are never overwritten.'),
+      h('span', { class: 'sb-muted' }, 'The circuit behind this banner is your own: Import adds the shared chips as copies and opens them; yours are never overwritten.'),
     ], [
       btn('Import', () => {
         el.remove();
@@ -630,7 +630,7 @@ export function installFiles(ed: Editor): FilesUi {
         const sum = summarize(r);
         leaveShare(sum.open ?? ed.chipId);
         if (sum.open) ed.openChip(sum.open);
-        ed.toast(`${summaryLine(sum)}${sum.renamed.length ? `: ${sum.renamed.map((x) => `${x.from} → ${x.to}`).join(', ')}` : ''}`);
+        ed.toast(`${summaryLine(sum)}${sum.renamed.length ? `: ${sum.renamed.map((x) => `“${x.name}”`).join(', ')}` : ''}`);
       }, true),
       btn('Dismiss', () => { el.remove(); leaveShare(); }),
     ]);

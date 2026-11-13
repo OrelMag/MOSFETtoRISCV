@@ -294,6 +294,7 @@ export function startApp(root: HTMLElement): void {
   palBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     palOpen(!palMenu.classList.contains('open'));
+    if (e.detail === 0 && palMenu.classList.contains('open')) presetBtns[0]?.focus({ preventScroll: true });
   });
   document.addEventListener('pointerdown', (e) => {
     if (!palMenu.contains(e.target as Node) && !palBtn.contains(e.target as Node)) palOpen(false);
@@ -357,7 +358,7 @@ export function startApp(root: HTMLElement): void {
     animate.classList.toggle('on', settings.animate);
     animate.setAttribute('aria-pressed', String(settings.animate));
     themeBtn.replaceChildren(icon(settings.theme === 'light' ? 'sun' : settings.theme === 'dark' ? 'moon' : 'auto', 18));
-    themeBtn.title = `Theme: ${settings.theme} (click to change)`;
+    themeBtn.title = `Theme: ${settings.theme}, click for ${themes[(themes.indexOf(settings.theme) + 1) % themes.length]}`;
   };
   settings.onChange(syncTools);
   syncTools();

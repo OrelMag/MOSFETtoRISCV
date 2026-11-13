@@ -13,7 +13,7 @@ import { AND, NOT, OR } from '../gates';
 import { NAND, TIE0, TIE1 } from '../transistors';
 import { orN } from '../wide';
 import { BRANCH16, CORE_PORTS, CTL16, IMM16, NEXTPC16 } from './cpu';
-import { foldBands } from '../fold';
+import { CORE_LAY, coreNetlist } from '../fold';
 import { choose4, MUX16, RF8, RV16_ALU16, RV16_DREG16, RV16_MUX4, RV16_MUX8, RV16_REG16 } from './logic';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -298,10 +298,7 @@ export function rv16SysCore(irq: boolean): ComponentDef {
     ports: [...CORE_PORTS.slice(0, 4), bit('irq', 'in'), ...CORE_PORTS.slice(4)],
     symbol: { kind: 'box', label: irq ? 'RV16 + IRQ' : 'RV16 + traps' },
     // a core is too wide to read at fit in one strip: two bands (lib/fold.ts)
-    netlist: () => foldBands({
-      pins: { ...pinsAt(['clk', 'rst', 'instr', 'drdata', 'irq'], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) },
-      instances: b.instances, nets: b.nets(),
-    }),
+    netlist: function (this: ComponentDef) { return coreNetlist(this.ports, b, { ...pinsAt(['clk', 'rst', 'instr', 'drdata', 'irq'], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) }, { ...CORE_LAY, wires: sysLabels(ctl, b) }); },
   });
   sysCores.set(key, d);
   return d;
@@ -309,3 +306,9 @@ export function rv16SysCore(irq: boolean): ComponentDef {
 
 export const RV16_CPU_TRAP = rv16SysCore(false);
 export const RV16_CPU_IRQ = rv16SysCore(true);
+
+/** Laid out by logic depth, these nets would run through other blocks: drawn as labels instead (measured on both trap cores). */
+function sysLabels(ctl: string, b: Builder): Record<string, false> {
+  const nill = b.instances.find((i) => i.label === '¬ill')?.name;
+  return Object.fromEntries([...(nill ? [`${nill}.y`] : []), ...['rwe', 'mwe', 'br', 'wb'].map((p) => `${ctl}.${p}`)].map((e) => [e, false]));
+}

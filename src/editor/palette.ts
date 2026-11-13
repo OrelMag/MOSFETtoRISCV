@@ -420,7 +420,7 @@ export class PalettePanel {
   private typedAt = 0;
 
   constructor(private ctx: () => PaletteCtx, private hooks: PaletteHooks) {
-    this.search = h('input', { type: 'search', placeholder: 'Search parts…', 'aria-label': 'Search parts' }) as HTMLInputElement;
+    this.search = h('input', { type: 'search', placeholder: 'Search…', 'aria-label': 'Search parts' }) as HTMLInputElement;
     this.search.addEventListener('input', () => { this.searchX.hidden = !this.search.value; this.render(); });
     this.searchX = h('button', { class: 'sb-search-x', type: 'button', title: 'Clear the search', 'aria-label': 'Clear the search', hidden: true,
       onclick: () => { this.clearSearch(); this.search.focus(); } }, icon('close', 13)) as HTMLButtonElement;
