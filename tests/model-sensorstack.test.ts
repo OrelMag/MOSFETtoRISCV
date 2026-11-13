@@ -2,7 +2,8 @@
 // where it is designed to, BSI keeps oblique light that FSI loses to its metal, and the drawing shows the trace.
 import { describe, expect, it } from 'vitest';
 import { absorptionDepth, bayerAt } from '../src/phys/imagesensor';
-import { angleCurve, BAYER, DIODE_DEPTH, diodeSpan, FATES, K, lensHeight, tenths, lensRadius, PITCHES, PPLUS, refract, siReflectance, spotSize, stackHeight, stackParts, stackSpec as specOf, traceStack, type Fate, type Illum, type StackPalette } from '../src/widgets/sensorstack3dparts';
+import { angleCurve, BAYER, DIODE_DEPTH, diodeSpan, FATES, K, lensHeight, tenths, lensRadius, PITCHES, PPLUS, refract, siReflectance, spotSize, stackHeight, stackSpec as specOf, traceStack, type Fate, type Illum } from '../src/widgets/sensorstack3dgeom';
+import { stackModel } from '../src/widgets/sensorstack3dkit';
 import { IMX183, STACK_BSI } from '../src/phys/imagesensor';
 import { STACK_OPTICS as O, filterT, nSi } from '../src/widgets/sensorstackoptics';
 
@@ -100,19 +101,22 @@ describe('the optical stack', () => {
   });
 
   it('draws the filters in the mosaic’s colours, the metal where the light meets it, and the absorption depth', () => {
-    const col = (i: number): [number, number, number, number] => [i / 20, 0.3, 0.3, 1];
-    const P: StackPalette = { lens: col(1), R: col(2), G: col(3), B: col(4), oxide: col(5), metal: [0.6, 0.1, 0.1], si: [0.1, 0.6, 0.1], diode: [0.1, 0.1, 0.6], dti: [0.9, 0.9, 0.9], beol: col(6), warn: [1, 0.5, 0], dim: [0.4, 0.4, 0.4], pplus: [0.7, 0.2, 0.7], arc: col(7) };
     for (const p of PITCHES) for (const il of ['fsi', 'bsi'] as const) for (const row of [0, 1] as const) {
-      const spec = stackSpec(il, p), trace = traceStack(spec, O, 600, 0, row), parts = stackParts({ spec, nm: 600, angle: 0, row, trace }, P);
-      const filters = parts.filter((p) => p.color === P.R || p.color === P.G || p.color === P.B);
+      const spec = stackSpec(il, p), trace = traceStack(spec, O, 600, 0, row), m = stackModel({ spec, nm: 600, angle: 0, row, trace });
+      const filters = m.items.filter((i) => i.name === 'colour filter');
       expect(filters).toHaveLength(4);
-      expect(filters.filter((p) => p.color === P.G)).toHaveLength(2);
-      const metalAbove = parts.filter((p) => p.color === P.metal && p.pos[1] > 0);
+      expect(filters.filter((i) => i.mat.label === 'green filter (dyed resist)')).toHaveLength(2);
+      // the front (cut) row's two filters are the mosaic's row, in order
+      const front = filters.filter((i) => i.at![2] > 0).sort((a, b) => a.at![0] - b.at![0]).map((i) => i.mat.label![0].toUpperCase());
+      expect(front).toEqual([...BAYER[row]]);
+      const metalAbove = m.items.filter((i) => i.name === 'metal' && i.at![1] > 0);
       expect(metalAbove.length > 0).toBe(true);
-      if (il === 'bsi') for (const m of metalAbove) expect(m.pos[1]).toBeLessThan(stackHeight(spec) * K);
-      const line = parts.find((p) => p.kind === 'box' && (p.color as number[]).length === 4 && p.scale![0] === 2 * spec.pitch * K && p.scale![1] < 0.5);
-      expect(line!.pos[1]).toBeCloseTo(-Math.min(absorptionDepth(600), spec.si) * K, 6);
-      expect(parts.filter((p) => p.color === P.dti).length > 0).toBe(il === 'bsi');
+      if (il === 'bsi') for (const x of metalAbove) expect(x.at![1]).toBeLessThan(stackHeight(spec) * K);
+      const line = m.items.find((i) => i.name === 'absorption depth')!;
+      expect(line.at![1]).toBeCloseTo(-Math.min(absorptionDepth(600), spec.si) * K, 6);
+      expect(line.geo.max[0] - line.geo.min[0]).toBeCloseTo(2 * spec.pitch * K, 6);
+      expect(m.items.some((i) => i.name === 'deep trench isolation')).toBe(il === 'bsi');
+      expect(m.items.filter((i) => i.name === 'microlens')).toHaveLength(4);
     }
   });
 
@@ -167,19 +171,17 @@ describe('the optical stack', () => {
   });
 
   it('the photodiode fills two thirds of the silicon on the metal side, under its p+ layer', () => {
-    const col = (i: number): [number, number, number, number] => [i / 20, 0.3, 0.3, 1];
-    const P: StackPalette = { lens: col(1), R: col(2), G: col(3), B: col(4), oxide: col(5), metal: [0.6, 0.1, 0.1], si: [0.1, 0.6, 0.1], diode: [0.1, 0.1, 0.6], dti: [0.9, 0.9, 0.9], beol: col(6), warn: [1, 0.5, 0], dim: [0.4, 0.4, 0.4], pplus: [0.7, 0.2, 0.7], arc: col(7) };
     for (const s of ALL) {
       const [d0, d1] = diodeSpan(s);
       expect(d1 - d0).toBeCloseTo(DIODE_DEPTH * s.si, 12);
       if (s.illum === 'fsi') expect(d1).toBeCloseTo(-PPLUS, 12); // metal above: the diode at the top
       else expect(d0).toBeCloseTo(-s.si + PPLUS, 12); // metal below: the diode at the bottom
-      const parts = stackParts({ spec: s, nm: 550, angle: 0, row: 0, trace: traceStack(s, O, 550, 0, 0) }, P);
-      const diodes = parts.filter((p) => p.color === P.diode);
+      const items = stackModel({ spec: s, nm: 550, angle: 0, row: 0, trace: traceStack(s, O, 550, 0, 0) }).items;
+      const diodes = items.filter((i) => i.name === 'photodiode');
       expect(diodes).toHaveLength(4);
-      for (const p of diodes) { expect((p.scale as number[])[1]).toBeCloseTo(DIODE_DEPTH * s.si * K, 9); expect(p.pos[1]).toBeCloseTo(((d0 + d1) / 2) * K, 9); }
-      expect(parts.filter((p) => p.color === P.pplus)).toHaveLength(4);
-      expect(parts.filter((p) => p.color === P.arc)).toHaveLength(s.arc ? 4 : 0);
+      for (const p of diodes) { expect(p.geo.max[1] - p.geo.min[1]).toBeCloseTo(DIODE_DEPTH * s.si * K, 4); expect(p.at![1]).toBeCloseTo(((d0 + d1) / 2) * K, 9); }
+      expect(items.filter((i) => i.name === 'p+ pinning layer')).toHaveLength(4);
+      expect(items.filter((i) => i.name === 'anti-reflection film')).toHaveLength(s.arc ? 4 : 0);
     }
   });
 

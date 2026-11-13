@@ -124,16 +124,25 @@ export function misalignment(cell: Cell, shift: number, aligned: boolean): { ove
   return { overlap, gap };
 }
 
-// ---- heights (layout units; the footprint is to scale, heights and depths are exaggerated)
+// ---- heights (layout units; the footprint is to scale, heights one factor of it: V_FACTOR)
 
 /** Trench, well and junction depth (below the surface, z < 0). */
 export const DEPTH = { sti: 0.6, well: 1.6, junction: 0.35, sub: -3.2 };
-const GOX = 0.14, PT = 0.9, RES = 0.7, MET = 0.7, MASK_GAP = 5, PLATE = 0.5, PATTERN = 0.4, PELL_GAP = 1.4;
+/** The mask model's heights: one factor for every layer against the footprint (1 λ = 62 nm), so relative thicknesses are
+ *  sky130's (SkyWater PDK, "assumptions": poly 0.18 µm, pre-LI dielectric 0.5, met1 0.35, photoresist 1.14, n-well 1.1
+ *  deep, source/drain junctions 0.1). The trench depth is not in the PDK pages read (0.3 µm assumed) and the gate oxide
+ *  (nanometres) would be invisible, so it is drawn at GOX. */
+export const LAMBDA_UM = 0.062, V_FACTOR = 0.25;
+export const TRUE_UM = { poly: 0.18, ild: 0.5, metal: 0.35, resist: 1.14, well: 1.1, junction: 0.1, sti: 0.3 } as const;
+/** A thickness in µm, drawn: V_FACTOR of its true size in layout units. */
+export const vh = (um: number): number => (V_FACTOR * um) / LAMBDA_UM;
+export const MK_DEPTH = { sti: vh(TRUE_UM.sti), well: vh(TRUE_UM.well), junction: vh(TRUE_UM.junction), sub: -(vh(TRUE_UM.well) + 2) };
+const GOX = 0.14, PT = vh(TRUE_UM.poly), RES = vh(TRUE_UM.resist), MET = vh(TRUE_UM.metal), MASK_GAP = 5, PLATE = 0.5, PATTERN = 0.4, PELL_GAP = 1.4;
 export const MARGIN = 3;
 
 export function zs(spread: number) {
   const poly0 = GOX + 2.2 * spread, poly1 = poly0 + PT, res0 = poly1 + 0.1, res1 = res0 + RES;
-  const ild = poly1 + 1.2 + 2 * spread, metal0 = ild, metal1 = metal0 + MET;
+  const ild = poly1 + vh(TRUE_UM.ild - TRUE_UM.poly) + 2 * spread, metal0 = ild, metal1 = metal0 + MET;
   return { poly0, poly1, res0, res1, ild, metal0, metal1, plate: Math.max(metal1, res1) + MASK_GAP };
 }
 
@@ -155,18 +164,18 @@ export const footprint = (c: Cell): R => [0, 0, c.w, 44];
 /** The silicon, level with the surface: bare wafer, then trenches, then the well, then implants sunk into the active area. */
 function wafer(c: Cell, st: MasksState, P: MasksPalette): Part[] {
   const out: Part[] = [], f = footprint(c), well = st.step >= LAND_AT.nwell;
-  if (st.step < LAND_AT.sti) return [slab(c, P.psub, f, DEPTH.sub, 0)];
+  if (st.step < LAND_AT.sti) return [slab(c, P.psub, f, MK_DEPTH.sub, 0)];
   const active = maskRects(c, 'diff'), nwell = well ? maskRects(c, 'nwell') : [];
   // Under the trenches: the substrate, and the well below trench depth.
-  out.push(...slabs(c, P.psub, minus([f], nwell), DEPTH.sub, -DEPTH.sti), ...slabs(c, P.psub, nwell, DEPTH.sub, -DEPTH.well), ...slabs(c, P.layer.nwell, nwell, -DEPTH.well, -DEPTH.sti));
-  out.push(...slabs(c, P.sti, minus([f], active), -DEPTH.sti, 0));
+  out.push(...slabs(c, P.psub, minus([f], nwell), MK_DEPTH.sub, -MK_DEPTH.sti), ...slabs(c, P.psub, nwell, MK_DEPTH.sub, -MK_DEPTH.well), ...slabs(c, P.layer.nwell, nwell, -MK_DEPTH.well, -MK_DEPTH.sti));
+  out.push(...slabs(c, P.sti, minus([f], active), -MK_DEPTH.sti, 0));
   // Active columns: the silicon of their region, with the implants inside them (below the surface, not raised).
   for (const k of ['n', 'p'] as const) {
     const act = activeOf(c, k), si = k === 'p' && well ? P.layer.nwell : P.psub;
-    out.push(...slabs(c, si, act, -DEPTH.sti, -DEPTH.junction));
-    if (st.step < (k === 'n' ? LAND_AT.ndiff : LAND_AT.pdiff)) { out.push(...slabs(c, si, act, -DEPTH.junction, 0)); continue; }
+    out.push(...slabs(c, si, act, -MK_DEPTH.sti, -MK_DEPTH.junction));
+    if (st.step < (k === 'n' ? LAND_AT.ndiff : LAND_AT.pdiff)) { out.push(...slabs(c, si, act, -MK_DEPTH.junction, 0)); continue; }
     const imp = implanted(c, k, st.shift, st.aligned);
-    out.push(...slabs(c, P.layer[k === 'n' ? 'ndiff' : 'pdiff'], imp, -DEPTH.junction, 0), ...slabs(c, si, minus(act, imp), -DEPTH.junction, 0));
+    out.push(...slabs(c, P.layer[k === 'n' ? 'ndiff' : 'pdiff'], imp, -MK_DEPTH.junction, 0), ...slabs(c, si, minus(act, imp), -MK_DEPTH.junction, 0));
   }
   return out;
 }
@@ -213,11 +222,11 @@ export function reticle(c: Cell, m: MaskName, st: MasksState, P: MasksPalette): 
 export function masksAnchors(c: Cell, st: MasksState): Anchor[] {
   const z = zs(st.spread), out: Anchor[] = [], front: Vec3 = [0, 0.3, 1];
   const at = (r: R, zz: number, fx = 1, fy = 0.5) => place(c, r[0] + r[2] * fx, r[1] + r[3] * fy, zz);
-  out.push({ text: 'p-type wafer', p: place(c, 0, 22, DEPTH.sub / 2), side: 'l', n: front });
+  out.push({ text: 'p-type wafer', p: place(c, 0, 22, MK_DEPTH.sub / 2), side: 'l', n: front });
   const tag = (text: string, p: Vec3) => out.push({ text, p, side: 'r', n: [0, 1, 0] });
   switch (st.step) {
     case 1: tag('STI oxide', at(minus([footprint(c)], maskRects(c, 'diff'))[0], 0)); break;
-    case 2: tag('n-well', at(maskRects(c, 'nwell')[0], -DEPTH.sti, 1, 0.1)); break;
+    case 2: tag('n-well', at(maskRects(c, 'nwell')[0], -MK_DEPTH.sti, 1, 0.1)); break;
     case 3: tag('blanket poly', at(footprint(c), z.poly1, 1, 0.9)); break;
     case 4: tag('resist', at(polyOf(c, st.shift)[0], z.res1)); break;
     case 5: tag('poly gates', at(polyOf(c, st.shift)[0], z.poly1)); break;

@@ -1,6 +1,6 @@
 /* ---------- Babbage's carry (widgets/babbage3dview.ts): materials ---------- */
 .m3d {
-  --bb-wheel: light-dark(#c9a75a, #b99445);
+  --bb-wheel: light-dark(#d6b46a, #d8b265);
   --bb-tick: light-dark(#2b2f3a, #14161c);
   --bb-lever: light-dark(#8a93ad, #7f8aa6);
   --bb-warn: light-dark(#d98a1f, #f0a63a);

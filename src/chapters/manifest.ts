@@ -35,6 +35,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A NAND from diodes", challenge: "quiz", stage: "scene" },
     { title: "One bit in one bulb", challenge: "reach", stage: "scene" },
     { title: "What it costs", challenge: "quiz", stage: "scene" },
+    { title: "Ten bulbs make a digit", stage: "widget" },
   ] },
   { id: "cards", num: 0, title: "Punch cards", blurb: "Holes in cards: a loom's pattern, a nation counted, a program a card at a time, and the reader that feeds it in.", level: "Input", prologue: "P3", builds: ["relays"], recap: {"checks":3}, steps: [
     { title: "A chain of cards", challenge: "quiz", stage: "widget" },
@@ -471,6 +472,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Wafers, yield and cost", challenge: "quiz", stage: "widget" },
     { title: "The same CPU in relays and tubes", challenge: "quiz", stage: "widget" },
     { title: "The journey", challenge: "quiz", stage: "widget" },
+    { title: "The light that draws it", stage: "widget" },
   ] },
   { id: "fpga", num: 36, title: "From netlist to FPGA", blurb: "Look-up tables, covering a netlist with them, the logic cell and its carry chain, routing switches, block RAM, and our RISC-V computer placed and routed on a Tang Nano 9K, measured against our own estimates.", level: "Physical design", builds: ["routing","memory","adders","silicon"], recap: {"checks":3}, steps: [
     { title: "Hardware you can rewrite", stage: "widget" },
@@ -612,6 +614,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Never overwrite", challenge: "quiz", stage: "widget" },
     { title: "Garbage, wear and bad blocks", challenge: "quiz", stage: "widget" },
     { title: "Bit errors and ECC", challenge: "reach", stage: "scene" },
+    { title: "The string stood up", stage: "widget" },
   ] },
   { id: "bus", num: 50, title: "Buses and DMA", blurb: "A valid / ready handshake, five channels and an address decoder, two masters and an arbiter, a DMA engine that copies while the CPU runs, a computer that boots from flash into RAM, or from a deck of punched cards, and one with a DRAM, a screen and a keyboard on the same bus: every part in gates.", level: "Memory in depth", builds: ["io","cache","multicore","memctrl","flash"], recap: {"checks":4}, steps: [
     { title: "A handshake", challenge: "reach", stage: "scene" },
@@ -646,6 +649,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A stepping selector", challenge: "reach", stage: "scene" },
     { title: "The machine itself", stage: "widget" },
     { title: "A crossbar", challenge: "reach", stage: "scene" },
+    { title: "The crossbar itself", stage: "widget" },
     { title: "What a switching network costs", challenge: "quiz", stage: "widget" },
     { title: "The busy tone", challenge: "quiz", stage: "widget" },
     { title: "Start-stop", challenge: "quiz", stage: "widget" },
@@ -1164,5 +1168,6 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A program woven into wire", challenge: "quiz", stage: "widget" },
     { title: "Inside a rope module", stage: "widget" },
     { title: "Thirty-four instructions", challenge: "quiz", stage: "widget" },
+    { title: "A logic module", stage: "widget" },
   ] },
 ];

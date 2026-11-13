@@ -1,5 +1,5 @@
 /* ---------- EDSAC's mercury delay line (widgets/mercury3dview.ts): materials ---------- */
-.m3d {
+.m3d, .hg3 {
   --hg-steel: light-dark(#8a93a3, #8d97aa);
   --hg-mercury: light-dark(#d4dae6, #e6ebf5);
   --hg-quartz: light-dark(#a9d8e6, #bfe6f2);
@@ -35,3 +35,5 @@
 .m3d .r3-kv { grid-template-columns: max-content minmax(0, 1fr); gap: 3px 10px; }
 .m3d .r3-kv .v { overflow-wrap: anywhere; }
 @media (max-width: 600px) { .m3d .r3-kv { grid-template-columns: minmax(0, 1fr); gap: 0; } .m3d .r3-kv > span:nth-child(odd) { font-size: 11px; color: var(--muted); margin-top: 5px; } .m3d .r3-kv .v { font-size: 12.5px; } .hg-in { flex-wrap: wrap; } .hg-in input[type="range"] { width: 7em; } }
+.hg-ctls { display: grid; gap: 8px; margin-bottom: 10px; }
+.hg-ctls .r3-ctl { margin: 0; }

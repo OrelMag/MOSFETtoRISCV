@@ -2,8 +2,9 @@
 .m3d {
   --crt-glass: light-dark(#b9cfd0, #8fb0b4);
   --crt-aquadag: light-dark(#17181b, #0b0c0e);
+  --crt-dag: light-dark(#2c2f34, #464c56);
   --crt-copper: light-dark(#b8692e, #d07f40);
-  --crt-ferrite: light-dark(#4a4c52, #5c5f67);
+  --crt-ferrite: light-dark(#6e6155, #8c7d6e);
   --crt-metal: light-dark(#8f98a8, #a3acbd);
   --crt-pin: light-dark(#a9a38c, #c9c3a8);
   --crt-off: light-dark(#26292e, #17191d);
@@ -22,7 +23,7 @@
 .crt-plot text { font: 10.5px var(--font-mono); fill: var(--muted); }
 .m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .crt-retrace { margin-top: 8px; }
-@media (pointer: coarse) { .crt-sel { min-height: 40px; } .crt-chk input { width: 20px; height: 20px; } }
+@media (pointer: coarse) { .crt-sel { min-height: 40px; } .crt-chk { min-height: 40px; align-items: center; } .crt-chk input { width: 20px; height: 20px; } }
 .m3d .crt3d .r3, .crt3d .r3 { grid-template-columns: minmax(0, 1fr); }
 .crt3d .r3-stage { aspect-ratio: 16 / 9; max-height: 580px; }
 .crt3d .r3-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 24px; align-items: start; }

@@ -1,5 +1,5 @@
 // The 1890 census tally, DOM-free: the fields a card punches, the seeded stack and what one pressed card does to the
-// dials. widgets/cards.ts (censusWidget) and the 3D press (widgets/press3dparts.ts) share it, so both count alike.
+// dials. widgets/cards.ts (censusWidget) and the 3D press (widgets/press3dgeom.ts) share it, so both count alike.
 
 export const FIELDS: { name: string; opts: string[] }[] = [
   { name: 'Sex', opts: ['M', 'F'] },

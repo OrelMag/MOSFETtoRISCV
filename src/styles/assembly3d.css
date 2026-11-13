@@ -11,6 +11,9 @@
   --as-bubble: light-dark(#c5cad8, #4a5068);
   --as-belt: light-dark(#59607a, #3b4158);
   --as-off: light-dark(#8b92a6, #565d74);
+  --as-frame: light-dark(#6d7488, #7d859c);
+  --as-chute: light-dark(#9aa1b3, #4c536a);
+  --as-fwd: light-dark(#e0a100, #ffd23f);
 }
 .as-prog { display: flex; align-items: center; gap: 8px; flex: 1 1 260px; min-width: 0; font-size: 13.5px; }
 .as-prog span { color: var(--text-2); flex: none; }

@@ -1,5 +1,5 @@
 /* Materials of the mask-by-mask model (widgets/masks3dview.ts), on the model stage's tokens. */
-.m3d {
+.m3d, .mk3 {
   --mk-psub: light-dark(#a7aecb, #6f7898);
   --mk-nwell: light-dark(#8fc3a0, #4f9a74);
   --mk-poly: light-dark(#cf5a5a, #d96a6a);

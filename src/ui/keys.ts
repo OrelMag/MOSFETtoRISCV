@@ -91,6 +91,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'model.pan', group: 'model', caps: ['Shift', '←', '→', '↑', '↓'], does: 'pan (or right-drag, shift-drag, middle-drag; two fingers on a touch screen)' },
   { id: 'model.zoom', group: 'model', caps: ['+', '·', '−'], does: 'zoom in · out (the wheel and a pinch zoom toward the pointer)' },
   { id: 'model.home', group: 'model', caps: ['Home'], does: 'back to the starting view (or double-click)' },
+  { id: 'model.names', group: 'model', caps: ['N'], does: 'names on/off' },
   { id: 'model.full', group: 'model', caps: ['Esc'], does: 'leave full screen (the corner button enters it)' },
   // ---- the sandbox (and campaign levels)
   { id: 'sb.fav', group: 'place', caps: ['1', '…', '9'], does: 'arm favourite n: the keyboard cursor comes on, ↵ or a click places it (Shift: several)', taken: ['1', '2', '3', '4', '5', '6', '7', '8', '9'] },

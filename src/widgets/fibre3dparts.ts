@@ -1,4 +1,4 @@
-// An optical fibre cut away, as parts (DOM-free, tested). Every number is the chapter's (phys/fibre.ts, used by
+// An optical fibre cut away: its rays, pulse and labels (DOM-free, tested; fibre3dkit.ts draws it). Every number is the chapter's (phys/fibre.ts, used by
 // widgets/glass.ts and chapters/ch-comm-glass.ts): the indices, the critical angle, the guided / leaking decision (rayOf), the
 // numerical aperture, V, and the modal delay n1 * delta / c per km (stepDelayPsKm). The fibre runs along x; the rays are
 // meridional (in the x-y plane) and true to the angle. The drawing is NOT a compressed kilometre: at 12.5 um per unit the
@@ -10,9 +10,8 @@
 // Scale: 1 unit = 12.5 um across, so the cladding (125 um) is radius 5, the acrylate coating (250 um) radius 10, a 50 um
 // core radius 2 and the chapter's single-mode core (8 um: a = 4 um) radius 0.32. Diameters are in true ratio.
 
-import type { RGB, RGBA } from '../gl/instances';
 import type { Vec3 } from '../gl/math';
-import { rod, type Anchor, type Part } from '../gl/parts';
+import type { Anchor } from '../gl/parts';
 import { acceptanceDeg, C_KM_S, criticalDeg, gradedDelayPsKm, MMF_50, modesLarge, n2Of, naOf, rayOf, SMF_G652, stepDelayPsKm, vNumber, type Fibre } from '../phys/fibre';
 
 export type Kind = 'multi' | 'single';
@@ -32,7 +31,6 @@ export const SIGMA_NS = 2;
 /** Packets lag by (stretch - 1) times this on screen, so a 1 % delay shows. */
 export const LAG_X = 20;
 
-export interface FibrePalette { glass: RGBA; coat: RGBA; core: RGB; coreEnd: RGB; ray: RGB; fan: RGB; leak: RGB; pulse: RGB; glow: RGBA; air: RGB; cut: RGB }
 export type Profile = 'step' | 'graded';
 export interface FibreState {
   kind: Kind; deg: number; tau: number;
@@ -183,10 +181,6 @@ export function facts(kind: Kind, deg: number, profile: Profile = kind === 'sing
 
 // ---------------------------------------------------------------- parts
 
-const slab = (c: RGB | RGBA, x0: number, x1: number, r: number, spec = 0) => rod(c, [x0, 0, 0], [x1, 0, 0], r, spec);
-const RAY_R = 0.13;
-const lit = (p: Part, c: RGB): Part => ({ ...p, emissive: c });
-
 export const packetX = (frac: number, lagFactor: number): number => X0 + Math.min(1, Math.max(0, frac * lagFactor)) * (X1 - X0);
 /** Progress at which the drawn packets of a ray with this stretch stand (exaggerated lag). */
 export const lagFactor = (stretch: number): number => 1 - LAG_X * (stretch - 1);
@@ -194,50 +188,6 @@ export const lagFactor = (stretch: number): number => 1 - LAG_X * (stretch - 1);
 export const lagFactorGraded = (deg: number, f: Fibre): number => 1 - LAG_X * (gradedDelayPsKm(f) / ((f.n1 * 1e12) / C_KM_S)) * Math.min(1, turnFraction(deg, f)) ** 4;
 const lagOf = (p: Profile, deg: number, f: Fibre): number => (p === 'graded' ? lagFactorGraded(deg, f) : lagFactor(rayPath(deg, f).stretch));
 
-export function fibreParts(st: FibreState, P: FibrePalette): Part[] {
-  const f = FIBRES[st.kind], r = coreR(f), single = st.kind === 'single', prof = profileOf(st), out: Part[] = [];
-  // the cut: the coating is stripped back at the input end, the cladding at the far end shows its layers as discs
-  out.push(slab(P.coat, X0 + 14, X1, R_COAT), slab(P.glass, X0, X1, R_CLAD));
-  out.push(slab([...P.core, 0.4] as RGBA, X0, X1, r, 0.3));
-  // end face: coating ring, cladding disc, core disc (stacked a hair apart)
-  out.push(slab(P.cut, X1, X1 + 0.1, R_COAT), slab(P.glass.slice(0, 3) as RGB, X1 + 0.1, X1 + 0.2, R_CLAD), slab(P.coreEnd, X1 + 0.2, X1 + 0.3, Math.max(r, 0.2)));
-  // the launch: the beam in air at the chosen angle, meeting the end at the axis
-  const a = (st.deg * Math.PI) / 180, lx = 8;
-  out.push(rod(P.air, [X0 - lx, -Math.tan(a) * lx, 0], [X0, 0, 0], RAY_R * 1.4));
-  // the acceptance cone in air: every launch inside it is guided
-  if (st.cone !== false) {
-    const acc = (acceptanceDeg(naOf(f.n1, n2Of(f))) * Math.PI) / 180;
-    for (let k = 0; k < 8; k++) {
-      const ph = (k * Math.PI) / 4;
-      out.push(rod([...P.air, 0.35] as RGBA, [X0, 0, 0], [X0 - lx, Math.tan(acc) * lx * Math.cos(ph), Math.tan(acc) * lx * Math.sin(ph)], 0.05));
-    }
-  }
-  const main = rayOfProfile(prof, st.deg, f);
-  if (single && main.guided) {
-    // one mode: a Gaussian field (1/e^2 radius w = MFD / 2): nested shells at 0.5 w, w and 1.5 w with falling density
-    const w = MFD_UM / 2 / UM;
-    for (const [k, al] of [[1.5, 0.16], [1, 0.3], [0.5, 0.5]] as const) out.push(slab([P.glow[0], P.glow[1], P.glow[2], al] as RGBA, X0, X1, w * k));
-  } else {
-    out.push(...main.pts.slice(1).map((p, k) => lit(rod(main.guided ? P.ray : P.leak, [main.pts[k][0], main.pts[k][1], 0], [p[0], p[1], 0], RAY_R * 1.5, 0.1), main.guided ? P.ray : P.leak)));
-  }
-  if (!single) for (const d of fanAngles(f, FAN)) {
-    const p = rayOfProfile(prof, d, f);
-    out.push(...p.pts.slice(1).map((q, k) => rod(P.fan, [p.pts[k][0], p.pts[k][1], -0.2], [q[0], q[1], -0.2], RAY_R)));
-  }
-  // packets
-  const tau = st.tau;
-  if (tau >= 0) {
-    if (single) {
-      if (main.guided) { const x = packetX(tau, 1); out.push(rod(P.pulse, [x - 1.6, 0, 0], [x + 1.6, 0, 0], 0.3, 0.2)); }
-    } else {
-      for (const d of fanAngles(f, FAN)) {
-        const p = rayOfProfile(prof, d, f), x = packetX(tau, lagOf(prof, d, f));
-        out.push(lit(rod(P.pulse, [x - 0.7, pathY(p.pts, x), 0.2], [x + 0.7, pathY(p.pts, x), 0.2], 0.5, 0.2), P.pulse));
-      }
-    }
-  }
-  return out;
-}
 export const FAN = 5;
 
 export function fibreAnchors(st: FibreState): Anchor[] {

@@ -9,6 +9,8 @@ import { FG_READ, FG_STEP, type SwitchSim } from '../sim/switchsim';
 import type { Stage } from '../view/stage';
 import { disk3d } from '../widgets/disk3d';
 import { fgate3d } from '../widgets/fgate3d';
+import { nand3d } from '../widgets/nand3d';
+import { CORE_NM, HOLE_NM, LEVELS, ONO_NM, PITCH_NM, POLY_NM, SLIT_NM, STAIR_UM, WORD_LINES } from '../flash/string3d';
 import { withModel } from '../widgets/modelhost';
 import { flashActions, flashScene, ftlWidget, wearWidget } from '../widgets/flash';
 import type { Chapter } from './types';
@@ -236,7 +238,7 @@ export const chFlash: Chapter = {
           <p>Planar cells stopped shrinking near 15 nm: a few dozen electrons per level, and neighbours coupling through the gap.
           <strong>3D NAND</strong> (Samsung's V-NAND, 2013, 24 layers) stands each string up as a vertical channel through a stack of
           word-line layers, most with a charge-trap layer in place of the floating gate; current parts stack over 200 layers. Density
-          now comes from layers, not from a smaller F.</p>`,
+          now comes from layers, not from a smaller F. <a href="#/c/flash/7">The last step</a> opens a block of one in 3D.</p>`,
         pitfall: `<p>Reading a NAND row as if the other cells were not there. In the scene, a string conducts only when every cell above and below the selected one is on, so a programmed cell
           that is not at the pass voltage would block the read. The pass voltage must exceed the highest threshold of any level, which is also what limits how many levels fit.</p>`,
         numbers: `<table class="mini"><tr><th>string length N</th><th>transistors per bit</th><th>bit-line contacts per bit</th></tr>
@@ -365,6 +367,25 @@ export const chFlash: Chapter = {
         hints: ['flip is a bit mask over the stored word.', 'Set flip to 3: bits 0 and 1.'],
         answer: 'flip = 0011 (any two bits): double = 1 and single = 0; the decoder detects the error but cannot say which bits to fix. One flipped bit is corrected and reported as single.',
         solve: (st) => st.setInputs({ d: 0x5a, flip: 3 }),
+      },
+    },
+    {
+      title: 'The string stood up',
+      deep: true,
+      body: `
+        <p>A planar string lies along the silicon, so its cells shrink only as fast as F. <strong>3D NAND</strong> stands the string on end. The chip deposits a stack of
+        alternating layers (in Samsung's second V-NAND, ${LEVELS.length} of them: ${WORD_LINES} word lines, four dummies and a select gate at each end), etches round holes straight
+        through it, and lines each hole from the outside in: an oxide, a film of silicon nitride, a thinner oxide, ${POLY_NM} nm of polysilicon for the channel, and an oxide core.
+        The layers become tungsten word lines, and where each one wraps a hole there is a cell: a transistor like the floating-gate cell earlier in this chapter, rolled into a ring with its gate all round.</p>
+        <p>The charge no longer sits on a floating gate but in the nitride, which is an insulator: electrons stay where a program pulse puts them, so one tube of nitride can run the
+        height of the hole while each cell keeps its own charge. The rules do not change. A read puts the read voltage on the chosen word line and the pass voltage on the other
+        ${WORD_LINES - 1}, and the string conducts only if the chosen cell is erased: the model below runs the chapter's rule, and a test holds it to the eight-cell string of the NOR and NAND step, read for read.</p>
+        <p>The cost moves elsewhere. The hole is ${HOLE_NM} nm across, far wider than a planar cell, and each layer ${PITCH_NM} nm thick; the density comes from stacking, with one
+        bit-line contact for a whole hole. Every word line still needs a contact of its own, so the layers end in a staircase about ${STAIR_UM} µm wide beside the array.</p>
+        <div class="try">Pick a word line, give it program pulses until the string reads 0 under Read, then pick another word line: it still reads 1.</div>`,
+      widget: () => nand3d(),
+      more: {
+        real: `<p>The sizes are TechInsights' cross-sections of the 32-layer part (2014): a ${HOLE_NM} nm hole, ${ONO_NM} nm of oxide-nitride-oxide, a ${CORE_NM} nm core left in the middle, slits ${SLIT_NM} nm apart that cut the stack into blocks and bring the source down to the substrate. The layer pitch drawn is the figure published for Samsung's 128-layer part; later parts stack past 200 layers, built as two or three decks of holes, as one hole cannot be etched deep enough in one go.</p>`,
       },
     },
   ],

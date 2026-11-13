@@ -44,6 +44,7 @@ describe('pipeSchedule against the gate-level pipeline', () => {
         const strip = (s: { pc: number; valid: boolean }[]) => s.map((x) => (x.valid ? x.pc : null));
         expect(strip(mine.slots), `${name} cycle ${c}`).toEqual(strip(hw.slots));
         expect([mine.stall, mine.flush], `${name} cycle ${c} stall/flush`).toEqual([hw.stall, hw.flush]);
+        expect(mine.fwd, `${name} cycle ${c} forwarding`).toEqual([hw.fwdA, hw.fwdB]);
         clockCycle(sim);
         if (c % 8 === 7) await tick();
       }
@@ -172,6 +173,6 @@ describe('the chip, the predict step and the lamp colours', () => {
     expect(tok('as-hold')).not.toBe(tok('as-ctl'));
     expect(tok('as-hold')).not.toBe(tok('as-wrong'));
     const view = readFileSync(new URL('../src/widgets/assembly3dview.ts', import.meta.url), 'utf8');
-    expect(view).toContain("hold: stage.rgb('--as-hold')");
+    expect(view).toContain("hold: s.rgb('--as-hold')");
   });
 });

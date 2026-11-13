@@ -2,12 +2,13 @@
 // cord's constant length and the pulleys' positions, is the chapter's sum at every sample time on the later machines' slotted
 // yokes ('yoke', the functions' default), and nearly so on the 1872 machine's crank pins ('pins'), which the last block bounds.
 import { describe, expect, it } from 'vitest';
-import type { RGB } from '../src/gl/instances';
 import { gibbsPeak, PATTERNS, seriesOf, sumAt } from '../src/comm/fourier';
 import {
-  A_ARC, GEAR_C, N_CRANKS, PAPER_L, PEN_SCALE, PEN_X, PITCH, TIDE_PRESET, angleOf, beatHours, gearRadii, handAngle, paperSpeed, ratioOf, throwMm, cordPath, crankX, levelOf, offsetsAt, pathLength, penTip, sidewaysAt, cordLength, tideAnchors, tideOf, tideParts,
-  traceOf, type TidePalette,
+  A_ARC, GEAR_C, N_CRANKS, PAPER_L, PEN_SCALE, PEN_X, PITCH, TIDE_PRESET, angleOf, beatHours, gearRadii, handAngle, paperSpeed, ratioOf, throwMm, cordPath, crankX, levelOf, offsetsAt, pathLength, penTip, sidewaysAt, cordLength, tideOf,
+  traceOf,
+  Y0, hubY, mainY,
 } from '../src/widgets/tide3dparts';
+import { WHEEL_R, cordAt, newPaper, paintPaper, tideModel, tidePose } from '../src/widgets/tide3dkit';
 
 const ALL = Array(N_CRANKS).fill(true) as boolean[];
 const prefix = (c: number) => ALL.map((_, i) => i < c);
@@ -98,18 +99,45 @@ describe('the pen against the chapter\'s sum of harmonics', () => {
   });
 });
 
-describe('the drawing', () => {
-  const g: RGB = [0.5, 0.5, 0.5], P: TidePalette = { iron: g, brass: g, wood: g, steel: g, cord: g, paper: g, ink: g, off: g, glass: [0.5, 0.5, 0.5, 0.5], live: g };
-  it('draws a pulley and a crank per harmonic and labels without duplicates', () => {
-    const td = tideOf(0), parts = tideParts(td, ALL, 1.2, P);
-    expect(parts.length).toBeGreaterThan(300);
-    for (const p of parts) for (const v of [...p.pos, ...(p.scale ?? [])]) expect(Number.isFinite(v)).toBe(true);
-    const a = tideAnchors(td);
-    expect(new Set(a.map((x) => x.text)).size).toBe(a.length);
-    const pins = tideParts(td, ALL, 1.2, P, false, 'pins'), ap = tideAnchors(td, 'pins');
-    for (const p of pins) for (const v of [...p.pos, ...(p.scale ?? [])]) expect(Number.isFinite(v)).toBe(true);
-    expect(new Set(ap.map((x) => x.text)).size).toBe(ap.length);
-    expect(ap.some((x) => x.text === 'pulley on its crank pin')).toBe(true);
+describe('the model (tide3dkit.ts)', () => {
+  const state = (pat: number, m: 'pins' | 'yoke', time = 1.2, on = ALL) => ({ td: tideOf(pat), on, t: time, mech: m, paper: newPaper() });
+  it('has every part finite, a crank and a pulley group per harmonic, and anchors on named groups without duplicates', () => {
+    for (const m of ['pins', 'yoke'] as const) for (const pat of [0, TIDE_PRESET]) {
+      const md = tideModel(state(pat, m));
+      for (const it of md.items) for (const v of it.geo.positions) expect(Number.isFinite(v)).toBe(true);
+      const groups = new Set(md.items.map((x) => x.group));
+      for (let i = 0; i < N_CRANKS; i++) { expect(groups.has(`crank${i}`)).toBe(true); expect(groups.has(`pulley${i}`)).toBe(true); }
+      expect(new Set(md.anchors!.map((x) => x.text)).size).toBe(md.anchors!.length);
+      for (const a of md.anchors!) expect(groups.has(a.on!)).toBe(true);
+      const names = new Set(md.items.map((x) => x.name));
+      for (const b of md.beats!) for (const g of b.frame ?? []) expect(groups.has(g) || names.has(g)).toBe(true);
+    }
+  });
+  it('bends the cord in place: the same point count at every pose', () => {
+    const g0 = cordAt(state(0, 'pins', 0), 'full');
+    for (const time of [0.3, 2.7, 9.1]) for (const m of ['pins', 'yoke'] as const) {
+      const g = cordAt(state(0, m, time), 'full');
+      expect(g.positions.length).toBe(g0.positions.length);
+      expect(g.indices.length).toBe(g0.indices.length);
+    }
+  });
+  it('moves the pen by the cord: the pose lifts it to penTip', () => {
+    const s = state(0, 'yoke', 2.2), mv = tidePose(s).get('pen')!;
+    expect(Y0 + mv[13]).toBeCloseTo(penTip(offsetsAt(s.td, s.on, s.t), s.td.dc, sidewaysAt(s.td, s.on, s.t, 'yoke')), 4);
+  });
+  it('turns a crank about its own hub (the hub stays put)', () => {
+    const s = state(0, 'yoke', 1.7), mv = tidePose(s).get('crank3')!, x = crankX(3), y = hubY('yoke');
+    expect(mv[0] * x + mv[4] * y + mv[12]).toBeCloseTo(x, 4);
+    expect(mv[1] * x + mv[5] * y + mv[13]).toBeCloseTo(y, 4);
+  });
+  it('paints the pen’s line and the terms on the paper', () => {
+    const s = state(0, 'yoke', 1.5); paintPaper(s.paper, s.td, s.on, s.t, 'yoke');
+    let ink = 0;
+    for (let k = 0; k < s.paper.pixels.length; k += 4) if (s.paper.pixels[k + 2] > s.paper.pixels[k] + 40) ink++;
+    expect(ink).toBeGreaterThan(200);
+  });
+  it('keeps the drawn worm wheel clear of the main shaft', () => {
+    for (const m of ['pins', 'yoke'] as const) expect(WHEEL_R(hubY(m), mainY(m))).toBeGreaterThan(1);
   });
 });
 
@@ -189,15 +217,6 @@ describe('the gearing and the slotted cranks', () => {
     const td = tideOf(0);
     td.harms.forEach((h) => { expect(throwMm(h)).toBeCloseTo(30 * h.amp, 9); expect(throwMm(h)).toBeLessThan(43); });
     for (const c of tideOf(TIDE_PRESET).harms) expect(throwMm(c)).toBeLessThanOrEqual(30);
-  });
-  it('the draw carries both sets and stays small', () => {
-    const g: RGB = [0.5, 0.5, 0.5], P: TidePalette = { iron: g, brass: g, wood: g, steel: g, cord: g, paper: g, ink: g, off: g, glass: [0.5, 0.5, 0.5, 0.5], live: g };
-    for (const pat of [0, TIDE_PRESET]) {
-      const td = tideOf(pat), parts = tideParts(td, ALL, 200, P);
-      expect(parts.length).toBeLessThan(800);
-      for (const p of parts) for (const v of [...p.pos, ...(p.scale ?? [])]) expect(Number.isFinite(v)).toBe(true);
-      expect(new Set(tideAnchors(td).map((a) => a.text)).size).toBe(tideAnchors(td).length);
-    }
   });
 });
 

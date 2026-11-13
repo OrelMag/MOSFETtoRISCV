@@ -72,7 +72,7 @@ interface Route {
   viewport?: Viewport;
   /** A page script run once the page is idle (awaited; returns the problems it found, as strings), then the page settles again. */
   drive?: string;
-  /** Added to the page's query (a flag such as studio3d). */
+  /** Added to the page's query (a flag such as flat3d). */
   query?: string;
 }
 
@@ -623,6 +623,76 @@ const mapDrive = (k: number, of: number) => `(async () => {
   scrollTo(0, 0); const g = document.querySelector('.cp-node[data-node="' + last + '"]'); g.scrollIntoView({ block: 'center' }); await wait(50);
   const b = g.getBoundingClientRect(); document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   await wait(200); const again = view(); if (again) bad.push(last + ' pressed again: ' + again);
+  return bad;
+})()`;
+
+/** A 3D model with settings.modelNames off: no name, leader or badge drawn, the list under the canvas hidden, the Names
+ *  button saying "Show names"; then N turns them back on (and off again), the canvas keeping its box exactly. */
+const NAMES_OFF_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let view = null;
+  for (let i = 0; i < 40 && !view; i++) { view = document.querySelector('.st-view'); if (!view) await wait(250); }
+  if (!view) return ['no 3D model stage'];
+  const st = view.closest('.st');
+  await wait(800);
+  const shown = (e) => e.style.display !== 'none' && !e.hidden && e.getClientRects().length > 0;
+  const bad = [];
+  const names = [...st.querySelectorAll('.st-lbl, .st-badge')].filter(shown).length;
+  if (names) bad.push(names + ' names or badges drawn with names off');
+  if (st.querySelector('.st-leaders')?.childElementCount) bad.push('leaders drawn with names off');
+  const list = st.querySelector('.st-list');
+  // the list stays in the accessibility tree with names off (screen readers, Enter on the canvas): only drawn is wrong
+  if (list && list.getBoundingClientRect().width > 2) bad.push('the list of names is shown with names off');
+  if (list && !list.querySelector('button.st-pick')) bad.push('the list of parts has no buttons for a keyboard or a screen reader');
+  const btn = st.querySelector('.st-names') ?? st.closest('.m3d, .widget')?.querySelector('.st-names');
+  if (!btn) return [...bad, 'no Names button'];
+  if (btn.getAttribute('aria-label') !== 'Show names' || btn.getAttribute('aria-pressed') !== 'false') bad.push('the Names button does not say Show names');
+  const box = () => { const r = view.getBoundingClientRect(); return [r.x, r.y + scrollY, r.width, r.height].map((v) => Math.round(v)).join(','); };
+  const before = box();
+  st.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));
+  await wait(600);
+  if (box() !== before) bad.push('turning names on moved or resized the canvas: ' + before + ' -> ' + box());
+  if (btn.getAttribute('aria-pressed') !== 'true') bad.push('N did not turn names on');
+  else if (![...st.querySelectorAll('.st-lbl, .st-badge')].some(shown)) bad.push('N turned names on but none is drawn');
+  st.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));
+  return bad;
+})()`;
+
+/** A 3D model's wheel rule (gl/kit/wheel.ts): over a canvas nobody clicked the wheel is the page's (not cancelled, the
+ *  camera still, the hint shown once); focused, it zooms; Esc lets go; Ctrl + wheel always zooms; touch-action follows.
+ *  Synthetic wheel events have no default action, so "the page's" is read as "not cancelled": the browser then scrolls. */
+const WHEEL_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let st = null;
+  for (let i = 0; i < 40 && !(st = window.__studio); i++) await wait(250);
+  if (!st) return ['no studio renderer (window.__studio)'];
+  const canvas = document.querySelector('.st-view canvas.r3-canvas');
+  if (!canvas) return ['no 3D canvas'];
+  await wait(600);
+  const bad = [];
+  const r = canvas.getBoundingClientRect();
+  const turn = (o = {}) => {
+    const e = new WheelEvent('wheel', { deltaY: 120, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true, ...o });
+    const d0 = st.camera.dist;
+    canvas.dispatchEvent(e);
+    return { prevented: e.defaultPrevented, moved: Math.abs(st.camera.dist - d0) > 1e-9 };
+  };
+  canvas.blur();
+  if (canvas.style.touchAction !== 'pan-y') bad.push('touch-action over an unfocused canvas is ' + canvas.style.touchAction + ', not pan-y');
+  let t = turn();
+  if (t.prevented || t.moved) bad.push('the wheel over an unfocused canvas zoomed instead of scrolling the page');
+  await wait(100);
+  if (!document.querySelector('.r3-whint.on')) bad.push('no hint after a wheel the page took');
+  canvas.focus();
+  if (canvas.style.touchAction !== 'none') bad.push('touch-action over a focused canvas is ' + canvas.style.touchAction + ', not none');
+  t = turn();
+  if (!t.prevented || !t.moved) bad.push('the wheel over a focused canvas did not zoom');
+  canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  if (document.activeElement === canvas) bad.push('Esc did not let go of the canvas');
+  t = turn();
+  if (t.prevented || t.moved) bad.push('the wheel zoomed after Esc');
+  t = turn({ ctrlKey: true });
+  if (!t.prevented || !t.moved) bad.push('Ctrl + wheel over an unfocused canvas did not zoom');
   return bad;
 })()`;
 
@@ -1425,9 +1495,16 @@ function routes(): Route[] {
   for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ` (3D model, ${phoneVp.name})`, phoneVp);
   // and on the narrowest phone, where the corner buttons (turn, save image, full screen) take the most of the stage
   for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ' (3D model, 360px phone)', { width: 360, height: 740, mobile: true, name: '360px phone' });
-  // Every model on the studio renderer (gl/studio.ts: the triode and the relay by default, the rest under ?studio3d), dark and on a phone.
-  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, themed('dark'), ' (3D model, studio, dark)', undefined, undefined, 'studio3d');
-  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ` (3D model, studio, ${phoneVp.name})`, phoneVp, undefined, 'studio3d');
+  // Every 3D model (all on the studio renderer, gl/studio.ts), dark and on a phone.
+  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, themed('dark'), ' (3D model, studio, dark)');
+  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ` (3D model, studio, ${phoneVp.name})`, phoneVp);
+  // the Names switch off (settings.modelNames): nothing named on the stage, no overflow, on a phone and wide
+  const namesOff = { [SETTINGS_KEY]: JSON.stringify({ theme: 'light', modelNames: false, coachDone: { stage: true, sandbox: true } }) };
+  const m0 = MODELS_3D[0];
+  add(`#/c/${m0.chapter}/${m0.step}`, namesOff, ` (3D model, names off, ${phoneVp.name})`, phoneVp, NAMES_OFF_DRIVE);
+  add(`#/c/${m0.chapter}/${m0.step}`, namesOff, ' (3D model, names off)', undefined, NAMES_OFF_DRIVE);
+  // the wheel belongs to the page until the canvas is clicked (gl/kit/wheel.ts)
+  add(`#/c/${m0.chapter}/${m0.step}`, light, ' (3D model, wheel)', undefined, WHEEL_DRIVE);
   for (const n of NODES) {
     add(`#/campaign/play/${n.id}`, unlocked);
     // Lessons, drills and programs open on the map instead (pages/level.ts levelRoute).

@@ -1,0 +1,4 @@
+/* ---------- ENIAC decade ring counter (widgets/eniac3dview.ts) ---------- */
+.en3 .r3 { grid-template-columns: minmax(0, 1fr); }
+.en3 .r3-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 24px; align-items: start; }
+.en3 .r3-sl:has(input[aria-label="Cutaway"]), .en3 .r3-sl:has(input[aria-label="Exploded view"]) { display: none; }

@@ -1,2 +1,5 @@
-/* ---------- The floating-gate string (widgets/fgate3dview.ts): the lit channel's colour ---------- */
-.m3d { --m3-hot: light-dark(#e8a020, #ffc04a); --m3-nitride: light-dark(#7d8fa8, #8fa0b8); }
+/* ---------- The floating-gate string (widgets/fgate3dview.ts): the lit channel's colour, the nitride ---------- */
+.m3d, .fg3 { --m3-hot: light-dark(#e8a020, #ffc04a); --m3-nitride: light-dark(#7d8fa8, #8fa0b8); --m3-fg: light-dark(#8a5a4e, #b07a68); }
+/* the canvas takes the whole column; the readout sits under it */
+.fg3 .r3 { grid-template-columns: minmax(0, 1fr); }
+.fg3 .r3-side .r3-kv { max-width: 560px; }

@@ -4,12 +4,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   BITS, CORES, CORE_R, FIXED_WORDS, HOLE_R, LAYERS, LAYER_COLS, LAYER_ROWS, MODULE_CORES, MODULE_WORDS, OD, PAIRS, SENSE_LINES, STRANDS,
-  UNIT_MM, WIRES, WORDS_PER_CORE, WORD_BITS, coreX, inRing, inhibitDriven, inhibitsOn, moduleCores, radiusOf, ropeAnchors, ropeParts, senseWord, switching,
-  threads, wireLive, wirePath, wireThreads, type RopePalette, type RopePose,
-} from '../src/widgets/rope3dparts';
+  UNIT_MM, WIRES, WORDS_PER_CORE, WORD_BITS, coreX, inRing, inhibitDriven, inhibitsOn, moduleCores, radiusOf, senseWord, switching,
+  threads, wireLive, wirePath, wireThreads, CY, CZ, type RopePose,
+} from '../src/widgets/rope3dgeom';
+import { AXIS_CUT, ROPE_HOME, ropeModel } from '../src/widgets/rope3dkit';
 
-const G: [number, number, number] = [0.5, 0.5, 0.5];
-const P: RopePalette = { ribbon: G, bobbin: G, copper: G, inhibit: G, set: G, reset: G, live: [1, 0.8, 0], board: G, res: G, diode: G, lamp: G, lampOff: G, sel: G };
 
 describe('core rope in 3D', () => {
   it('the sourced numbers: 512 cores, 192 sense lines, 12 words of 16 bits a core, six modules of 6144 words, 0.249 in cores', () => {
@@ -63,11 +62,40 @@ describe('core rope in 3D', () => {
     }
   });
 
-  it('draws the close-up, and the module when asked; the anchors point at the model', () => {
-    const pose: RopePose = { strand: 0, addr: 2, phase: 'idle', module: false };
-    const near = ropeParts(pose, P), far = ropeParts({ ...pose, module: true }, P);
-    expect(far.length - near.length).toBeGreaterThanOrEqual(MODULE_CORES);
-    for (const a of ropeAnchors({ ...pose, module: true })) for (const v of a.p) expect(Number.isFinite(v)).toBe(true);
-    expect(ropeAnchors(pose, true).length).toBeLessThan(ropeAnchors(pose).length);
+  it('the studio close-up: eight cores on their axis, a wire per slot following its path, the switching core lit', () => {
+    const pose: RopePose = { strand: 0, addr: 2, phase: 'set', module: false }, m = ropeModel(pose);
+    const ribbons = m.items.filter((i) => i.name?.startsWith('core ') && i.mat.label?.startsWith('permalloy'));
+    expect(ribbons).toHaveLength(CORES);
+    ribbons.forEach((r, c) => { expect(r.at).toEqual([coreX(c), CY, CZ]); expect(r.geo.max[1] - r.geo.min[1]).toBeCloseTo(OD, 1); });
+    expect(ribbons.filter((r) => r.mat.emit).map((r) => r.name)).toEqual(['core 2']);
+    const wires = m.items.filter((i) => /wire$/.test(i.name ?? ''));
+    expect(wires).toHaveLength(WIRES.length);
+    // inhibit wires lit in the set phase are exactly the driven members
+    const lit = wires.filter((w) => w.mat.emit).map((w) => w.name);
+    expect(lit.filter((n) => n === 'inhibit wire')).toHaveLength(PAIRS);
+    expect(lit).toContain('set wire');
+    expect(ropeModel({ ...pose, phase: 'idle' }).items.some((i) => i.mat.emit)).toBe(false);
+  });
+  it('the cut takes the cores open along their axis and leaves the wires whole', () => {
+    const m = ropeModel({ strand: 1, addr: 5, phase: 'reset', module: false });
+    expect(m.cuts!.planes[0]).toEqual({ n: [0, 0, 1], d: AXIS_CUT });
+    expect(AXIS_CUT).toBe(CZ);
+    for (const i of m.items) if (/wire$/.test(i.name ?? '') || i.name === 'sense amplifier') expect(i.cut).toBe('none');
+    // in the reset the lamps of the bits core 5 holds on strand 1 are lit
+    const lamps = m.items.filter((i) => i.name === 'sense amplifier' && i.mat.emit).length;
+    expect(lamps).toBe(Array.from({ length: BITS }, (_, b) => threads(1, b, 5)).filter(Boolean).length);
+  });
+  it('the module: 512 cores, the eight of the close-up among them; both views have a home, names and a tour', () => {
+    const mod = ropeModel({ strand: 0, addr: 0, phase: 'idle', module: true });
+    const cores = mod.items.find((i) => i.name === 'cores')!.geo, sel = mod.items.find((i) => i.name === 'the eight cores of the close-up')!.geo;
+    expect((cores.positions.length + sel.positions.length) / sel.positions.length).toBeCloseTo(MODULE_CORES / CORES, 9);
+    for (const module of [false, true]) {
+      const m = ropeModel({ strand: 0, addr: 0, phase: 'idle', module });
+      expect((m.anchors ?? []).length).toBeGreaterThanOrEqual(3);
+      expect((m.beats ?? []).length).toBeGreaterThanOrEqual(2);
+      for (const a of m.anchors ?? []) for (const v of a.p) expect(Number.isFinite(v)).toBe(true);
+      expect(ropeModel({ strand: 0, addr: 0, phase: 'idle', module }, 'flat').items.length).toBe(m.items.length);
+    }
+    expect(ROPE_HOME.close).toBeDefined();
   });
 });

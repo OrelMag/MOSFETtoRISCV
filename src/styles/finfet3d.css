@@ -1,0 +1,8 @@
+/* ---------- Planar, fin and nanosheet transistors (widgets/finfet3dview.ts) ---------- */
+.m3d, .ff3 {
+  --ff-n: light-dark(#5b8fd0, #4f86d8);
+  --ff-sti: light-dark(#c9d3df, #8fa0b8);
+  --ff-hik: light-dark(#e9c46a, #f0d27a);
+  --ff-on: light-dark(#1f9a63, #3ecb8a);
+  --ff-leak: light-dark(#c0392b, #ff6b5a);
+}

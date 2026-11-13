@@ -17,11 +17,7 @@
 // The page does not list the coil's winding height, the gap height, the magnet's size, the phase plug's size or the spider: the winding (18 mm) and gap (6 mm) are chosen so that
 // Xmax = (winding − gap) / 2 = 6 mm, and the rest are proportions drawn to look like a 7" driver.
 //
-// The speaker faces +y; the front half (z > 0) is cut away so the section shows. Units are millimetres.
-
-import type { RGB, RGBA } from '../gl/instances';
-import { quatAxisAngle, quatMul, type Quat, type Vec3 } from '../gl/math';
-import { box, rod, type Anchor, type Part } from '../gl/parts';
+// The speaker faces +y. Units are millimetres. speaker3dkit.ts draws it (the front half cut away so the section shows).
 
 export type Mode = 'speaker' | 'mic';
 
@@ -197,32 +193,6 @@ export const emfVolts = (d: Drive, k: number): number => BL * (velocityMmS(d, k)
 export const NECK_Y = 36;
 /** Height of the cone's neck at displacement `cone` (−1 … 1), as drawn. */
 export const neckY = (cone: number, mag = DRAW_K): number => NECK_Y + cone * XMAX_MM * mag;
-const SEG = 12, WIND_SEG = 6, TURNS = 16;
-const phiOf = (k: number, seg = SEG) => Math.PI + ((k + 0.5) * Math.PI) / seg;
-
-export interface SpeakerPalette {
-  steel: RGB; magnet: RGB; basket: RGB; cone: RGBA; plug: RGB; former: RGB; wire: RGB; wire2: RGB; flux: RGB; rubber: RGB; spider: RGB;
-  stair: RGB; stairDim: RGBA; trace: RGB; cursor: RGB; live: RGB; zero: RGB;
-}
-
-/** A flat slab from (r0, y0) to (r1, y1) over one wedge of angle `phi` ± dphi/2, `thick` across the slope. */
-export function slab(c: RGB | RGBA, phi: number, dphi: number, r0: number, y0: number, r1: number, y1: number, thick: number): Part {
-  const rm = (r0 + r1) / 2, len = Math.hypot(r1 - r0, y1 - y0) || 0.01, alpha = Math.atan2(y1 - y0, r1 - r0);
-  const wide = 2 * Math.max(r0, r1, 0.5) * Math.sin(dphi / 2) * 1.02;
-  const rot: Quat = quatMul(quatAxisAngle([0, 1, 0], -phi), quatAxisAngle([0, 0, 1], alpha));
-  return { kind: 'box', pos: [rm * Math.cos(phi), (y0 + y1) / 2, rm * Math.sin(phi)], scale: [len, thick, wide], rot, color: c };
-}
-
-/** A ring in the cut (back half): radius rIn … rOut, height y0 … y1. */
-const ring = (c: RGB | RGBA, rIn: number, rOut: number, y0: number, y1: number, seg = SEG): Part[] =>
-  Array.from({ length: seg }, (_, k) => slab(c, phiOf(k, seg), Math.PI / seg, rIn, (y0 + y1) / 2, rOut, (y0 + y1) / 2, y1 - y0));
-
-/** A conical sheet (cone, spider, surround) as one slab per wedge. */
-const sheet = (c: RGB | RGBA, r0: number, y0: number, r1: number, y1: number, thick: number): Part[] =>
-  Array.from({ length: SEG }, (_, k) => slab(c, phiOf(k), Math.PI / SEG, r0, y0, r1, y1, thick));
-/** A sheet along a profile of (r, y) points: one slab per segment per wedge. */
-export const profile = (c: RGB | RGBA, pts: readonly (readonly [number, number])[], thick: number): Part[] =>
-  pts.slice(1).flatMap((p, i) => sheet(c, pts[i][0], pts[i][1], p[0], p[1], thick));
 /** The surround: a half-roll (semicircle of radius R, rising) from (r0, y0) to (r0 + 2R, y0), `n` segments, shifted by dy at its inner foot. */
 export const rollPts = (r0: number, yIn: number, yOut: number, R: number, n = 4): [number, number][] =>
   Array.from({ length: n + 1 }, (_, i) => { const a = Math.PI * (1 - i / n); return [r0 + R + R * Math.cos(a), yIn + (yOut - yIn) * (i / n) + R * Math.sin(a)]; });
@@ -243,24 +213,8 @@ export const spiderPts = (r0: number, y0: number, r1: number, y1: number, A: num
   for (let i = 1; i <= m; i++) { const u = i / m; pts.push([r0 + (r1 - r0) * u, y0 + (y1 - y0) * u + (i % 2 ? A : 0) * (i === m ? 0 : 1)]); }
   return pts;
 };
-/** A 3-rod arrow from a to b (head size h). */
-export function arrow(c: RGB, a: Vec3, b: Vec3, r = 0.3, h = 1.6): Part[] {
-  const d: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.hypot(d[0], d[1], d[2]) || 1, u: Vec3 = [d[0] / L, d[1] / L, d[2] / L];
-  // a side vector perpendicular to u in the plane z = const (the cut face), else x
-  const side: Vec3 = Math.abs(u[2]) > 0.9 ? [1, 0, 0] : [-u[1], u[0], 0], sl = Math.hypot(...side) || 1, sv: Vec3 = [side[0] / sl, side[1] / sl, side[2] / sl];
-  const back = (k: number): Vec3 => [b[0] - u[0] * h + sv[0] * h * 0.5 * k, b[1] - u[1] * h + sv[1] * h * 0.5 * k, b[2] - u[2] * h + sv[2] * h * 0.5 * k];
-  return [rod(c, a, b, r), rod(c, b, back(1), r), rod(c, b, back(-1), r)];
-}
-
-/** The plot behind the speaker (its own scale: `amp` stands for full scale). */
-export const PLOT = { x0: -90, x1: 90, z: -20, yc: 134, amp: 20 };
-const stepX = (d: Drive, k: number): number => PLOT.x0 + ((PLOT.x1 - PLOT.x0) * k) / d.n;
-const level = (v: number): number => PLOT.yc + v * PLOT.amp;
 /** The staircase the plot draws: the held DAC codes (speaker) or the ADC's held samples (mic), each on −1 … 1. */
 export const staircase = (d: Drive): number[] => (d.mode === 'speaker' ? d.codes.map((c) => c / d.peak) : [...d.adc]);
-
-/** Where the voltage bar at the coil's terminals stands. */
-export const BAR = { x: 118, y0: 40, z: -6, half: 24 };
 
 /** Fixed geometry, mm. Winding 16 … 34 (18 mm) in a gap 22 … 28 (6 mm): Xmax = (18 − 6) / 2 = 6 mm. */
 export const GEOM = {
@@ -268,91 +222,3 @@ export const GEOM = {
   formerIn: 18.6, formerOut: 19.2, windOut: 19.8, windLow: 16, windHigh: 34, formerTop: 36,
   coneNeck: 22, coneRim: 63, coneRimY: 72, spiderOuter: 66, spiderY: 42,
 };
-
-export function speakerParts(d: Drive, t: number, P: SpeakerPalette): Part[] {
-  const ps = poseAt(d, t), dy = ps.cone * XMAX_MM * d.mag, out: Part[] = [], G = GEOM;
-  // Fixed: back plate, ferrite ring, top plate, pole piece, the six-spoke cast frame.
-  out.push(...ring(P.steel, 0, G.outerR, 0, G.backTop));
-  out.push(...ring(P.magnet, G.magnetIn, G.outerR, G.backTop, G.magnetTop));
-  out.push(...ring(P.steel, G.plateIn, G.outerR, G.magnetTop, G.plateTop));
-  out.push(...ring(P.steel, 0, G.poleR, G.backTop, G.plateTop));
-  for (const deg of [180, 240, 300, 360]) out.push(slab(P.basket, (deg * Math.PI) / 180, 0.11, G.outerR, G.plateTop, 80, 70, 4));
-  out.push(...ring(P.basket, 72, 90, 70, 74));
-  // Moving: the former, the winding (16 of its ~64 turns drawn, 1.1 mm pitch, alternating shade; 0.8 mm clear each side of the
-  // gap), the cone, the spider (corrugated) and the surround (a half-roll). The phase plug stays put on the pole piece.
-  out.push(...ring(P.former, G.formerIn, G.formerOut, G.windLow + dy, G.formerTop + dy));
-  for (let i = 0; i < TURNS; i++) {
-    const y = G.windLow + 0.05 + i * ((G.windHigh - G.windLow) / TURNS);
-    out.push(...ring(i % 2 ? P.wire2 : P.wire, G.formerOut, G.windOut, y + dy, y + 0.95 + dy, WIND_SEG));
-  }
-  for (const [r, y0, y1] of plugSteps()) out.push(...ring(P.plug, 0, r, y0, y1));
-  out.push(...sheet(P.cone, G.coneNeck, G.formerTop + dy, G.coneRim, G.coneRimY + dy, 0.8));
-  out.push(...profile(P.spider, spiderPts(G.formerOut, 33 + dy, G.spiderOuter, G.spiderY, 2.5), 0.9));
-  out.push(...profile(P.rubber, rollPts(G.coneRim, G.coneRimY + dy, G.coneRimY, 4.5, 4), 1.4));
-  // Flux and force: B across the gap (the magnet is magnetised along the axis, N up: plate to pole, radially in), the current
-  // in the coil (dot = towards the viewer) and F = B·l·i on the former, up for a positive current.
-  const gm = (G.formerIn + G.windOut) / 2, mid = (G.windLow + G.windHigh) / 2, z0 = 1.2;
-  for (const y of [G.magnetTop + 1.5, G.magnetTop + 3, G.plateTop - 1.5]) out.push(...arrow(P.flux, [-G.plateIn - 0.2, y, z0], [-G.poleR + 0.3, y, z0], 0.22, 1.0));
-  if (d.mode === 'speaker' && Math.abs(ps.drive) > 0.02) {
-    const sgn = ps.drive > 0 ? 1 : -1;
-    for (const side of [-1, 1]) {
-      const c: Vec3 = [side * gm, mid + dy, z0 + 0.2], towards = side * sgn < 0, m = 1.1;
-      if (towards) out.push(box(P.live, c[0] - m * 0.5, c[0] + m * 0.5, c[1] - m * 0.5, c[1] + m * 0.5, c[2] - 0.3, c[2] + 0.3));
-      else out.push(rod(P.live, [c[0] - m, c[1] - m, c[2]], [c[0] + m, c[1] + m, c[2]], 0.28), rod(P.live, [c[0] - m, c[1] + m, c[2]], [c[0] + m, c[1] - m, c[2]], 0.28));
-    }
-    out.push(...arrow(P.live, [-gm - 3, G.formerTop + dy, z0], [-gm - 3, G.formerTop + dy + sgn * Math.max(4, Math.abs(ps.drive) * 14), z0], 0.45, 2.4));
-  }
-  // The coil's terminals: a bar standing for the voltage (the amplifier's drive, or the EMF the ADC samples).
-  out.push(box(P.zero, BAR.x - 4, BAR.x + 4, BAR.y0 - 0.5, BAR.y0 + 0.5, BAR.z - 4, BAR.z + 4));
-  const v = ps.drive * BAR.half, y0 = BAR.y0 + Math.min(0, v), y1 = BAR.y0 + Math.max(0, v);
-  if (y1 - y0 > 0.05) out.push(box(P.live, BAR.x - 3, BAR.x + 3, y0, y1, BAR.z - 3, BAR.z + 3));
-  // Tinsel leads: one to the frame's terminal, one on to the bar (the amplifier's terminal), both bending with the cone.
-  out.push(rod(P.wire, [G.windOut - 0.4, 20 + dy, 0], [-72, 74, -1], 0.5), rod(P.wire, [-72, 74, -1], [BAR.x - 4, BAR.y0, BAR.z], 0.7));
-  // The plot: the staircase, the future dimmed, the cursor, the cone's own trace.
-  const n = d.n, st = staircase(d), w = (PLOT.x1 - PLOT.x0) / n;
-  out.push(box(P.zero, PLOT.x0 - 2, PLOT.x1 + 2, PLOT.yc - 0.25, PLOT.yc + 0.25, PLOT.z - 0.4, PLOT.z + 0.4));
-  for (let k = 0; k < n; k++) {
-    const done = k <= ps.k, c = done ? P.stair : P.stairDim, x = stepX(d, k), y = level(st[k]);
-    out.push(box(c, x, x + w, y - 0.6, y + 0.6, PLOT.z - 0.8, PLOT.z + 0.8));
-    if (k > 0) {
-      const y2 = level(st[k - 1]), lo = Math.min(y, y2), hi = Math.max(y, y2);
-      if (hi - lo > 0.05) out.push(box(c, x - 0.5, x + 0.5, lo - 0.6, hi + 0.6, PLOT.z - 0.8, PLOT.z + 0.8));
-    }
-  }
-  const edges = coneEdges(d), tr: Vec3[] = [], cx = PLOT.x0 + ((PLOT.x1 - PLOT.x0) * mod(t, d.n)) / d.n;
-  for (let k = 0; k <= ps.k; k++) tr.push([stepX(d, k), level(edges[k]), PLOT.z + 2.4]);
-  tr.push([cx, level(ps.cone), PLOT.z + 2.4]);
-  for (let i = 1; i < tr.length; i++) out.push(rod(P.trace, tr[i - 1], tr[i], 0.8));
-  out.push(box(P.cursor, cx - 0.4, cx + 0.4, PLOT.yc - PLOT.amp - 3, PLOT.yc + PLOT.amp + 3, PLOT.z - 0.6, PLOT.z + 0.6));
-  return out;
-}
-
-export function speakerAnchors(d: Drive, t: number, close = false): Anchor[] {
-  const dy = poseAt(d, t).cone * XMAX_MM * d.mag;
-  const at = (r: number, phi: number, y: number): Vec3 => [r * Math.cos(phi), y, r * Math.sin(phi)];
-  const up: Vec3 = [0, 1, 0], front: Vec3 = [0, 0, 1];
-  if (close) {
-    // The close-up on the gap (the left cut face): only what is in view, each label towards the middle.
-    return [
-      { text: 'Top plate', p: [-28, 25, 0], side: 'l', n: front },
-      { text: 'Voice coil', p: [-19.2, 28 + dy, 0], side: 'r', n: front },
-      { text: 'Pole piece', p: [-8, 11, 0], side: 'r', n: front },
-      { text: 'Ferrite magnet', p: [-34, 13, 0], side: 'l', n: front },
-      { text: 'B across the gap', p: [-19, 22.6, 1.2], side: 'b', n: front },
-    ];
-  }
-  return [
-    { text: 'Cone', p: at(44, Math.PI * 1.3, 52 + dy), side: 'l', n: up },
-    { text: 'Surround', p: at(67, Math.PI * 1.12, 77 + dy / 2), side: 'l', n: up },
-    { text: 'Spider', p: at(40, Math.PI * 1.7, 38 + dy * 0.4), side: 'r', n: up, minor: true },
-    { text: 'Voice coil', p: [-19.2, 25 + dy, 0], side: 'r', n: front },
-    { text: 'Pole piece', p: [-9, 12, 0], side: 'b', n: front },
-    { text: 'Phase plug', p: [-5, 50, 0], side: 'r', n: front, minor: true },
-    { text: 'Ferrite magnet', p: [-54, 11, 0], side: 'l', n: front },
-    { text: 'Top plate', p: [-54, 25, 0], side: 'l', n: front, minor: true },
-    { text: 'Frame', p: at(71.4, Math.PI * 1.83, 52), side: 'r', n: front, minor: true },
-    { text: d.mode === 'speaker' ? 'Coil current' : 'EMF', p: [BAR.x, BAR.y0 + BAR.half + 2, BAR.z], side: 't', n: up },
-    { text: d.mode === 'speaker' ? 'Held DAC codes' : 'ADC samples', p: [PLOT.x0 + 6, PLOT.yc + PLOT.amp + 4, PLOT.z], side: 't', n: front },
-    { text: 'Cone position', p: [PLOT.x1 - 14, PLOT.yc - PLOT.amp - 3, PLOT.z + 2.4], side: 'b', n: front },
-  ];
-}

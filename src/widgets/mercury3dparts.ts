@@ -1,11 +1,10 @@
-// EDSAC's mercury delay line as numbers and parts (DOM-free, tested). The tube is the 1948 report's (Wilkes & Renwick,
+// EDSAC's mercury delay line as numbers, scene units and names (DOM-free, tested; mercury3dkit.ts draws it). The tube is the 1948 report's (Wilkes & Renwick,
 // section 3.1): a mercury-filled steel tube of 1 inch external diameter, about 5 ft 4 in between its end blocks,
 // a piezo-electric crystal at each end, 16 long numbers of 36 pulse intervals (P0 blank, P1..P34 digits, P35 sign)
 // circulating, one major cycle long. Delay and capacity are computed here from length and sound speed, not typed in.
 
-import type { RGB, RGBA } from '../gl/instances';
 import type { Vec3 } from '../gl/math';
-import { box, rod, wire, type Anchor, type Part } from '../gl/parts';
+import type { Anchor } from '../gl/parts';
 import { DDR4_3200 } from '../dram/timing';
 
 // ------------------------------------------------------------------ the physical tube and its figures
@@ -171,10 +170,6 @@ export const histogram = (waits: readonly number[], bins: number): number[] => {
 };
 
 // ------------------------------------------------------------------ the drawing
-export interface MercuryPalette {
-  steel: RGB; steelClear: RGBA; mercury: RGB; quartz: RGBA; brass: RGB; housing: RGBA; pulse: RGB; pulseOff: RGB;
-  bandA: RGBA; bandB: RGBA; bandSel: RGBA; panel: RGB; lamp: RGB; live: RGB; wire: RGB; cut: RGB;
-}
 /** Scene units: the tube is 240 long, so a unit is LENGTH_M / 240. */
 export const TUBE_X0 = -120, TUBE_X1 = 120;
 export const UNIT_M = LENGTH_M / (TUBE_X1 - TUBE_X0);
@@ -183,10 +178,9 @@ export const TUBE_R = OD_M / 2 / UNIT_M;
 export const MERC_R = TUBE_R * 0.74;
 export const PITCH = (TUBE_X1 - TUBE_X0) / SLOTS;
 export const ACTIVE: Vec3 = [0, 7.5, 7.5];
-const ELEC_Y = -17;
+/** The electronics: a row of chassis standing in front of the battery, low (y, z of their centres). */
+export const ELEC_Y = -6, ELEC_Z = ACTIVE[2] + 15;
 export const xOfPos = (pos: number): number => TUBE_X0 + (pos + 0.5) * PITCH;
-
-const lit = (c: RGB, k: number): RGB => [c[0] * k, c[1] * k, c[2] * k];
 
 /** The pulse's size in the drawing at position p (slots): launched clean, it weakens and spreads on the way. */
 export const pulseShape = (pos: number): { amp: number; width: number } => {
@@ -200,65 +194,16 @@ export function bandOf(tank: { t: number }, w: number): [number, number][] {
   return s + SLOTS_PER_WORD <= SLOTS ? [[s, s + SLOTS_PER_WORD]] : [[s, SLOTS], [0, s + SLOTS_PER_WORD - SLOTS]];
 }
 
-export function mercuryParts(tank: Tank, sel: number, P: MercuryPalette): Part[] {
-  const out: Part[] = [], [, ay, az] = ACTIVE;
-  // The housing every tank sits in (they must all be at one temperature) and the other fifteen tubes.
-  out.push(box(P.housing, TUBE_X0 - 7, TUBE_X1 + 7, -12, 13, -12, 13));
-  for (const y of [-7.5, -2.5, 2.5, 7.5]) for (const z of [-7.5, -2.5, 2.5, 7.5]) {
-    if (y === ay && z === az) continue;
-    out.push(rod(P.steel, [TUBE_X0, y, z], [TUBE_X1, y, z], TUBE_R, 0.3));
-    out.push(box(P.brass, TUBE_X0 - 3, TUBE_X0, y - 1.6, y + 1.6, z - 1.6, z + 1.6), box(P.brass, TUBE_X1, TUBE_X1 + 3, y - 1.6, y + 1.6, z - 1.6, z + 1.6));
-  }
-  // The tank in use: mercury, the steel round it, a quartz crystal and a brass block at each end.
-  out.push(rod(P.mercury, [TUBE_X0, ay, az], [TUBE_X1, ay, az], MERC_R, 0.7));
-  out.push(rod(P.steelClear, [TUBE_X0, ay, az], [TUBE_X1, ay, az], TUBE_R, 0.3));
-  out.push(box(P.brass, TUBE_X0 - 4, TUBE_X0 - 1.2, ay - 2.6, ay + 2.6, az - 2.6, az + 2.6, 0.4), box(P.brass, TUBE_X1 + 1.2, TUBE_X1 + 4, ay - 2.6, ay + 2.6, az - 2.6, az + 2.6, 0.4));
-  out.push(rod(P.quartz, [TUBE_X0 - 1.2, ay, az], [TUBE_X0 + 0.2, ay, az], MERC_R, 0.5), rod(P.quartz, [TUBE_X1 - 0.2, ay, az], [TUBE_X1 + 1.2, ay, az], MERC_R, 0.5));
-  // The words as bands under the tube, moving with the pulses; the chosen word is lit.
-  for (let w = 0; w < WORDS; w++) for (const [a, b] of bandOf(tank, w)) {
-    out.push(box(w === sel ? P.bandSel : w % 2 ? P.bandB : P.bandA, xOfPos(a) - PITCH / 2, xOfPos(b - 1) + PITCH / 2, ay - TUBE_R - 1.3, ay - TUBE_R - 0.3, az - 1.2, az + 1.2));
-  }
-  // The receiving slot (dim) and, inside it, the window a pulse must fall in to be accepted (bright, +-WINDOW_TOL of a slot).
-  const cx = TUBE_X1 - PITCH / 2, y0 = ay - TUBE_R - 0.4, y1 = ay + TUBE_R + 0.4, z0 = az - TUBE_R - 0.4, z1 = az + TUBE_R + 0.4;
-  out.push(box([P.live[0], P.live[1], P.live[2], 0.18] as RGBA, cx - PITCH / 2, cx + PITCH / 2, y0, y1, z0, z1));
-  out.push(box([P.live[0], P.live[1], P.live[2], 0.4] as RGBA, cx - WINDOW_TOL * PITCH, cx + WINDOW_TOL * PITCH, y0, y1, z0, z1));
-  // The backing behind the far crystal: a dark absorber so the pulse is not reflected back up the tube.
-  out.push(box(lit(P.panel, 0.4), TUBE_X1 + 4, TUBE_X1 + 9, ay - 2.2, ay + 2.2, az - 2.2, az + 2.2, 0.2));
-  // The pulses: a slab across the bore per 1.
-  for (let L = 0; L < SLOTS; L++) {
-    if (!tank.bits[L]) continue;
-    const pos = tank.pos(L), { amp, width } = pulseShape(pos), x = xOfPos(pos + tank.offset * (pos / SLOTS)), hw = (width * PITCH) / 2;
-    const p = rod(amp > 0.8 ? P.pulse : lit(P.pulse, 0.55 + amp * 0.5), [x - hw, ay, az], [x + hw, ay, az], MERC_R * 1.12, 0.1);
-    p.emissive = lit(P.pulse, 0.55 * amp);
-    out.push(p);
-  }
-  // The electronics under the battery: amplifier, reshaping against the clock, the recirculate / write gate.
-  const bx = [80, 15, -50] as const, bw = 20;
-  out.push(...wire(P.wire, [[TUBE_X1 + 2.6, ay, az], [TUBE_X1 + 2.6, ELEC_Y, az], [TUBE_X0 - 2.6, ELEC_Y, az], [TUBE_X0 - 2.6, ay, az]], 0.45));
-  const arriving = tank.bits[tank.label] === 1;
-  bx.forEach((x, i) => {
-    const on = i === 2 ? !tank.loop || !!tank.access : arriving && tank.loop;
-    out.push(box(P.panel, x - bw / 2, x + bw / 2, ELEC_Y - 4, ELEC_Y + 4, az - 5, az + 5, 0.2));
-    const lamp = box(i === 2 && !tank.loop ? P.cut : on ? P.live : P.lamp, x - 2, x + 2, ELEC_Y + 4, ELEC_Y + 5.2, az - 2, az + 2);
-    if (on) lamp.emissive = lit(i === 2 && !tank.loop ? P.cut : P.live, 0.6);
-    out.push(lamp);
-  });
-  // The gate's lever: down on the recirculation path, over to the input when writing, open when the loop is cut.
-  const lx = bx[2], lever = tank.loop ? (tank.access?.kind === 'write' ? 1 : 0) : 2;
-  out.push(rod(P.brass, [lx - 6, ELEC_Y + 4, az + 5.2], [lx - 6 + [6, 11, 11][lever] * 0.8, ELEC_Y + 4 + [3.5, 5, 7][lever], az + 5.2], 0.6, 0.4));
-  return out;
-}
-
 export function mercuryAnchors(_tank: Tank, _sel: number, compact = false): Anchor[] {
   const [, ay, az] = ACTIVE, out: Anchor[] = [];
   out.push({ text: 'sending crystal', p: [TUBE_X0 + 38, ay + TUBE_R, az], side: 't', n: [0, 1, 0] });
   out.push({ text: 'receiving crystal', p: [TUBE_X1 - 38, ay + TUBE_R, az], side: 't', n: [0, 1, 0] });
   out.push({ text: 'mercury in a steel tube', p: [0, ay + TUBE_R, az], side: 't', n: [0, 1, 0], minor: true });
-  out.push({ text: 'backing (absorbs the echo)', p: [TUBE_X1 + 9, ay + 2.2, az], side: 't', n: [0, 1, 0] });
-  out.push({ text: 'amplifier', p: [80, ELEC_Y - 4, az + 5], side: 'b', n: [0, 0, 1] });
-  out.push({ text: 'reshaper', p: [15, ELEC_Y - 4, az + 5], side: 'b', n: [0, 0, 1] });
-  out.push({ text: 'gate', p: [-50, ELEC_Y - 4, az + 5], side: 'b', n: [0, 0, 1] });
-  // A phone has room for two names, not seven (the view opens on the sending end).
-  return compact ? out.filter((a) => ['sending crystal', 'gate'].includes(a.text)) : out;
+  out.push({ text: 'backing', p: [TUBE_X1 + 9, ay + 2.2, az], side: 't', n: [0, 1, 0] });
+  out.push({ text: 'amplifier', p: [80, ELEC_Y - 4, ELEC_Z + 5], side: 'b', n: [0, 0, 1] });
+  out.push({ text: 'reshaper', p: [15, ELEC_Y - 4, ELEC_Z + 5], side: 'b', n: [0, 0, 1] });
+  out.push({ text: 'gate', p: [-50, ELEC_Y - 4, ELEC_Z + 5], side: 'b', n: [0, 0, 1] });
+  // A phone has room for two names, not seven, and opens on the sending end: the crystal, and the tube named where that view shows it.
+  return compact ? [{ ...out[0], p: [TUBE_X0 + 4, ay + TUBE_R, az] }, { text: 'mercury in a steel tube', p: [TUBE_X0 + 28, ay + TUBE_R, az], side: 't', n: [0, 1, 0] }] : out;
 }
 

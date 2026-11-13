@@ -23,7 +23,9 @@
   container-type: inline-size;
 }
 .r3 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
-@container (min-width: 760px) { .r3 { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); align-items: start; } }
+/* side by side only for a panel without a studio stage: a studio model takes the column's whole width (its names need the
+   gutters), and its side panel goes below, laid out by the model (auto-fit grids) */
+@container (min-width: 760px) { .r3:not(:has(.st)) { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); align-items: start; } }
 .r3-main, .r3-side { min-width: 0; }
 
 /* controls */

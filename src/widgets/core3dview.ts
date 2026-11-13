@@ -1,50 +1,95 @@
-// A 4 x 4 plane of ferrite cores in 3D (loaded on demand, modelhost.ts). What the cores do is core3dparts.ts's rule, nothing
-// else: a core sees the sum of its wires' currents and flips only at the switching current. A cycle is two phases, each
-// planned whole (planOp) and then played: the currents, the flips and the sense pulse on screen are the plan's.
+// A 4 x 4 plane of ferrite cores in 3D on the studio renderer (loaded on demand, modelhost.ts), in true geometry
+// (core3dkit.ts). What the cores do is core3dparts.ts's rule, nothing else: a core sees the sum of its wires' currents and
+// flips only at the switching current. A cycle is two phases, each planned whole (planOp) and then played: the currents,
+// the flips and the sense pulse on screen are the plan's. The model is rebuilt only when what it shows changes (a wire
+// starts or stops carrying current, a core starts or stops switching, a bit changes); the pulses on the wires, the flux
+// sweeping round a switching core and the sense pulse travelling to the amplifier move every frame as instances.
 
 import '../styles/core3d.css';
 import { h, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
-import { FULL, HALF, HALF_MAX, HALF_MIN, IC, N, coreAnchors, coreParts, halfSelected, idle, idx, colOf, rowOf, planOp, marginOf, marginWindow, cycleFault, type CorePalette, type CorePose, type Op, type Phase } from './core3dparts';
+import { packInstances, type Instance } from '../gl/instances';
+import { along, sphere } from '../gl/kit/geo';
+import { M } from '../gl/kit/materials';
+import type { Vec3 } from '../gl/math';
+import { studioStage } from './studiostage';
+import { CORE_HOME, CORE_HOME_FRAME, CORE_HOME_R, MATS, RO, coreModel, ringPoint, stackCoreSites, stackGeo, stackSites, wires, type CoreState } from './core3dkit';
+import { FULL, HALF, HALF_MAX, HALF_MIN, IC, N, halfSelected, idle, idx, colOf, rowOf, planOp, marginOf, marginWindow, cycleFault, type Op, type Phase } from './core3dparts';
 
 const PHASE_MS = 1100, HOLD_MS = 500;
 /** A pattern worth reading: something of both kinds in every row and column. */
 const START = [1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0];
+const BEAD = sphere(3.2, 8, 5), PULSE = sphere(5, 8, 5), PER_WIRE = 5, PER_CORE = 8;
+const WIRES = wires();
 const amps = (a: number) => `${a > 0 ? '+' : a < 0 ? '−' : ''}${Math.abs(a).toFixed(2)} A`;
 const half = (v: number) => (v === 0 ? 'off' : `${v > 0 ? '+' : '−'}½`);
 
 export function coreView(): Widget {
-  const phone = () => typeof matchMedia === 'function' && matchMedia('(max-width: 600px)').matches;
   let halfA = HALF, spread = false, threeWire = false, lastPlan: Phase[] | null = null;
   let bits = [...START], addr = idx(1, 1), plan: Phase[] | null = null, k = 0, u = 1, hold = 0, last: Phase | null = null, lastOp: Op | null = null;
 
-  const panel = h('div', { class: 'panel' });
-  const stage = modelStage(panel, {
-    look: LOOKS.machine,
-    aria: 'A plane of sixteen ferrite cores in 3D, threaded by X and Y select wires, a sense wire and an inhibit wire; a bright wire carries current and a circulating arrow on each core shows its magnetisation',
-    camera: { target: [0, -4, 4], yaw: 0.62, pitch: 0.62, dist: phone() ? 340 : 250 },
-    limits: { minDist: 90, maxDist: 520 },
-    note: 'Sizes are a mid-1950s Lincoln Laboratory core’s (80 mil outside, 50 mil inside, 20 mil high) with the pitch assumed and Whirlwind’s 32-gauge wire (MIT Report R-221, drawn bare); the cores are drawn as round tubes on a tilted ring, the loop as perfectly square (a real core drifts a little with every half-select), and a cycle lasts about a second here, not microseconds. The half-select current is Whirlwind’s, 0.45 A on each selected X and Y line (MIT Report R-221), so a full select is 0.90 A; the switching current, 0.65 A, is the model’s own figure between them, since R-221 gives the current that switches a core within a set time, not a threshold. Real cores switch over a range, not at one value (the drive-spread switch gives each core its own Ic, up to 20 % off). The sense wire runs diagonally through all sixteen, as in real planes, where that lets the half-select noise of a core’s neighbours cancel; the cancelling is not modelled and the pulse is drawn as a single pulse. The three-wire plane merges sense and inhibit into that wire; its current direction against each core is not modelled, the inhibit still cancels one half in every core. The faint plane below stands for the other planes of a word (Whirlwind’s stack was 32 × 32 × 17: 16 bits and a parity bit, one plane each): it shares the X and Y wires; the diodes and terminations at a plane’s edge are not drawn.',
-    draw: () => paint(),
+  const panel = h('div', { class: 'panel co3' });
+  let stackOn = false, sweep = 0, pulseU = 0, shownKey = '';
+  const stage = studioStage({
+    aria: 'A plane of sixteen ferrite cores in 3D, threaded by X and Y select wires, a sense wire and an inhibit wire; a lit wire carries current and an arrow on each core shows its magnetisation',
+    home: CORE_HOME,
+    homeFrame: CORE_HOME_FRAME,
+    homeRadius: CORE_HOME_R,
+    scaleBar: (len) => (len >= 1000 ? (len / 1000) + ' in' : len + ' mil'),
+    onBeat: (i) => { stackOn = i === 4; instances(); },
+    limits: { minDist: 120, maxDist: 60000, maxPan: 12000 },
+    build: (detail) => coreModel(state(), detail),
+    note: `To scale in mils: an 80 mil core the size of Whirlwind’s, 32-gauge wire at its bare size, a 4 × 4 crop of a plane. The wires are tinted to tell them apart (real ones are all one amber). The currents are Whirlwind’s (0.45 A half-select); the 0.65 A switching threshold is the model’s own, the loop drawn perfectly square and the sense pulse as one pulse. A cycle takes about a second here, not microseconds.`,
+    noteMore: 'To scale in mils. The core is 80 mil outside, the size of Whirlwind’s second bank (MIT Report R-221, 1954, sec. 5.22); its 50 mil hole and 20 mil height are a later Lincoln Laboratory core’s. The wire is R-221’s 32-gauge magnet wire (sec. 5.24), drawn at its bare 7.95 mil since no source gives it insulated, and tinted to tell the four apart (real Formex is one amber colour). The pitch, 250 mil, is R-221’s 9.5 in frame for 32 cores a side less an assumed border; this is a 4 × 4 crop and its frame, and the 45° tilt of the cores is the model’s choice. The half-select current is Whirlwind’s, 0.45 A on each selected X and Y line (R-221), so a full select is 0.90 A; the switching current, 0.65 A, is the model’s own figure between them (R-221 gives about 0.85 A to switch a core in a set time, not a threshold), and the loop is drawn perfectly square. Real cores switch over a range (the drive-spread switch gives each core its own Ic, up to 20 % off). The diagonal sense wire lets the half-select noise of a core’s neighbours cancel; the cancelling is not modelled and the pulse is drawn as one pulse. The three-wire plane merges sense and inhibit into that wire. A cycle lasts about a second here, not microseconds; the tour’s last beat shows the stack of 17 planes, with the spacing assumed.',
   });
-  const palette = (): CorePalette => ({
-    ferrite: stage.rgb('--co-ferrite'), frame: stage.rgb('--co-frame'), metal: stage.rgb('--m3-metal'), wx: stage.rgb('--co-wx'), wy: stage.rgb('--co-wy'),
-    ws: stage.rgb('--co-ws'), wi: stage.rgb('--co-wi'), live: stage.rgb('--co-live'), one: stage.rgb('--co-one'), zero: stage.rgb('--co-zero'),
-    lamp: stage.rgb('--co-lamp'), lampOff: stage.rgb('--co-lamp-off'), sel: stage.rgb('--co-sel'),
-  });
-  const ph = (): Phase | null => (plan ? plan[k] : null);
-  /** What is drawn now: the cores flip in the middle of the phase. */
-  function pose(): CorePose {
+  const beadMat = (tok: '--co-one' | '--co-zero') => M.make({ base: tok, metal: 0, rough: 0.4, emit: tok, glow: 1.2, bloom: 1.4, label: 'the flux reversing (drawn)' });
+  const pulseMat = M.make({ base: '--co-live', metal: 0, rough: 0.4, emit: '--co-live', glow: 1.4, bloom: 1.5, label: 'current (drawn as pulses)' });
+  const senseMat = M.make({ base: '--co-lamp', metal: 0, rough: 0.4, emit: '--co-lamp', glow: 1.8, bloom: 1.8, label: 'the sense pulse' });
+  function ph(): Phase | null { return plan ? plan[k] : null; }
+  /** What is drawn now: the cores flip in the middle of the phase (u >= 0.45), the sense pulse with them. */
+  function state(): CoreState {
     const p = ph();
-    if (!p) return { bits, drive: idle(), u: 1, flipping: [], addr, sense: false, threeWire };
+    if (!p) return { bits, drive: idle(), flipping: [], addr, sense: false, threeWire };
     const flipNow = u >= 0.45;
-    return { bits: flipNow ? p.after : p.before, drive: p.drive, u, flipping: u >= 0.45 && u < 0.9 ? p.flipped : [], addr, sense: p.strobed && p.pulse && flipNow && u < 0.95, threeWire };
+    return { bits: flipNow ? p.after : p.before, drive: p.drive, flipping: u >= 0.45 && u < 0.9 ? p.flipped : [], addr, sense: p.strobed && p.pulse && flipNow && u < 0.95, threeWire };
   }
-  function paint(): void { stage.paint(coreParts(pose(), palette()), coreAnchors(phone(), threeWire)); }
+  /** Rebuild only when what the model shows changed; the instances follow every frame. */
+  function paint(): void {
+    const s = state(), key = JSON.stringify([s.bits, s.drive, s.flipping, s.addr, s.sense, s.threeWire]);
+    if (key !== shownKey) { shownKey = key; stage.refresh(); }
+    instances();
+  }
+  function instances(): void {
+    const s = state(), pulses: Instance[] = [], sense: Instance[] = [], flux1: Instance[] = [], flux0: Instance[] = [];
+    // current: pulses running along each live wire's runs, in the current's direction
+    for (const w of WIRES) {
+      const dir = w.kind === 'x' ? s.drive.x[w.i] : w.kind === 'y' ? s.drive.y[w.i] : w.kind === 'inh' && !s.threeWire ? s.drive.inh : 0;
+      if (!dir) continue;
+      for (const [a, b] of w.runs) for (let i = 0; i < PER_WIRE; i++) {
+        const f = (pulseU + i / PER_WIRE) % 1, q = dir > 0 ? f : 1 - f;
+        pulses.push({ pos: [a[0] + (b[0] - a[0]) * q, a[1] + (b[1] - a[1]) * q, a[2] + (b[2] - a[2]) * q], color: [1, 1, 1] });
+      }
+    }
+    // the flux of a switching core sweeping round in its new direction
+    for (const k of s.flipping) {
+      const dir = s.bits[k] ? 1 : -1, list = s.bits[k] ? flux1 : flux0;
+      for (let i = 0; i < PER_CORE; i++) list.push({ pos: ringPoint(k, dir * sweep + (i / PER_CORE) * 2 * Math.PI, RO + 3), color: [1, 1, 1] });
+    }
+    // the sense pulse: from the switching core along the sense wire to the amplifier
+    if (s.sense) {
+      const path = WIRES.find((w) => w.kind === 'sense')!.path;
+      for (let i = 0; i < 4; i++) sense.push({ pos: along(path, Math.min(1, (u - 0.45) / 0.5 + i * 0.03)) as Vec3, color: [1, 1, 1] });
+    }
+    stage.instances('current', PULSE, pulseMat, packInstances(pulses));
+    stage.instances('flux 1', BEAD, beadMat('--co-one'), packInstances(flux1));
+    stage.instances('flux 0', BEAD, beadMat('--co-zero'), packInstances(flux0));
+    stage.instances('sense pulse', PULSE, senseMat, packInstances(sense));
+    const S = stackGeo();
+    stage.instances('stack cores', S.stackRing, MATS.ferrite, packInstances(stackOn ? stackCoreSites().map((p) => ({ pos: p, color: [1, 1, 1] })) : []), true);
+    stage.instances('stack frames', S.stackFrame, MATS.frame, packInstances(stackOn ? stackSites().map((p) => ({ pos: p, color: [1, 1, 1] })) : []), true);
+  }
 
   // ---- readout
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
@@ -126,6 +171,7 @@ export function coreView(): Widget {
   }
   function next(): void { if (!plan) return; if (u < 1) { u = 1; paint(); } finishPhase(); loop.kick(); paint(); }
   const loop = frameLoop((_n, dt) => {
+    pulseU = (pulseU + dt * 0.9) % 1; sweep += dt * 9;
     if (plan && !reducedMotion()) {
       if (u < 1) u = Math.min(1, u + (dt * 1000) / PHASE_MS);
       else { hold += dt * 1000; if (hold >= HOLD_MS) finishPhase(); }
@@ -163,14 +209,13 @@ export function coreView(): Widget {
     h('h3', { class: 'm3-title' }, 'A plane of cores'),
     h('p', { class: 'm3-sub' }, `Sixteen ferrite rings, each threaded by four wires: an X and a Y select wire, a sense wire and an inhibit wire. A core flips only when the current through it reaches ${IC.toFixed(2)} A. By default a select wire carries ${HALF.toFixed(2)} A (the slider sets it), half of the ${FULL.toFixed(1)} A that flips a core: the whole row and column of the address feel ${HALF.toFixed(2)} A and hold, and the one core where both wires cross feels ${FULL.toFixed(1)} A and flips. Reading drives the core toward 0: a 1 flips and the sense wire pulses, a 0 does not move. That erased the 1, so the second phase writes back what was read; to write a 0 the inhibit wire carries ${HALF.toFixed(2)} A the other way, cancelling one half select so the crossing core sees only ${HALF.toFixed(2)} A and holds.`),
     h('div', { class: 'r3' },
-      h('div', { class: 'r3-main' },
-        h('div', { class: 'r3-ctl' }, h('div', { class: 'r3-btns' }, readBtn, w0Btn, w1Btn, nextBtn, resetBtn, stage.resetBtn),
-          h('label', { class: 'r3-sl co-sl' }, h('span', null, 'Half select'), slider, sliderOut), spreadBtn, wireBtn),
-        predict, stage.el, stage.hint, live),
+      h('div', { class: 'r3-main' }, predict, stage.el, live),
       h('div', { class: 'r3-side' },
-        h('h4', null, 'Address ', h('span', { class: 'r3-badge' }, 'pick a core')), grid,
-        h('div', { class: 'co-rc' }, h('span', null, 'Row'), h('div', { class: 'co-seg', role: 'group', 'aria-label': 'Row' }, ...rowBtns), h('span', null, 'Column'), h('div', { class: 'co-seg', role: 'group', 'aria-label': 'Column' }, ...colBtns)),
-        h('h4', null, 'This cycle ', h('span', { class: 'r3-badge' }, 'model')), kv, h('h4', null, 'The loop'), bh)));
+        h('div', null, h('h4', null, 'Address ', h('span', { class: 'r3-badge' }, 'pick a core')), grid,
+        h('div', { class: 'co-rc' }, h('span', null, 'Row'), h('div', { class: 'co-seg', role: 'group', 'aria-label': 'Row' }, ...rowBtns), h('span', null, 'Column'), h('div', { class: 'co-seg', role: 'group', 'aria-label': 'Column' }, ...colBtns))),
+        h('div', null, h('h4', null, 'This cycle ', h('span', { class: 'r3-badge' }, 'model')), kv), h('div', null, h('h4', null, 'The loop'), bh))));
+  stage.slot.append(h('div', { class: 'r3-ctl' }, h('div', { class: 'r3-btns' }, readBtn, w0Btn, w1Btn, nextBtn, resetBtn),
+    h('label', { class: 'r3-sl co-sl' }, h('span', null, 'Half select'), slider, sliderOut), spreadBtn, wireBtn));
   // Escape is left alone: Enter and Space on the focused Next phase button advance, nothing else does.
   const mq = typeof matchMedia === 'function' ? matchMedia('(max-width: 600px)') : null, onMq = () => paint();
   mq?.addEventListener?.('change', onMq);

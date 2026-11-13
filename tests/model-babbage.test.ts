@@ -48,16 +48,24 @@ describe('the column of figure wheels', () => {
 });
 
 describe('the carry axis and its helix', () => {
-  it('the arms are 22 degrees apart, with 45 between the 15th and the 16th', () => {
+  // Swade, DE2 Technical Description (2020), §3.2 "Warning and Carriage of Tens", the carry-axis paragraph (Fig. 3.16, A/171):
+  // "the angular pitch is fixed at 22½°. There is one exception to this i.e. the spacing between the 15th and 16th arms is 45°
+  // not 22½°"; "The carry axes complete two rotations for each carry action".
+  it('the arms are 22½ degrees apart, with 45 between the 15th and the 16th: both sections close a turn', () => {
+    expect(PITCH_DEG).toBe(22.5);
+    expect(GAP_DEG).toBe(45);
+    expect(16 * PITCH_DEG).toBe(360);
+    expect((SPLIT - 1) * PITCH_DEG + GAP_DEG).toBe(360);
     for (let a = 1; a < ARMS; a++) {
       const step = ((armAngle(a) - armAngle(a - 1)) % 360 + 360) % 360;
       expect(step).toBe(a === SPLIT ? GAP_DEG : PITCH_DEG);
     }
   });
-  it('polls each section from below, and the upper section’s first arm comes before arm 0 in a rotation', () => {
+  it('polls each section from below, the two sections in step: the upper section’s first arm with arm 0', () => {
     for (let a = 1; a < SPLIT; a++) expect(armTime(a, 0)).toBeGreaterThan(armTime(a - 1, 0));
     for (let a = SPLIT + 1; a < ARMS; a++) expect(armTime(a, 0)).toBeGreaterThan(armTime(a - 1, 0));
-    expect(armTime(SPLIT, 0)).toBeLessThan(armTime(0, 0));
+    expect(armTime(SPLIT, 0)).toBe(armTime(0, 0));
+    for (let a = 0; a < ARMS - SPLIT; a++) expect(armTime(SPLIT + a, 0)).toBe(armTime(a, 0));
     expect(armTime(SPLIT, 0)).toBe(0);
     // A carry out of arm 14 reaches lever 15 after that lever was polled: it has to wait for the second rotation.
     expect(armTime(SPLIT, 0)).toBeLessThan(armTime(SPLIT - 1, 0));

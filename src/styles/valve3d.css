@@ -13,3 +13,5 @@
 .vl-gate output { width: 64px; }
 /* Each value on one line: the names carry the units, so the values are short and a phone squeezes the names instead. */
 .vl-kv .v { white-space: nowrap; }
+.vl-below { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 24px; margin-top: 8px; }
+@media (max-width: 900px) { .vl-below { grid-template-columns: minmax(0, 1fr); } }

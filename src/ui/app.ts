@@ -227,7 +227,7 @@ export function startApp(root: HTMLElement): void {
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Reduce motion'), motionWhy));
   // Text on the schematics: fewer words on a dense level; names come back under the pointer.
-  const labelItem = (key: 'portNames' | 'partNames' | 'busValues' | 'tapRanges' | 'hideSmall', title: string, about: string) =>
+  const labelItem = (key: 'portNames' | 'partNames' | 'modelNames' | 'busValues' | 'tapRanges' | 'hideSmall', title: string, about: string) =>
     h('button', { role: 'menuitemcheckbox', class: 'pal-flow', 'data-label': key, onclick: () => { settings.set(key, !settings[key]); applyTheme(); } },
       h('span', { class: 'pal-flow-sw' }, h('i')),
       h('span', null, h('b', null, title), h('small', null, about)));
@@ -236,6 +236,7 @@ export function startApp(root: HTMLElement): void {
     labelItem('partNames', 'Part names', 'Block and instance names; off, pointing at a part shows them once it is large enough to read'),
     labelItem('busValues', 'Bus values', 'Live values on the buses, standing or riding along'),
     labelItem('tapRanges', 'Bit ranges', 'Where a bus is tapped ([7:0]); off, shown on a net you point at or select'),
+    labelItem('modelNames', '3D model names', 'Off, pointing names a part'),
     labelItem('hideSmall', 'Hide unreadable text', 'Zoomed out, text under 7 px on screen is left out; off, every label stays however small'),
   ];
   // Zoomed out, a block's name is drawn at a fixed size over it (view/legible.ts): how large, or not at all.

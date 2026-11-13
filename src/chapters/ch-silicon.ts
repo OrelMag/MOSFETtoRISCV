@@ -5,6 +5,9 @@ import { chipLayoutWidget } from '../widgets/chiplayout';
 import { journeyWidget } from '../widgets/journey';
 import { cell3d } from '../widgets/cell3d';
 import { masks3d } from '../widgets/masks3d';
+import { euv3d } from '../widgets/euv3d';
+import { CHAIN, DROP, TARGET_UM, LAMBDA_NM, OPTICS, R_MIRROR, REFLECTIONS, conesApart, halfPitchNm, maskHalfDeg, onTargetNeeded, powerAtIf, transmission } from '../phys/euv';
+import { finfet3d } from '../widgets/finfet3d';
 import { withModel } from '../widgets/modelhost';
 import { clockTreeWidget, fabWidget, floorplanWidget, mappingWidget, pnrWidget, waferWidget } from '../widgets/silicon';
 import { cabinetCounts, hallFacts, periodIn } from '../lib/hall';
@@ -16,6 +19,9 @@ import { CARD_S, hallProgram, programStore, READER_711 } from '../lib/hallcards'
 import type { Chapter, Step } from './types';
 import { numOf } from './order';
 import { skyTimingHtml } from './silicon/skytiming';
+
+/** ASML's EUV system sales in 2024 (Q4 and full-year 2024 results, 29 January 2025): €8.3 billion on 44 systems (NXE and EXE). */
+const EUV_SALES_BN = 8.3, EUV_UNITS = 44;
 
 const num = (n: number) => groupDigits(Math.round(n));
 const times = (x: number) => (x >= 10 ? num(x) : x.toFixed(1));
@@ -128,6 +134,9 @@ function hallStep(): Step {
   };
 }
 
+/** The EUV step's index (the last step: a deep dive, linked from "How chips are made"); tests/chapter-guide holds it. */
+export const SILICON_EUV = 10;
+
 export const chSilicon: Chapter = {
   id: 'silicon', num: numOf('silicon'), title: 'From netlist to silicon', level: 'Physical design',
   blurb: 'Standard cells in layout, how they are made, technology mapping, place and route, the clock tree, a floorplan of our dual-core, the real flow on two of our CPUs against our own estimates, and wafer economics.',
@@ -183,7 +192,7 @@ export const chSilicon: Chapter = {
         Since holes are slower than electrons, series PMOS (the NOR) must be drawn wider to be as fast, which is one reason NAND is the preferred universal gate.</p>
         <p>The cell is a rectangle of fixed height so that cells abut in rows: the rails line up and the tools can place any cell next to any other. Width is what varies, set by
         how many polysilicon strips the cell needs. Area is therefore counted in tracks: a NAND2 is a few polysilicon pitches wide, a flip-flop a dozen or more. Widths come in whole placement sites, so a smaller cell can round up: the inverter drawn here is one pitch narrower than the NAND2, but in SkyWater's library the smallest inverter and NAND2 take the same 1.38 µm.</p>
-        <div class="try">Toggle A and B and watch which channels conduct. Press Section, drag the plane through a gate and read the stack off the cut face: n+, gate oxide, polysilicon, n+. Orbit the cell, hide layers, pull them apart; the Top view is the flat layout.</div>`,
+        <div class="try">Toggle A and B and watch which channels conduct, and the charge run through them as the output switches. Drag Cutaway through a gate and read the stack off the cut face: n+, gate oxide, polysilicon, n+. Orbit the cell, take metal 1 off, pull the layers apart with Explode; Top view is the flat layout.</div>`,
       widget: () => cell3d(),
       more: {
         derive: `<p>Why series transistors are drawn wider. A transistor's drive current is proportional to W / L; two in series have twice the resistance, so to match an inverter's pull-down a NAND2 draws
@@ -206,8 +215,8 @@ export const chSilicon: Chapter = {
       widget: () => withModel(fabWidget(), masks3d()),
       more: {
         derive: `<p>The smallest printable half-pitch is R = k<sub>1</sub> · λ / NA. With EUV light at λ = 13.5 nm, a numerical aperture of 0.33 and a process factor k<sub>1</sub> of about 0.3 that is
-          ${(0.3 * 13.5 / 0.33).toFixed(0)} nm. Argon fluoride light (193 nm) with immersion (NA about 1.35) and the same k<sub>1</sub> gives ${(0.3 * 193 / 1.35).toFixed(0)} nm in one exposure, which is why finer features there need
-          several exposures per layer.</p>`,
+          ${halfPitchNm(0.3, LAMBDA_NM, 0.33).toFixed(0)} nm. Argon fluoride light (193 nm) with immersion (NA about 1.35) and the same k<sub>1</sub> gives ${halfPitchNm(0.3, 193, 1.35).toFixed(0)} nm in one exposure, which is why finer features there need
+          several exposures per layer. How 13.5 nm light is made and carried to the wafer is the chapter's <a href="#/c/silicon/${SILICON_EUV}">last step</a>.</p>`,
         real: `<p>One company makes EUV scanners, and each is among the most complex machines built. A node's name (7 nm, 5 nm, 3 nm) no longer measures a feature; it is a label for a generation, and
           its transistors are three-dimensional fins or stacked ribbons, not the planar one drawn here.</p>`,
         pitfall: `<p>Reading the node name as the gate length. Of the dimensions that matter, the contacted gate pitch and the metal pitch set the density, and they are several times the node name.
@@ -341,7 +350,7 @@ export const chSilicon: Chapter = {
         <div class="try">Switch to the system core: find the block sky130 builds far smaller than our NAND count, and the one it builds larger. Then compare where the two critical paths run.</div>
         <p>What the table checks is the model. Our NAND count, our unit delay and our hierarchy came from a course that never mentioned a layout; here the same design is measured on silicon rules. The agreement is
         approximate, and the gaps are the finding: they say which of our simplifications (a NAND as the only cell, a gate delay as the only delay, wires as free) cost the most.</p>`,
-      widget: chipLayoutWidget,
+      widget: () => withModel(chipLayoutWidget(), finfet3d()),
       more: {
         derive: `<p>The conversion between the two timing scales: if the real critical path takes t ns after routing and ours is d unit delays, one of our delays is worth t / d in that process. Applied to every
           path of the design it predicts how fast the design would run if the unit-delay model held; the difference from the measured path is the cost of wires and load, which a unit-delay model does not carry.</p>`,
@@ -407,6 +416,19 @@ export const chSilicon: Chapter = {
         answer: 1,
         why: ['The Verilog on each component\'s tab is generated from its netlist, after the fact.', '', 'The drawings come from the netlists (their layout hints and the router); the netlist is the source.', 'The simulation is digital: 0, 1 and X at gate level, a switch-level solver for transistors.'],
         explain: 'Abstraction with transparency: every level is a box you may use without opening, and every box opens. Specifications, exhaustive tests and the instruction-set simulator kept each level honest.',
+      },
+    },
+    {
+      title: 'The light that draws it',
+      deep: true,
+      body: `
+        <p>“How chips are made” said the smallest features are printed with 13.5 nm light. Nothing transmits it: glass, quartz and air all absorb it, so it is made and used in vacuum and handled only by mirrors, each a stack of about forty molybdenum and silicon pairs that reflects ${Math.round(R_MIRROR * 100)} % at best.</p>
+        <p><strong>The source.</strong> No lamp or laser emits 13.5 nm. Tin does, as a plasma at about 30 eV (some ${groupDigits(Math.round((30 * 11604.5) / 1000) * 1000)} °C). A generator fires ${DROP.dUm} µm drops of liquid tin across a vacuum vessel, ${groupDigits(DROP.fKhz * 1000)} a second; each is hit twice by a CO₂ laser, first by a weak pre-pulse that flattens it into a thin target about ${TARGET_UM} µm across, then by the main pulse, which turns it into a plasma at the focus of an ellipsoidal mirror. The mirror, a dish with a hole in its middle for the laser, catches the light over about 5 steradians (two fifths of all directions) and brings it to its other focus, a small hole the scanner looks through. Of the laser's energy about ${Math.round(CHAIN.ce * 100)} % comes out as useful light in the half space in front of the target; the mirror covers part of that, reflects two thirds of it, and the hydrogen that protects the mirror from tin absorbs a quarter: with every published factor at its best, 20 kW of laser gives ${powerAtIf(20).toFixed(0)} W, so the published “more than 20 kW for 200 W” means at least ${Math.round(onTargetNeeded(20, 200) * 100)} % of the laser lands on the target.</p>
+        <p><strong>The scanner.</strong> From that hole to the wafer the light meets ${REFLECTIONS} mirrors: the illuminator's, which make the field even and choose the angles it arrives from, the mask (a mirror under its pattern), and six that image the mask onto the wafer four times smaller. After ten bounces ${(transmission(R_MIRROR, REFLECTIONS) * 100).toFixed(1)} % is left. Because the mask reflects, it is lit off its normal, at 6°, and the light coming in and going out must not share angles: at NA 0.33 each cone at the mask is ${maskHalfDeg(0.33, 4).toFixed(1)}° wide, inside the 6°. At NA 0.55 and the same 4× it would be ${maskHalfDeg(0.55, 4).toFixed(1)}°: the cones overlap. ${conesApart(OPTICS[2].na, OPTICS[2].mScan) ? 'The High NA tools therefore reduce 8× along the scan, which halves the field there, and keep 4× across it.' : ''}</p>`,
+      widget: () => euv3d(),
+      more: {
+        real: `<p>One company builds these scanners, with the mirrors from one optics maker; ASML sold ${EUV_UNITS} EUV systems in 2024 for €${EUV_SALES_BN} billion, about €${Math.round((EUV_SALES_BN * 1000) / EUV_UNITS / 10) * 10} million each on average (ASML, Q4 and full-year 2024 results, January 2025; the first High-NA systems, dearer still, are in that sum). The figures here are from ASML's published source paper (Fomenkov et al., Advanced Optical Technologies, 2017) and its product pages; the mirrors' positions in the model are an illustration of the path, not a design.</p>`,
+        pitfall: `<p>Thinking the scanner is a projector with lenses. At 13.5 nm every optic, the mask included, is a mirror, and each takes a third of the light: that, not the plasma, is why the source must make hundreds of watts.</p>`,
       },
     },
   ],

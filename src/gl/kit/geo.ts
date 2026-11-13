@@ -357,7 +357,11 @@ export function transform(g: Geo, m: Mat4): Geo {
       norm3([nm[0] * nx + nm[3] * ny + nm[6] * nz, nm[1] * nx + nm[4] * ny + nm[7] * nz, nm[2] * nx + nm[5] * ny + nm[8] * nz]));
   }
   b.i = Array.from(g.indices);
-  return b.done(`${g.name}*`);
+  const out = b.done(`${g.name}*`);
+  // per-vertex data rides along unchanged (a textured plane placed by a matrix keeps its picture)
+  if (g.uvs) out.uvs = g.uvs.slice();
+  if (g.colors) out.colors = g.colors.slice();
+  return out;
 }
 
 /** Several geometries as one (one draw). */
@@ -368,7 +372,11 @@ export function merge(list: readonly Geo[], name = 'merged'): Geo {
     for (let k = 0; k < g.positions.length; k++) { b.p.push(g.positions[k]); b.n.push(g.normals[k]); }
     for (const i of g.indices) b.i.push(base + i);
   }
-  return b.done(name);
+  const out = b.done(name);
+  // uvs and colours survive when every part has them (a part without would leave its vertices undefined)
+  if (list.length && list.every((g) => g.uvs)) out.uvs = Float32Array.from(list.flatMap((g) => Array.from(g.uvs!)));
+  if (list.length && list.every((g) => g.colors)) out.colors = Float32Array.from(list.flatMap((g) => Array.from(g.colors!)));
+  return out;
 }
 
 /** The inverse transpose of a matrix's upper 3 × 3 (column-major 3 × 3 out): normals under a non-uniform scale. */

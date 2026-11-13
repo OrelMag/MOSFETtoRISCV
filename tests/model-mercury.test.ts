@@ -1,19 +1,17 @@
 // EDSAC's mercury tank: delay = length / speed, capacity = delay x rate, held to the 1948 report's figures; the circulating
 // store must hand back what was written, only when the word comes round, and forget when the loop is cut.
 import { describe, expect, it } from 'vitest';
-import type { RGB, RGBA } from '../src/gl/instances';
+import type { RGB } from '../src/gl/instances';
 import {
   CARRIER_HZ, CUT_LENGTH_M, LENGTH_M, REPORT, ROW_HIT_S, SLOTS, SLOTS_PER_WORD, SOUND_M_S, TANK_C, Tank, WINDOW_TOL, WORDS, bandOf, bitsInTank, carrierCycles,
-  circulationHz, delayS, dramRatio, histogram, inWindow, initialWord, mercuryAnchors, mercuryParts, meanWaitS, offsetSlots, pulseLengthM, randomWaits, rateHz,
+  circulationHz, delayS, dramRatio, histogram, inWindow, initialWord, mercuryAnchors, meanWaitS, offsetSlots, pulseLengthM, randomWaits, rateHz,
   reportTubeDelayS, slotPitchM, slotS, soundAt, storeLongWords, storeShortWords, toleranceK, tubeDelayAt, valueOfSlots, wordSlots,
-  type MercuryPalette,
 } from '../src/widgets/mercury3dparts';
+import { mercuryModel, pulseInstances, shownKey } from '../src/widgets/mercury3dkit';
+import { cutsAt } from '../src/gl/kit/scene';
 
-const c = (i: number): RGB => [i / 20, 0.5, 0.5], ca = (i: number): RGBA => [i / 20, 0.5, 0.5, 0.4];
-const P: MercuryPalette = {
-  steel: c(1), steelClear: ca(2), mercury: c(3), quartz: ca(4), brass: c(5), housing: ca(6), pulse: [0.1, 0.9, 0.2], pulseOff: c(8), bandA: ca(9), bandB: ca(10), bandSel: ca(11),
-  panel: c(12), lamp: c(13), live: c(14), wire: c(15), cut: c(16),
-};
+const PULSE: RGB = [0.1, 0.9, 0.2], CHOSEN: RGB = [0.2, 0.3, 0.9];
+const pulsesOf = (t: Tank) => pulseInstances(t, 2, PULSE, CHOSEN);
 const near = (a: number, b: number, tol: number) => expect(Math.abs(a - b) / b).toBeLessThan(tol);
 
 describe('the figures', () => {
@@ -96,7 +94,7 @@ describe('temperature', () => {
   it('the drawing shifts pulses along with the offset, fully at the receiver', () => {
     const a = new Tank(), b = new Tank();
     b.offset = offsetSlots(48);
-    const xs = (t: Tank) => mercuryParts(t, 2, P).filter((p) => p.spec === 0.1).map((p) => p.pos[0]);
+    const xs = (t: Tank) => pulsesOf(t).map((p) => p.pos[0]);
     const xa = xs(a), xb = xs(b);
     expect(xb).toHaveLength(xa.length);
     expect(xb.some((x, i) => Math.abs(x - xa[i]) > 0.2)).toBe(true);
@@ -196,15 +194,37 @@ describe('the drawing', () => {
   it('one pulse per 1 in the tank, all inside the tube, and the words tile the tube', () => {
     const t = new Tank();
     t.advance(123.4);
-    const pulses = mercuryParts(t, 2, P).filter((p) => p.spec === 0.1);
+    const pulses = pulsesOf(t);
     expect(pulses).toHaveLength(t.bits.reduce((a, b) => a + b, 0));
     for (const p of pulses) { expect(p.pos[0]).toBeGreaterThan(-121); expect(p.pos[0]).toBeLessThan(121); }
     let tiled = 0;
     for (let w = 0; w < WORDS; w++) tiled += bandOf(t, w).reduce((a, [x, y]) => a + (y - x), 0);
     expect(tiled).toBeCloseTo(SLOTS, 9);
     expect(mercuryAnchors(t, 2).length).toBeGreaterThan(5);
-    expect(mercuryAnchors(t, 2).some((a) => a.text.startsWith('backing'))).toBe(true);
-    expect(mercuryAnchors(t, 2, true).map((a) => a.text).sort()).toEqual(['gate', 'sending crystal']);
+    expect(mercuryAnchors(t, 2).some((a) => a.text === 'backing')).toBe(true);
+    expect(mercuryAnchors(t, 2, true).map((a) => a.text).sort()).toEqual(['mercury in a steel tube', 'sending crystal']);
+  });
+  it('the model: the picked word’s pulses in its colour, the tube cut open a quarter, lamps and lever from the state', () => {
+    const t = new Tank();
+    t.advance(40.2);
+    const ps = pulsesOf(t), mine = ps.filter((p) => p.color[2] > p.color[1]);
+    expect(mine.length).toBe(t.bits.filter((b, L) => b && Math.floor(L / SLOTS_PER_WORD) === 2).length);
+    const m = mercuryModel({ tank: t, sel: 2 });
+    for (const it of m.items) for (const v of it.geo.positions) expect(Number.isFinite(v)).toBe(true);
+    // the quarter removed is the one in front and above the active tube's axis: a point there is cut, its opposite not
+    const cuts = cutsAt(m, 1), dot = (p: number[], n: number[]) => p[0] * n[0] + p[1] * n[1] + p[2] * n[2];
+    expect(cuts.every((c) => dot([0, 9, 9], c.n) > c.d)).toBe(true);
+    expect(cuts.every((c) => dot([0, 6, 6], c.n) > c.d)).toBe(false);
+    expect(cutsAt(m, 0)).toEqual([]);
+    expect(m.items.filter((i) => i.cut !== 'none').map((i) => i.name).sort()).toEqual(['mercury', 'quartz crystal', 'steel tube']);
+    // flat: the pulses become items
+    expect(mercuryModel({ tank: t, sel: 2 }, false, { pulse: PULSE, chosen: CHOSEN, band: CHOSEN }).items.filter((i) => i.name === 'pulse')).toHaveLength(ps.length);
+    // the model is rebuilt only when what it shows changes: not as the pulses move within a slot
+    const k = shownKey({ tank: t, sel: 2 }, false);
+    t.loop = false;
+    expect(shownKey({ tank: t, sel: 2 }, false)).not.toBe(k);
+    expect(mercuryModel({ tank: t, sel: 2 }).items.find((i) => i.name === 'gate' && i.mat.emit)).toBeTruthy();
+    expect(m.beats!.length).toBeGreaterThanOrEqual(4);
   });
   it('pulses are one slot pitch apart in the drawing', () => {
     const t = new Tank();

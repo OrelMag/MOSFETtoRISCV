@@ -13,6 +13,8 @@ import type { SwitchSim } from '../sim/switchsim';
 import { driverWidget, flightWidget, noiseWidget, padScene, reflectionWidget, repeaterWidget, terminationWidget, wireRcWidget } from '../widgets/line';
 import { cable3d } from '../widgets/cable3d';
 import { package3d } from '../widgets/package3d';
+import { flipchip3d } from '../widgets/flipchip3d';
+import { BOND, bondNh, bumpNh, BUMP } from '../phys/flipchip';
 import { withModel } from '../widgets/modelhost';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -246,9 +248,10 @@ export const chWire: Chapter = {
       title: 'From the pad to the pin',
       body: `
         <p>The pad is not the pin. Between the die and the board sits a bond wire 1 to 3 mm long, a lead in the lead frame, and the board's own copper. A wire carrying current has inductance, about 1 nH per mm for a 25 µm gold wire (<code>L ≈ 0.2 · ℓ · [ln(2ℓ / r) − 0.75]</code> nH, ℓ and r in mm: 2.8 mm is 3 nH), and every falling output returns its current through the same few ground wires; every rising one draws it through the few VDD wires, so the supply sags by the same formula. When several outputs switch at once the chip's ground lifts by <code>L · n · di/dt</code>, the figure of the noise panel on “Crosstalk, ground bounce and pairs”: eight pads, 3 nH and a 1 ns edge give ${f2(bounce(8, 1))} V against V<sub>IL</sub> = ${f2(VIL)} V.</p>
-        <p>Open the package and watch the wires that carry it. Adding rail pins (a ground and a VDD pin each) puts bond wires in parallel and divides L, and a longer wire raises it; the model here divides it exactly, which a real package does not, because neighbouring wires couple through their mutual inductance.</p>
+        <p>Open the package, a 74HC595 in its SOIC-16, and watch the wires that carry it. A longer wire raises L, and this chip keeps ground and VDD on its corner pins, whose wires are the longest in the package; more wires on a rail's lead put them in parallel and divide L. The model here divides it exactly, which a real package does not, because neighbouring wires couple through their mutual inductance.</p>
+        <p>A large chip takes the other way: no wires at all. Its die is turned face down onto a substrate and soldered through a bump under every part of its face, an area array at about ${Math.round(BUMP.pitch * 1000)} µm pitch instead of a ring of pads round its edge (a <em>flip chip</em>). A bump ${Math.round(BUMP.h * 1000)} µm tall has about ${Math.round(bumpNh() * 1000)} pH of inductance against the ${BOND.l} mm wire’s ${bondNh().toFixed(1)} nH, ${Math.round(bondNh() / bumpNh())} times lower, and hundreds of them can be grounds, so the bounce moves out to the substrate and the board. The second model below is such a package, to scale, cut open.</p>
         <p>What arrives at the receiver is a voltage with noise on it; what it must deliver is a bit, on its own clock. Chapter ${numOf('clocks')} is that decision.</p>`,
-      widget: () => package3d(),
+      widget: () => withModel(package3d(), flipchip3d()),
     },
   ],
 };

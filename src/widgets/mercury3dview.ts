@@ -1,4 +1,4 @@
-// EDSAC's mercury delay line in 3D (loaded on demand, modelhost.ts). The tube, its length, the sound speed, the slot and the
+// EDSAC's mercury delay line in 3D on the studio renderer (loaded on demand, modelhost.ts; drawn by mercury3dkit.ts). The tube, its length, the sound speed, the slot and the
 // 576 slots are mercury3dparts.ts's figures (the 1948 report's, delay = length / speed); the pulses move at the real sound
 // speed and spacing, slowed by a stated factor. What is drawn rather than modelled is in the note below the stage.
 
@@ -9,28 +9,25 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import type { OrbitView } from '../gl/camera';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
+import { packInstances } from '../gl/instances';
+import { studioStage } from './studiostage';
+import { keepWidth } from './studiowidth';
+import { BAND_GEO, BAND_MAT, HG_VIEWS, PULSE_GEO, PULSE_MAT, bandInstances, mercuryModel, pulseInstances, shownKey } from './mercury3dkit';
 import {
   CARRIER_HZ, CUT_LENGTH_M, LENGTH_M, OD_M, ROW_HIT_S, SLOTS, SLOTS_PER_WORD, SOUND_M_S, TANKS, TANK_C, Tank, WINDOW_TOL, WORDS, bitsInTank,
-  carrierCycles, circulationHz, delayS, dramRatio, histogram, inWindow, mercuryAnchors, mercuryParts, meanWaitS, offsetSlots, pulseLengthM,
+  carrierCycles, circulationHz, delayS, dramRatio, histogram, inWindow, meanWaitS, offsetSlots, pulseLengthM,
   randomWaits, rateHz, reportTubeDelayS, slotPitchM, slotS, soundAt, storeLongWords, tubeDelayAt, MAX35, initialWord,
-  type MercuryPalette,
 } from './mercury3dparts';
 
 /** Slowdown choices: how many times slower than the real thing the pulses move on screen. */
 const SLOWS = [2000, 20000] as const;
-const VIEWS = {
-  whole: { target: [-14, -3, 6], yaw: -0.95, pitch: 0.4, dist: 290 },
-  rx: { target: [96, 3, 7], yaw: 0.3, pitch: 0.36, dist: 80 },
-  tx: { target: [-96, 3, 7], yaw: -0.3, pitch: 0.36, dist: 80 },
-} satisfies Record<string, OrbitView>;
+const VIEWS = HG_VIEWS;
 /** A phone is narrow and the tube is 64 times longer than wide: stand further back. */
 const narrow = () => typeof matchMedia === 'function' && matchMedia('(max-width: 600px)').matches;
-const wholeView = (): OrbitView => (narrow() ? { ...VIEWS.whole, dist: 320 } : { ...VIEWS.whole });
+const wholeView = (): OrbitView => (narrow() ? { ...VIEWS.whole, dist: 340 } : { ...VIEWS.whole } as OrbitView);
 /** On a phone the 64:1 tube is a thin strip: open on the sending end, where pulses and crystal are large enough to see. */
 const startKey = (): keyof typeof VIEWS => (narrow() ? 'tx' : 'whole');
-const startView = (): OrbitView => (startKey() === 'whole' ? wholeView() : { ...VIEWS[startKey()] });
+const startView = (): OrbitView => (startKey() === 'whole' ? wholeView() : { ...VIEWS[startKey()] } as OrbitView);
 const BINS = 8;
 const PREDICT = ['first quarter (0 to 0.29 ms)', 'second quarter', 'third quarter', 'last quarter (to 1.15 ms)'];
 const VIEW_NAMES: Record<keyof typeof VIEWS, string> = { whole: 'Whole tank', rx: 'Receiving end', tx: 'Sending end' };
@@ -44,22 +41,43 @@ export function mercuryView(): Widget {
   let tempC = TANK_C, predicted = -1, reads: number[] | null = null, running = false, slow = 0, sel = 3, idle = 0, tweenFrom = 0, step: { t0: number; slots: number } | null = null, listKey = '';
   const slotsPerSec = () => rateHz() / SLOWS[slow];
 
-  const panel = h('div', { class: 'panel' });
-  const stage = modelStage(panel, {
-    look: LOOKS.lab,
+  const panel = h('div', { class: 'panel hg3' });
+  let ready = false, built = '';
+  /** The pulses' colours (theme tokens); before the stage exists, neutral ones. */
+  function colours() {
+    if (!ready) return { pulse: [0.25, 0.8, 0.55] as [number, number, number], chosen: [0.3, 0.5, 0.9] as [number, number, number], band: [0.3, 0.5, 0.9] as [number, number, number] };
+    return { pulse: stage.rgb('--m3-charge'), chosen: stage.rgb('--m3-dim'), band: stage.rgb('--m3-dim') };
+  }
+  const stage = studioStage({
+    home: startView(),
+    fit: false,
+    // the tube is 64 times longer than wide
+    aspect: narrow() ? 1.25 : 1.9,
+    knobs: { cut: 1 },
+    onBeat: () => instances(),
+    build: (detail) => mercuryModel({ tank, sel }, narrow(), detail === 'flat' ? colours() : undefined),
     aria: 'EDSAC’s mercury delay line in 3D: a steel tube of mercury with a quartz crystal at each end, a train of pulses travelling along it, the amplifier, reshaper and gate that feed the pulses back, and fifteen more tanks in the same housing',
-    camera: startView(),
-    limits: { minDist: 40, maxDist: 700 },
-    note: `Length, outside diameter, slot count and pulse timing are the 1948 report’s and the sound speed is mercury’s; the bore and wall, the crystals’ size, the housing (the report only says all tanks must be at the same temperature) with its 4 × 4 grid of tubes standing for a battery of 16, and the electronics are drawn, not modelled; the clock fixes the timing as it did in EDSAC (500 kc/s, a 2 µs slot, 576 slots = 1.152 ms) and the tube is the length that fits it: sound goes ${SOUND_M_S.toFixed(0)} m/s in mercury at 40 °C (the temperature secondary sources give for heated mercury lines; no EDSAC source we could read states it), so the crystal faces are ${CUT_LENGTH_M.toFixed(3)} m apart, ${((CUT_LENGTH_M / LENGTH_M - 1) * 100).toFixed(1)} % more than the report’s ‘approximately 5 ft 4 in’ between end blocks (the path between the crystal faces is not given: our inference). The speed and its −0.46 m/s per K slope are one handbook table’s (Karl Deutsch, ‘Sound Velocity in Liquids’), a linear fit; the backing’s material is not given, so its box is generic; the temperature slider is our model of the drift, not a measurement. The pulses move at the real speed and spacing, ${groupNum(SLOWS[0])} times slower (${groupNum(SLOWS[1])} on the slow setting), and their weakening and spreading down the tube is exaggerated.`,
-    draw: () => paint(),
+    limits: { minDist: 25, maxDist: 700, maxPan: 200 },
+    note: `The tube’s length, slots and pulse timing are the 1948 EDSAC report’s; the speed is sound’s in mercury at 40 °C, so the crystal faces are ${CUT_LENGTH_M.toFixed(3)} m apart. The bore, crystals, housing and electronics are drawn. The pulses move ${groupNum(SLOWS[0])} times slower than real (${groupNum(SLOWS[1])} on the slow setting) and their weakening down the tube is exaggerated; the temperature slider is our model of the drift.`,
+    noteMore: `Length, outside diameter, slot count and pulse timing are the 1948 report’s and the sound speed is mercury’s; the bore and wall, the crystals’ size, the housing (the report only says all tanks must be at the same temperature) with its 4 × 4 grid of tubes standing for a battery of 16, and the electronics are drawn, not modelled; the clock fixes the timing as it did in EDSAC (500 kc/s, a 2 µs slot, 576 slots = 1.152 ms) and the tube is the length that fits it: sound goes ${SOUND_M_S.toFixed(0)} m/s in mercury at 40 °C (the temperature secondary sources give for heated mercury lines; no EDSAC source we could read states it), so the crystal faces are ${CUT_LENGTH_M.toFixed(3)} m apart, ${((CUT_LENGTH_M / LENGTH_M - 1) * 100).toFixed(1)} % more than the report’s ‘approximately 5 ft 4 in’ between end blocks (the path between the crystal faces is not given: our inference). The speed and its −0.46 m/s per K slope are one handbook table’s (Karl Deutsch, ‘Sound Velocity in Liquids’), a linear fit; the backing’s material is not given, so its box is generic; the temperature slider is our model of the drift, not a measurement. The pulses move at the real speed and spacing, ${groupNum(SLOWS[0])} times slower (${groupNum(SLOWS[1])} on the slow setting), and their weakening and spreading down the tube is exaggerated.`,
   });
-  const palette = (): MercuryPalette => ({
-    steel: stage.rgb('--hg-steel'), steelClear: stage.rgba('--hg-steel', 0.32), mercury: stage.rgb('--hg-mercury'), quartz: stage.rgba('--hg-quartz', 0.8),
-    brass: stage.rgb('--hg-brass'), housing: stage.rgba('--hg-housing', 0.16), pulse: stage.rgb('--m3-charge'), pulseOff: stage.rgb('--hg-lamp'),
-    bandA: stage.rgba('--hg-band-a', 0.55), bandB: stage.rgba('--hg-band-b', 0.55), bandSel: stage.rgba('--m3-dim', 0.9),
-    panel: stage.rgb('--hg-panel'), lamp: stage.rgb('--hg-lamp'), live: stage.rgb('--m3-charge'), wire: stage.rgb('--hg-wire'), cut: stage.rgb('--m3-poly'),
-  });
-  function paint(): void { stage.paint(mercuryParts(tank, sel, palette()), mercuryAnchors(tank, sel, narrow())); }
+  // the homes are framed on the desktop canvas (aspect 1.9); a phone's narrower one pulls back so the same width shows
+  let cur: OrbitView = startView();
+  const width = keepWidth(stage, 1.9, () => cur);
+  ready = true;
+  /** The pulses and the picked word's sleeve move every frame as instances. */
+  function instances(): void {
+    if (!ready) return;
+    const c = colours();
+    stage.instances('pulses', PULSE_GEO, PULSE_MAT, packInstances(pulseInstances(tank, sel, c.pulse, c.chosen)));
+    stage.instances('band', BAND_GEO, BAND_MAT, packInstances(bandInstances(tank, sel, c.band)));
+  }
+  /** Rebuild only when a lamp, the lever or the loop's wire changed (or every frame in the flat drawing, which has no instances). */
+  function paint(): void {
+    const key = shownKey({ tank, sel }, narrow());
+    if (key !== built || stage.isFlat()) { built = key; stage.refresh(); }
+    instances();
+  }
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), list = h('ol', { class: 'hg-words', 'aria-label': 'The sixteen words in this tank' });
   const live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
@@ -207,29 +225,35 @@ export function mercuryView(): Widget {
     b.addEventListener('click', () => { slow = i; slowBtns.forEach((x, j) => { x.classList.toggle('on', j === i); x.setAttribute('aria-pressed', String(j === i)); }); readout(true); kick(); });
     return b;
   });
-  // the preset views on the stage's shared view bar (the whole tank framed for the stage's width at the click); a phone opens on the sending end
-  const views = (Object.keys(VIEWS) as (keyof typeof VIEWS)[]).map((k) => ({ label: VIEW_NAMES[k], view: k === 'whole' ? wholeView : () => ({ ...VIEWS[k] }), on: k === startKey() }));
+  // the preset views; a phone opens on the sending end
+  const viewBtns = (Object.keys(VIEWS) as (keyof typeof VIEWS)[]).map((k) => {
+    const b = h('button', { type: 'button', 'aria-pressed': String(k === startKey()), class: k === startKey() ? 'on' : '' }, VIEW_NAMES[k]) as HTMLButtonElement;
+    b.addEventListener('click', () => { cur = k === 'whole' ? wholeView() : { ...VIEWS[k] } as OrbitView; stage.goTo(width.scaled(cur)); viewBtns.forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); }); });
+    return b;
+  });
 
   panel.append(
     h('h3', { class: 'm3-title' }, 'EDSAC’s mercury delay line'),
     h('p', { class: 'm3-sub' }, `A circulating shift register made of sound. A quartz crystal turns each pulse into a ${(CARRIER_HZ / 1e6).toFixed(1)} MHz burst of ultrasound, the burst crosses the mercury in ${ms(delayS())}, the crystal at the far end turns it back into a voltage, and the electronics amplify it, reshape it against the clock and launch it again: ${bitsInTank().toFixed(0)} pulse slots (16 words of 36) in flight at once. Recirculation is refresh: the pulse is rewritten every ${ms(delayS())}, where a DRAM cell is rewritten every 64 ms. But there is no address, only time: a word can be read or written only as its slot passes the gate, so a request waits up to a whole circulation, ${us(meanWaitS())} on average.`),
+    // the controls, then the tank across the panel's width (it is 64 times longer than wide), then the figures and the words
+    h('div', { class: 'hg-ctls' },
+      h('div', { class: 'r3-ctl' },
+        h('label', { class: 'hg-in' }, 'Word ', wordSel),
+        h('label', { class: 'hg-in' }, 'Value ', sw),
+        h('label', { class: 'hg-in' }, 'Guess the wait ', predictSel),
+        h('div', { class: 'r3-btns' }, readBtn, writeBtn)),
+      h('div', { class: 'r3-ctl' },
+        h('div', { class: 'r3-btns' }, runBtn, stepBtn, cutBtn, resetBtn),
+        h('label', { class: 'hg-in' }, 'Tank temperature ', temp, tempOut)),
+      h('div', { class: 'r3-ctl' },
+        h('div', { class: 'seg', role: 'group', 'aria-label': 'View' }, ...viewBtns),
+        h('div', { class: 'seg hg-seg', role: 'group', 'aria-label': 'How much slower than real time' }, ...slowBtns))),
+    stage.el, live,
     h('div', { class: 'r3' },
-      h('div', { class: 'r3-main' },
-        h('div', { class: 'r3-ctl' },
-          h('label', { class: 'hg-in' }, 'Word ', wordSel),
-          h('label', { class: 'hg-in' }, 'Value ', sw),
-          h('label', { class: 'hg-in' }, 'Guess the wait ', predictSel),
-          h('div', { class: 'r3-btns' }, readBtn, writeBtn)),
-        h('div', { class: 'r3-ctl' }, h('label', { class: 'hg-in' }, 'Tank temperature ', temp, tempOut)),
-        h('div', { class: 'r3-ctl' },
-          h('div', { class: 'r3-btns' }, runBtn, stepBtn, cutBtn, resetBtn)),
-        h('div', { class: 'r3-ctl' },
-          stage.viewBar(views),
-          h('div', { class: 'seg hg-seg', role: 'group', 'aria-label': 'How much slower than real time' }, ...slowBtns)),
-        stage.el, stage.hint, live),
-      h('div', { class: 'r3-side' }, h('h4', null, 'This tank ', h('span', { class: 'r3-badge' }, `${SLOTS} slots`)), kv, h('h4', null, 'Waits of random reads'), randBtn, hist, histNote, h('h4', null, 'Its sixteen words'), list)));
+      h('div', { class: 'r3-main' }, h('h4', null, 'Its sixteen words'), list, h('h4', null, 'Waits of random reads'), randBtn, hist, histNote),
+      h('div', { class: 'r3-side' }, h('h4', null, 'This tank ', h('span', { class: 'r3-badge' }, `${SLOTS} slots`)), kv)));
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape' && running) { running = false; readout(true); kick(); } });
   readout(true);
   paint();
-  return { el: panel, destroy() { loop.stop(); stage.destroy(); } };
+  return { el: panel, destroy() { width.stop(); loop.stop(); stage.destroy(); } };
 }

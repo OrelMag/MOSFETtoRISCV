@@ -4,7 +4,7 @@
 //    "Warning and Carriage of Tens" and the carry axes (A/171, A/163-165): eight 31-digit numbers, a column of thirty-one figure
 //    wheels; during giving-off a wheel passing 9 to 0 arms a warning latch and does NOT carry; in the carry phase "the warning
 //    mechanisms are serviced in turn and the carries propagate upwards"; thirty carry arms (1C1_1 .. 1C1_30) in a helix keyed to
-//    the carry axis poll each figure wheel "starting from below" ("successive carry"); angular pitch 22 degrees, 45 degrees between
+//    the carry axis poll each figure wheel "starting from below" ("successive carry"); "the angular pitch is fixed at 22½°", 45° between
 //    the 15th and 16th arms; the carry axes complete two rotations per carry action, the second servicing a warning set during
 //    the first by the fifteenth figure wheel; the carry lever warns, locks the wheels and advances the wheel above.
 //  - Swade, "The Construction of Charles Babbage's Difference Engine No. 2", IEEE Annals of the History of Computing 27(3), 2005:
@@ -13,8 +13,10 @@
 //  - C. Babbage, Passages from the Life of a Philosopher (1864), ch. VIII: "teaching the Engine to foresee and then to act upon
 //    that foresight"; "the whole of any unlimited number of carriages in one unit of time"; nine units of time for the addition
 //    and one unit for the carriage, however many digits.
-// The order the arms are reached in below (two sections of 15 arms swept together, the upper one 7 degrees ahead) is derived from
-// those angles, not quoted: the document gives the pitch, the gap and the second rotation, and this ordering reproduces all three.
+// The order the arms are reached in below is derived from those angles, not quoted: 16 × 22½° and 14 × 22½° + 45° are both
+// 360°, so the two sections of 15 arms are polled in step (arm 15 with arm 0, arm 16 with arm 1 …), each from below; a warning
+// the 15th wheel sets late in the first turn (arm 14, at 315°) comes after lever 15 was polled (at 0°), and waits for the second
+// turn, as the document says.
 
 import type { RGB } from '../gl/instances';
 import type { Vec3 } from '../gl/math';
@@ -24,8 +26,8 @@ import { koggeStone } from '../lib/fastadd';
 import { groupNum } from '../sim/numfmt';
 import { logicDepth } from '../sim/stats';
 
-export const DIGITS = 31, ARMS = DIGITS - 1, SPLIT = 15, PITCH_DEG = 22, GAP_DEG = 45;
-/** A carry arm's angle on the carry axis (degrees): 22 degrees apart, 45 between the 15th and the 16th, which wraps the upper 15 to start 7 degrees early. */
+export const DIGITS = 31, ARMS = DIGITS - 1, SPLIT = 15, PITCH_DEG = 22.5, GAP_DEG = 45;
+/** A carry arm's angle on the carry axis (degrees): 22½° apart, 45° between the 15th and the 16th, which brings the upper 15 round to start with the lower. */
 export const armAngle = (a: number): number => a < SPLIT ? PITCH_DEG * a : PITCH_DEG * (SPLIT - 1) + GAP_DEG + PITCH_DEG * (a - SPLIT) - 360;
 /** Shifts the earliest arm to time 0. */
 export const OFFSET = -armAngle(SPLIT);

@@ -1,53 +1,77 @@
-// The CMOS 4T pixel in 3D (loaded on demand, pixel4t3d.ts): one back-illuminated 2.4 µm pixel, cut through its
-// photodiode. Light of the chosen colour falls through the microlens and filter and is absorbed at the depth silicon
-// gives that wavelength; its electrons gather in the pinned photodiode. Read steps the correlated double sampling
-// sequence (imagesensor.ts cdsSequence): reset, sample the reset level, transfer, sample the signal; the floating
-// diffusion's voltage and the column's two samples are plotted beside.
+// The CMOS 4T pixel in 3D (loaded on demand, pixel4t3d.ts) on the studio renderer: one back-illuminated 2.4 µm pixel in
+// true geometry (pixel4t3dkit.ts), cut through its photodiode. Light of the chosen colour falls through the microlens and
+// filter and is absorbed at the depth silicon gives that wavelength; its electrons gather in the pinned photodiode. Read
+// steps the correlated double sampling sequence (imagesensor.ts cdsSequence): reset, sample the reset level, transfer,
+// sample the signal; the floating diffusion's voltage and the column's two samples are plotted beside.
 
 import '../styles/pixel4t3d.css';
+import { packInstances, type Instance } from '../gl/instances';
+import { M } from '../gl/kit/materials';
+import type { Vec3 } from '../gl/math';
 import { h, s } from '../ui/dom';
 import { groupNum } from '../sim/numfmt';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { absorptionDepth, C_FD_FF, CG_4T, ktcNoise, qe, SF_GAIN, VDD_PIX } from '../phys/imagesensor';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
+import { studioStage } from './studiostage';
+import { cutAt, ELECTRON, PHOTON, PIX_HIDDEN, PIX_HOME, PIX_HOME_FRAME, pixModel } from './pixel4t3dkit';
 import {
-  DRAWN, electronsOf, FILTER_NM, FULL_WELL, IDLE, nextPhase, PHOTONS_PER_FLASH, photonsAt, phaseOf, pixAnchors, pixParts, PITCH, SI_T, sequenceOf,
-  type Filter, type Photon, type PixPalette, type PixState,
-} from './pixel4t3dparts';
+  absorbed, dotAt, dots, DRAWN, electronsOf, FD_BOX, FILTER_NM, FULL_WELL, IDLE, LENS, nextPhase, PD_BOX, PHOTONS_PER_FLASH, photonsAt, phaseOf, PITCH, SI_T, sequenceOf,
+  type Filter, type Photon, type PixState,
+} from './pixel4t3dgeom';
 
 /** A photon falls for FALL_MS, its electron drifts for DRIFT_MS; a CDS phase is held READ_MS while Read runs. */
 const FALL_MS = 700, DRIFT_MS = 500, READ_MS = 900;
 const e = (n: number): string => `${groupNum(Math.round(n))} e⁻`;
-const HOME = { target: [12, 10, 12] as [number, number, number], yaw: 2.65, pitch: 0.3, dist: 128 };
-const ZOOM = { target: [16, 0, 17] as [number, number, number], yaw: 2.65, pitch: 0.3, dist: 42 };
 const NAMES: Record<Filter, string> = { b: 'Blue', g: 'Green', r: 'Red' };
 
 export function pixel4tView(): Widget {
   let last: Photon[] = [];
-  let st: PixState = { ...IDLE }, filter: Filter = 'g', photons: Photon[] = [], seed = 1, cut = true, reading = false, held = 0;
+  let st: PixState = { ...IDLE }, filter: Filter = 'g', photons: Photon[] = [], seed = 1, reading = false, held = 0, shown = '';
   const panel = h('div', { class: 'panel px4t' });
-  const stage = modelStage(panel, {
-    look: LOOKS.silicon,
+  const stage = studioStage({
     aria: 'One back-illuminated CMOS pixel in 3D, cut through its photodiode: microlens, colour filter, thinned silicon with the pinned photodiode, and on the front side the transfer gate, floating diffusion, reset, source follower and row select transistors with their metal to the column line',
-    camera: HOME,
-    views: [{ label: 'Whole pixel', view: HOME }, { label: 'Zoom to the transistors', view: ZOOM, title: 'Close on the transfer gate, floating diffusion and the reset, follower and select transistors' }],
-    limits: { minDist: 25, maxDist: 220 },
-    note: `Drawn to scale (${PITCH} µm pixel, ${SI_T} µm of thinned silicon, absorption depths from Green's 2008 table) except the gate oxide, a few nanometres and not drawn. Representative, not IMX183's own (Sony does not publish them): the deep trench walls (0.08 µm inside each edge, full depth), the 0.28 µm shallow trench (the 0.25–0.3 µm class of Fossum & Hondongwa, IEEE J. EDS 2014), the HfO₂ / Ta₂O₅ / SiO₂ films (0.03, 0.065 and 0.095 µm, the last two a quarter wave at 550 nm), the 0.25 µm metal grid, and the 1.2 µm drawn of the bonded carrier wafer, which is hundreds of µm thick; the p+ back layer is drawn 0.05 µm, five times the 0.01 µm dead layer the model fits. The potential funnel is a sketch: the real field comes from graded doping and deep implants, so electrons born at the back are steered into the diode, not carried in a straight line as drawn. Poly (0.18 µm) and the metals are 0.18 µm-generation values; a 2.4 µm pixel's transistors are a newer, finer node (Sony does not say which). The layout is ours: a real ${PITCH} µm pixel shares its reset, follower and select transistors among two or four photodiodes. A dot is ${groupNum(Math.round(FULL_WELL / 60))} electrons, and each drawn photon stands for ${PHOTONS_PER_FLASH / DRAWN}. Sony does not publish the IMX183's conversion gain: ${CG_4T} µV/e⁻ is an illustrative value for a ${PITCH} µm pixel, and the floating diffusion's ${C_FD_FF.toFixed(2)} fF follows from it as q / CG; the full well (${groupNum(FULL_WELL)} e⁻) is an EMVA 1288 measurement.`,
-    draw: () => draw(),
+    home: PIX_HOME,
+    knobs: { cut: 1 },
+    homeFrame: PIX_HOME_FRAME,
+    hidden: PIX_HIDDEN,
+    aspect: 0.78,
+    limits: { minDist: 2, maxDist: 40, minPitch: -1.2, maxPan: 6 },
+    scaleBar: (len) => (len >= 1 ? `${len} µm` : `${Math.round(len * 1000)} nm`),
+    note: `To scale in µm (${PITCH} µm pixel, ${SI_T} µm of silicon), except the gate oxide, not drawn, and the carrier wafer: 1.2 µm of its hundreds. The trenches, films, grid and metal are representative, not the IMX183’s own (Sony does not publish them); the layout is ours and the potential funnel a sketch. A dot is ${groupNum(Math.round(FULL_WELL / 60))} electrons; the conversion gain, ${CG_4T} µV/e⁻, is illustrative.`,
+    noteMore: `Drawn to scale in µm (${PITCH} µm pixel, ${SI_T} µm of thinned silicon, absorption depths from Green's 2008 table) except the gate oxide, a few nanometres and not drawn. Representative, not IMX183's own (Sony does not publish them): the deep trench walls (0.08 µm inside each edge, full depth; Sony's are oxide-filled, about 150 nm), the 0.28 µm shallow trench, the HfO₂ / Ta₂O₅ / SiO₂ films (0.03, 0.065 and 0.095 µm, the last two a quarter wave at 550 nm), the 0.25 µm metal grid, the metal levels, and the 1.2 µm drawn of the bonded carrier wafer, which is hundreds of µm thick; the p+ back layer is drawn 0.05 µm, five times the 0.01 µm dead layer the model fits. The microlens is a spherical cap whose corners meet the filter (no IMX183 sag is published). The potential funnel is a sketch: the real field comes from graded doping and deep implants. The layout is ours: a real ${PITCH} µm pixel shares its reset, follower and select transistors among two or four photodiodes. A dot is ${groupNum(Math.round(FULL_WELL / 60))} electrons, and each drawn photon stands for ${PHOTONS_PER_FLASH / DRAWN}. Sony does not publish the IMX183's conversion gain: ${CG_4T} µV/e⁻ is illustrative, and the floating diffusion's ${C_FD_FF.toFixed(2)} fF follows from it as q / CG; the full well (${groupNum(FULL_WELL)} e⁻) is an EMVA 1288 measurement.`,
+    onKnobs: () => particles(),
+    build: (detail) => pixModel({ s: st, filter }, detail),
   });
-  const palette = (): PixPalette => ({
-    si: stage.rgba('--m3-si', 0.28), p: stage.rgb('--m3-p'), n: stage.rgb('--m3-n'), nplus: stage.rgb('--px-nplus'), poly: stage.rgb('--m3-poly'),
-    metal: stage.rgb('--px-metal'), oxide: stage.rgba('--m3-oxide', 0.3), lens: stage.rgba('--px-lens', 0.35),
-    filter: { b: stage.rgba('--px-b', 0.55), g: stage.rgba('--px-g', 0.55), r: stage.rgba('--px-r', 0.55) },
-    charge: stage.rgb('--m3-charge'), hot: stage.rgb('--px-hot'), light: { b: stage.rgb('--px-b'), g: stage.rgb('--px-g'), r: stage.rgb('--px-r') },
-    sti: stage.rgba('--px-sti', 0.85), dti: stage.rgba('--px-dti', 0.4), pback: stage.rgba('--m3-p', 0.85), grid: stage.rgb('--px-metal'),
-    ar: [stage.rgba('--px-ar0', 0.9), stage.rgba('--px-ar1', 0.9), stage.rgba('--px-ar2', 0.75)], ild: stage.rgba('--m3-oxide', 0.16), wafer: stage.rgb('--px-wafer'),
-  });
-  const pose = () => ({ s: st, filter, photons, cut });
-  const draw = () => stage.paint(pixParts(pose(), palette()), pixAnchors(pose()));
+
+  const eMat = M.make({ base: '--m3-charge', metal: 0, rough: 0.4, emit: '--m3-charge', glow: 0.8, label: 'electrons (a dot is many)' });
+  const lightMat = (f: Filter) => M.make({ base: `--px-${f}`, metal: 0, rough: 0.4, emit: `--px-${f}`, glow: 1, label: 'a photon (drawn as a streak)' });
+  /** Electrons in the photodiode and on FD, drifting electrons and falling photons, in front of the cut left out. */
+  function particles(): void {
+    const zc = cutAt(stage ? stage.knobs().cut : 1), z0 = Math.max(zc, 0);
+    const box = (b: typeof PD_BOX | typeof FD_BOX) => ({ x: b.x, y: b.y, z: [Math.max(z0 + 0.05, b.z[0]), b.z[1]] as const });
+    const pd = box(PD_BOX), fd = box(FD_BOX), inPd = dots(st.pd), es: Instance[] = [], ls: Instance[] = [];
+    const one = (p: Vec3): Instance => ({ pos: p, color: [1, 1, 1] });
+    for (let k = 0; k < inPd; k++) es.push(one(dotAt(k, pd.x, pd.y, pd.z)));
+    for (let k = 0; k < dots(st.fd); k++) es.push(one(dotAt(k, fd.x, fd.y, fd.z)));
+    for (const f of photons) {
+      if (f.z < zc) continue;
+      const yHit = SI_T - Math.min(f.depth, SI_T + 0.3), top = LENS[1] + 1.2;
+      if (f.t < 1) ls.push({ pos: [f.x, top + (yHit - top) * f.t, f.z], scale: [1, 5, 1], color: [1, 1, 1] });
+      else if (absorbed(f) && f.t < 2) {
+        const u = f.t - 1, tgt = dotAt(inPd, pd.x, pd.y, pd.z);
+        es.push(one([f.x + (tgt[0] - f.x) * u, yHit + (tgt[1] - yHit) * u, f.z + (tgt[2] - f.z) * u]));
+      }
+    }
+    stage.instances('electrons', ELECTRON, eMat, packInstances(es));
+    stage.instances('photons', PHOTON, lightMat(filter), packInstances(ls));
+  }
+  /** The model is rebuilt only when what it draws changes: the phase, the filter, or the FD's charge. */
+  function model(): void {
+    const key = `${st.phase}|${filter}|${st.fd}|${st.read}`;
+    if (key !== shown) { shown = key; stage.refresh(); }
+  }
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), plotBox = h('div'), live = h('div', { class: 'sr-only', 'aria-live': 'polite' });
   stage.chips.append(chip);
@@ -56,7 +80,7 @@ export function pixel4tView(): Widget {
     // Both traces on one axis: FD near the supply, the column a follower's drop below it (SF_GAIN × (FD − Vt)).
     const seq = sequenceOf(st), W = 300, H = 150, x0 = 34, cw = (W - x0 - 6) / 4, vMin = 1, vMax = VDD_PIX + 0.1;
     const y = (v: number) => 8 + ((vMax - v) / (vMax - vMin)) * (H - 30);
-    const svg = s('svg', { class: 'px-plot', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `The floating diffusion's voltage and the column's through the four phases of a read, with the column's reset and signal samples` }) as SVGSVGElement;
+    const svg = s('svg', { class: 'px-plot', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'The floating diffusion\'s voltage and the column\'s through the four phases of a read, with the column\'s reset and signal samples' }) as SVGSVGElement;
     for (const v of [VDD_PIX, 2, 1.2]) svg.append(s('line', { class: 'grid', x1: x0, x2: W - 6, y1: y(v), y2: y(v) }), s('text', { x: 0, y: y(v) + 3 }, `${v.toFixed(1)} V`));
     let pts = '', cpts = '';
     const dotsAt: SVGElement[] = [];
@@ -69,9 +93,9 @@ export function pixel4tView(): Widget {
       if (p.sample) dotsAt.push(s('circle', { class: `smp ${p.sample}`, cx: xa + cw / 2, cy: y(p.col), r: 4 }));
     });
     if (st.phase >= 0) {
-      const last = seq.phases[Math.min(st.phase, 3)];
+      const lastPh = seq.phases[Math.min(st.phase, 3)];
       svg.append(s('polyline', { class: 'fd', points: pts.trim() }), s('polyline', { class: 'col', points: cpts.trim() }), ...dotsAt,
-        s('text', { class: 'lbl', x: W - 8, y: y(last.fd) - 4, 'text-anchor': 'end' }, 'FD'), s('text', { class: 'lbl', x: W - 8, y: y(last.col) - 4, 'text-anchor': 'end' }, 'column'));
+        s('text', { class: 'lbl', x: W - 8, y: y(lastPh.fd) - 4, 'text-anchor': 'end' }, 'FD'), s('text', { class: 'lbl', x: W - 8, y: y(lastPh.col) - 4, 'text-anchor': 'end' }, 'column'));
     }
     return svg;
   }
@@ -124,9 +148,10 @@ export function pixel4tView(): Widget {
       if (held >= READ_MS) { held = 0; step(); if (st.phase < 0) reading = false; }
     }
     readout();
-    draw();
+    model();
+    particles();
   }, moving);
-  function repaint(): void { readout(); draw(); loop.kick(); }
+  function repaint(): void { readout(); model(); particles(); loop.kick(); }
 
   function flash(): void {
     if (st.phase >= 0) st = { ...IDLE, pd: 0 };
@@ -155,21 +180,19 @@ export function pixel4tView(): Widget {
   stepBtn.addEventListener('click', () => { reading = false; photons = []; step(); repaint(); });
   const readBtn = h('button', { type: 'button', class: 'btn sm on', 'aria-pressed': 'false' }, 'Read the row') as HTMLButtonElement;
   readBtn.addEventListener('click', () => { reading = !reading; held = READ_MS; repaint(); });
-  const cutBtn = h('button', { type: 'button', class: 'btn sm on', 'aria-pressed': 'true' }, 'Cut through');
-  cutBtn.addEventListener('click', () => { cut = !cut; cutBtn.setAttribute('aria-pressed', String(cut)); repaint(); });
   const reset = h('button', { type: 'button', class: 'btn sm' }, 'Empty');
   reset.addEventListener('click', () => { reading = false; photons = []; st = { ...IDLE }; repaint(); });
+  stage.slot.append(h('div', { class: 'r3-ctl' },
+    h('div', { class: 'r3-btns', role: 'group', 'aria-label': 'Colour filter and light' }, ...filterBtns),
+    h('div', { class: 'r3-btns' }, flashBtn, stepBtn, readBtn, reset)));
 
   panel.append(
     h('h3', { class: 'm3-title' }, 'One pixel, cut open'),
-    h('p', { class: 'm3-sub' }, `A back-illuminated pixel, drawn with the light coming from above: microlens, colour filter, then ${SI_T} µm of silicon with the pinned photodiode at its foot, and the transistors and metal on the front side below it. Which colour has the lowest QE here? Guess, then expose each in turn. Each photon stops at the depth silicon gives its wavelength (blue near the top, red deep, some red straight through), and its electron is steered into the photodiode by the potential gradient. xfer is the transfer gate, sf the follower, rs the row select; DTI / STI are the deep and shallow trench isolation. Then step the read and watch the gates light and the floating diffusion's voltage fall in the plot.`),
+    h('p', { class: 'm3-sub' }, `A back-illuminated pixel, drawn with the light coming from above: microlens, colour filter, then ${SI_T} µm of silicon with the pinned photodiode at its foot, and the transistors and metal on the front side below it. Which colour has the lowest QE here? Guess, then expose each in turn. Each photon stops at the depth silicon gives its wavelength (blue near the top, red deep, some red straight through), and its electron is steered into the photodiode by the potential gradient. xfer is the transfer gate, sf the follower, rs the row select; DTI is the deep trench isolation. Then step the read and watch the gates light and the floating diffusion's voltage fall in the plot.`),
     h('div', { class: 'r3' },
-      h('div', { class: 'r3-main' },
-        h('div', { class: 'r3-ctl' }, h('div', { class: 'r3-btns', role: 'group', 'aria-label': 'Colour filter and light' }, ...filterBtns),
-          h('div', { class: 'r3-btns' }, flashBtn, stepBtn, readBtn, reset, cutBtn), stage.viewBar()),
-        stage.el, stage.hint, live),
+      h('div', { class: 'r3-main' }, stage.el, live),
       h('div', { class: 'r3-side' }, h('div', null, h('h4', null, 'This pixel ', h('span', { class: 'r3-badge' }, 'model')), kv), plotBox)));
   readout();
-  draw();
+  particles();
   return { el: panel, destroy() { loop.stop(); stage.destroy(); } };
 }

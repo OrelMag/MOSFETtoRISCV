@@ -11,7 +11,9 @@ import { VDD, energyFj } from '../sim/power';
 import { stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
 import { strowger3d } from '../widgets/strowger3d';
+import { crossbar3d } from '../widgets/crossbar3d';
 import { telegraph3d } from '../widgets/telegraph3d';
+import { teletype3d } from '../widgets/teletype3d';
 import { withModel } from '../widgets/modelhost';
 import { codesWidget, limitsWidget, telegraphLineWidget } from '../widgets/comm';
 import { erlangWidget, meshWidget, networkCostWidget, startStopWidget } from '../widgets/exchange';
@@ -486,6 +488,15 @@ export const chExchange: Chapter = {
       },
     },
     {
+      title: 'The crossbar itself',
+      body: `
+        <p>The grid of the previous step pays a relay for every crosspoint. The machine the Bell System built from 1938 does not: its crosspoints are only contact springs, and the bars that close them are shared. A Type B switch has ten levels and twenty verticals, 200 crosspoints, each a set of three contact pairs (tip, ring and sleeve). Across its front run five <strong>select bars</strong>; each tilts up or down under one of its two select magnets, so the five bars choose one of ten levels. Every vertical has a <strong>holding bar</strong> the height of the switch, worked by its own <strong>hold magnet</strong>. That is 30 magnets for 200 crosspoints, where the relay grid needed ${XB.relays} relays for nine.</p>
+        <p>A call takes two motions in order. The select magnet tilts its bar, and the bar's flexible fingers, one per vertical, swing in front of the chosen level's contact cards. Then the caller's hold magnet pulls its holding bar in: it traps the one finger in front of it against the card, and the three pairs close. Only then does the select magnet let go: the other nineteen fingers spring back, the trapped one stays bent, and the bar is free for the next call. A hang-up drops the hold magnet, and that crosspoint alone opens.</p>
+        <p>The chapter's grid holds a call on the caller's row; this machine holds it on the caller's vertical. With callers on verticals and called lines on levels the two are the same rule, and a test holds the model to the relay grid of the previous step, call for call. What the steel adds is a rule of its own: two select magnets up at once would swing two fingers in front of one vertical, and its holding bar would trap both. So the marker, the shared controller, serves one request at a time.</p>
+        <div class="try">Call from vertical 4 to level 2, then from vertical 9 to level 2: the second is refused, the level is busy. Hang up vertical 4 and call again.</div>`,
+      widget: () => crossbar3d(),
+    },
+    {
       title: 'What a switching network costs',
       body: `
         <p>The crossbar's N² crosspoints are too many at telephone scale: a thousand lines are ${thin(crossbarCrosspoints(1000))} contacts. Charles Clos's 1953 three-stage network cuts it down: r input switches
@@ -538,7 +549,7 @@ export const chExchange: Chapter = {
         ±${(100 * SS.ita2.fast).toFixed(2)} % for the teleprinter, ±${(100 * SS.uart.fast).toFixed(2)} % for 8N1 (K = 9), both for an isolated character. (8N1, the frame of most serial ports, is eight data bits, no parity and one stop bit.) With characters back to back the slow side of 8N1 tightens to −${(100 * SS.uartB2B.slow).toFixed(2)} %, because the stop sample at 9.5 / (1 + e) must come before the next start edge at 10; the teleprinter's 1.5 stop units leave it unaffected. The widget searches every code to find where the first one fails (a code ending in 0 goes first: a sample that
         lands in a neighbour of the same level reads right). The frame is general: the serial-port chip (UART) of chapter ${numOf('uart')} reuses it with another length, and a clock that counts sixteen ticks a bit loses part of the margin. Everything so far took for granted that a level sent is a level received; chapter ${numOf('wire')} asks what the wire does to it.</p>
         <div class="try">Move the receiver's speed until a sample crosses a boundary. Then pick the 8-bit frame, and search every code.</div>`,
-      widget: () => startStopWidget(),
+      widget: () => withModel(startStopWidget(), teletype3d()),
       more: {
         derive: `<p>The receiver detects the start edge, then samples data bit i at (i + 1 + p) bits of its own clock, p = ½ for mid-bit. With its clock fast by e it reaches that instant after (i + 1 + p) / (1 + e) transmitter units. The bit read is the unit that instant falls in. The first failure on the fast side is the stop sample at K + p, which must stay at or after K:
           e ≤ p / K. On the slow side, the last data sample at K − 1 + p must stay before K: e ≥ −(1 − p) / K. K = 1 + data + parity: ${K_ITA2} for ITA2, 9 for 8N1.</p>`,

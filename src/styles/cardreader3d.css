@@ -2,12 +2,13 @@
 .m3d {
   --cr-card: light-dark(#e6d9b0, #d9c995);
   --cr-hole: light-dark(#2b2f3a, #101217);
-  --cr-bed: light-dark(#b9bfd2, #4d5572);
+  --cr-bed: light-dark(#7e8598, #3f465e);
   --cr-brass: light-dark(#b8862b, #e0b04a);
   --cr-lamp: light-dark(#7b6f6a, #5c5450);
   --cr-panel: light-dark(#5d6680, #3b4259);
   --cr-beam: light-dark(#f5d76e, #ffe58a);
   --cr-rubber: light-dark(#3a3d45, #24262c);
+  --cr-frame: light-dark(#8e939c, #6c727e);
 }
 .cr-seg { flex: 0 1 auto; flex-wrap: wrap; max-width: 100%; } /* wraps under 400 px rather than clip "Column by column (2501)" */
 .cr-seg button { min-height: 30px; }

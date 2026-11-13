@@ -6,7 +6,8 @@ import type { Anchor, Part } from '../gl/parts';
 import { boxParts, BOX_AT, currentParts, insideParts, printerParts, PRN_BASE } from './enigma3dextras';
 import { AX_Y, AX_Z, caseParts, coverParts, ETW_FACE, FACE_Z, keyboardParts, lampParts, lidParts, PANEL_Y, pawlParts, plugboardParts, RIM_R, RIM_X, stackLift, stackParts, stackX, type EnigmaPalette, type EnigmaPose } from './enigma3dparts';
 
-export function enigmaParts(p: EnigmaPose, P: EnigmaPalette): Part[] {
+/** `lid: false` leaves the open lid out (the flat drawing, whose painter's order cannot sort its thin panels). */
+export function enigmaParts(p: EnigmaPose, P: EnigmaPalette, o: { lid?: boolean } = {}): Part[] {
   const out: Part[] = [];
   caseParts(out, p, P);
   keyboardParts(out, p, P);
@@ -16,7 +17,7 @@ export function enigmaParts(p: EnigmaPose, P: EnigmaPalette): Part[] {
   coverParts(out, p, P);
   stackParts(out, p, P);
   pawlParts(out, p, P);
-  if (!p.bare && !p.printer) lidParts(out, p, P);
+  if (!p.bare && !p.printer && o.lid !== false) lidParts(out, p, P);
   if (p.printer) printerParts(out, p, P);
   if (p.box) boxParts(out, p, P);
   if (p.trace && p.out < 0.02 && p.inside) currentParts(out, p.trace, p, P);
@@ -40,7 +41,7 @@ export function enigmaAnchors(p: EnigmaPose): Anchor[] {
   }
   if (p.lid > 0.5) {
     a.push({ text: 'Lamps', p: [-130, 94, 5], side: 'l', n: up }, { text: 'Keyboard', p: [131, 62, 80], side: 'r', n: up });
-    if (p.flap > 0.5) a.push({ text: 'Plugboard: sockets by number', p: [132, 30, FACE_Z], side: 'r', n: [0, 0, 1] });
+    if (p.flap > 0.5) a.push({ text: 'Plugboard sockets', p: [132, 30, FACE_Z], side: 'r', n: [0, 0, 1] });
   }
   if (p.cover > 0.5) {
     const y = AX_Y + lift + RIM_R, back = AX_Z - 44;
@@ -51,7 +52,7 @@ export function enigmaAnchors(p: EnigmaPose): Anchor[] {
     if (p.out < 0.1) a.push({ text: 'Pawls', p: [36, AX_Y + 3, AX_Z - 52], side: 'r', n: up, minor: true });
     a.push({ text: 'Battery', p: [97, 93, -105], side: 'r', n: up, minor: true });
   } else if (p.lid > 0.5) {
-    a.push({ text: 'Windows: the four wheels', p: [RIM_X[1], PANEL_Y + 2, AX_Z - 25], side: 't', n: up });
+    a.push({ text: 'Wheel windows', p: [RIM_X[1], PANEL_Y + 2, AX_Z - 25], side: 't', n: up });
   }
   return a;
 }

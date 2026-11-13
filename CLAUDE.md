@@ -1354,28 +1354,46 @@ src/phys/      lumped physics models behind the prologue's close-ups (DOM-free):
                law fitted to the datasheet, Richardson emission over a 6 s heater warm-up, plateVoltage with divider loads,
                gateLevels(fanout, top, bottom, bias): a chain's margins, sectionPower / nandBrickPower, TUBE_STEP_US (an
                estimate), ENIAC's numbers; tests/phys-triode.test.ts)
-src/widgets/   (3D models, also) modelhost.ts lazyModel / withModel: what a chapter imports (a model under the step's widget; never a grid around a `.widget`: its margin: auto collapses), modelstage.ts modelStage: a model's canvas, SVG fallback (gl/parts.ts flatFaces), labels, chips, theme; gl/parts.ts box / cyl / rod / wire, Anchor: DOM-free parts, so `<x>3dparts.ts` is tested against its model (tests/models3d.test.ts: mosfet3dparts on mosphys.ts). Tokens --m3-* in styles/model3d.css, the stage's classes r3-* in relay3d.css. The models: mosfet3d, strowger3d (phys/strowger.ts, tests hold it to DIAL_SELECTOR), cable3d (phys/cable.ts), masks3d, fgate3d (phys/fgate.ts on lib/flash.ts), dram3d (its own SwitchSim of DRAM4X4), telegraph3d (phys/telegraph.ts, relay.ts), package3d (phys/line.ts groundBounce), press3d (cards/census.ts, shared with censusWidget)
-src/gl/        the hand-written WebGL2 renderer (its own lazy chunk, no library): instanced meshes (boxMesh, cylinderMesh; 18
-               floats per instance: position, scale, quaternion, RGBA, emissive + specular), transparent batches, frames
-               on demand, OrbitCamera + orbit controls, context loss recovery; createRenderer returns null without WebGL2.
-               studio.ts: the studio renderer every model moves to (API frozen: docs/STUDIO3D.md): GGX + clear coat
+src/widgets/   (3D models, also) every model on the studio renderer (docs/STUDIO3D.md), one entry each in models3dindex.ts
+               (the codex's model index and the smoke's 3D routes read it; tests/models3dindex.test.ts: every *3d* file claimed,
+               every mount found): <x>3d.ts the tiny lazy entry a chapter imports (modelhost.ts lazyModel / withModel: a model
+               under the step's widget; never a grid around a `.widget`: its margin: auto collapses), <x>3dview.ts the stage
+               (studiostage.ts studioStage) and the model's controls, <x>3dkit.ts DOM-free geometry / materials / xModel(state)
+               → Model3, <x>3dparts.ts or 3dgeom.ts the measured data and arithmetic the kit and its test share;
+               tests/model-<x>.test.ts holds each drawing to its numbers (physics in phys/: strowger, cable, fgate, telegraph,
+               relay, triode, flipchip, gatecontrol, memsmic, crossbar, euv, line, …). Tokens per model in styles/<x>3d.css
+               (both themes), the stage's classes st-* in studio3d.css, r3-* in relay3d.css. A model's rule: the subject alone
+               and large at home, one layer per chip or beat, sourced sizes pinned in its test, anything else said to be typical
+               or illustrative in its note, one stated factor for an exaggeration.
+src/gl/        the hand-written WebGL2 renderers (lazy chunks, no library). renderer.ts: the older instanced box / cylinder
+               renderer (boxMesh, cylinderMesh; 18 floats per instance), still drawing the machine hall, the water figures and
+               the relay / triode side views; OrbitCamera + orbit controls, context loss recovery; null without WebGL2.
+               studio.ts (docs/STUDIO3D.md), every 3D model's renderer: GGX + clear coat
                in a procedural studio, one key light (env.dir), PCF shadow map redrawn only when dirty, glass over a frame copy,
                translucent layers sorted far to near, MSAA with a glow target, bloom (half / quarter resolution), ACES, up to 4
                glow lights, one data texture per material (emit / albedo / mask), per-vertex colour, live deform (Geo.rev →
                bufferSubData), move() (rigid motion by name or group), adaptive tiers (MSAA 4→2, PCF 9→4, MSAA off, refraction
-               off, bloom off: never back up). kit/ (DOM-free, tested in Node): geo.ts (lathe, sweep, tube, helix, extrude,
-               bentSheet, roundedBox, surface, ribbon, refresh, paint, along), materials.ts (M presets, heatColour / heatGlow,
-               oxideColour), scene.ts (Item / Model3 / Beat / Moves; pick: a CPU ray, fitView / aspectOf, anchorAt follows
-               moves), text.ts (strokeGeo: the stroke font as tubes or flat ink on a Surface), fromparts.ts + looks.ts (phase 0:
-               today's box / cyl parts on the studio, each model's look as data: LOOKS.machine | silicon | lab | field in its
-               modelStage call, under ?studio3d). widgets/studiostage.ts studioStage({ build }): canvas at the model's aspect,
-               home refitted, names in gutters or numbered badges + list (by measured width / height), hover cards, tour beats
-               (frame / show / hide), Cutaway / Explode, corner tools, flat SVG fallback (?flat3d), ?stats overlay.
-               widgets/relay3d.ts (relayCloseup: a placeholder, then relay3dview.ts relayView({ studio: true }): the controls,
+               off, bloom off: never back up); a cut cap is shaded at the first inner back face, so solids sharing a face z-fight
+               on a section (inset them a hair). kit/ (DOM-free, tested in Node): geo.ts (lathe, sweep, tube, helix, extrude,
+               bentSheet, roundedBox, surface, ribbon, refresh, paint, along; transform / merge keep uvs and colours),
+               materials.ts (M presets incl. M.oxideFilm, heatColour / heatGlow, oxideColour), scene.ts (Item / Model3 / Beat / Moves /
+               StudioAnchor; pick: a CPU ray, fitView / aspectOf, anchorAt follows moves; Model3.cutLabels, StudioAnchor.gutter /
+               whenCut, Beat.labels, flatOrder), text.ts (strokeGeo: the stroke font as tubes or flat ink on a Surface),
+               fromparts.ts (UNIT_BOX / UNIT_CYL the kits instance). parts.ts flatView: the flat fallback seen from
+               OrbitCamera.eye()'s side, faces clipped to a cut (tests/models3d.test.ts). widgets/studiostage.ts studioStage({
+               build, home, fit, homeFrame, homeRadius, aspect, hidden, scaleBar, onBeat, knobs, onKnobs }): the column's whole
+               width, canvas at the model's aspect, home fitted to what it shows (a goTo home survives a resize), names in
+               gutters or numbered badges + list (by measured width), hover cards, tour beats (frame / show / hide / labels;
+               onBeat before the beat is read), Cutaway / Explode, corner tools, flat SVG fallback (?flat3d), ?stats overlay;
+               goTo / look / endTour / setKnobs for hosts. A Names corner tool (tag, key N; settings.modelNames, the view menu's
+               "3D model names", in VIEW_KEYS) hides the names, leaders, phone badges and list for every model, the canvas box
+               unchanged and the model fitted into the gutters' width (gl/kit/names.ts).
+               widgets/relay3d.ts (relayCloseup: a placeholder, then relay3dview.ts: the controls,
                plots and sweep around relay3dkit.ts's relay (true geometry, posed per sample by relayPose(): the armature
                turned about the hinge, the spring stretched, the blade bent with refresh(), contacts lit when closed;
                relay3dgeom.ts the lever arithmetic both drawings share; tests/relay3dkit.test.ts)); widgets/triode3d.ts
-               (triodeCloseup: triode3dnext.ts on triode3dkit.ts, physics and plots from triode3dview.ts on phys/triode.ts);
+               (triodeCloseup: triode3dnext.ts on triode3dkit.ts, physics and plots from triode3dview.ts on phys/triode.ts;
+               phys/triodefield.ts the Field layer's potential, triodedata.ts the data sheet's curves);
                widgets/tubedivider.ts (P2's divider explorer: ratio, bias, fan-out)
 src/gfx/       raster16.ts: the campaign's (7-bit vertices, 32 × 32, RGB565; Edge16 / Walk16 models, rasterize16 with the
                19-cycle set-up, draw16, rgb565); raster.ts: the rasterizer's reference model (setup, rasterize: pixel writes

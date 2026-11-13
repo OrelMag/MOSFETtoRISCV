@@ -56,6 +56,8 @@ export interface Beat {
   explode?: number;
   /** The cut's position 0 (none) … 1 (fully open). */
   cut?: number;
+  /** false: no names in this beat (a view where they would only clutter, a field of copies). */
+  labels?: boolean;
 }
 
 export interface StudioAnchor extends Anchor {
@@ -63,6 +65,10 @@ export interface StudioAnchor extends Anchor {
   on?: string;
   /** Shown only in views from below (pins). */
   under?: boolean;
+  /** The studio stage puts a name in the gutter nearer its point (`side` comes from the Anchor the old stage used; the studio stage ignores it); this forces one. */
+  gutter?: 'l' | 'r';
+  /** true: shown only while the model is cut (a name on the section); false: only while it is not. */
+  whenCut?: boolean;
 }
 
 export interface Model3 {
@@ -75,7 +81,12 @@ export interface Model3 {
   floor?: number;
   lights?: GlowLight[];
   /** The model's look on the studio (phase 0's per-model data, and any model's): exposure, key-light direction. */
-  look?: { exposure?: number; keyDir?: Vec3 };
+  look?: { exposure?: number; keyDir?: Vec3; haze?: { colour: Colour; dist: number } };
+  /** The flat (SVG) drawing's painter's order: per triangle (default), or whole items back to front by their farthest point,
+   *  then the triangles within each: for a model of separate layers (stacked platters, thin overlays on a face). */
+  flatOrder?: 'faces' | 'items';
+  /** Labels whose point the cut has taken away hide (a section that removes whole parts with their labels). */
+  cutLabels?: boolean;
 }
 
 export interface Knobs { explode: number; cut: number }

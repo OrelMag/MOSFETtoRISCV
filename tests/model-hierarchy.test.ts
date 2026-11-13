@@ -6,11 +6,11 @@ import { describe, expect, it } from 'vitest';
 import { CORE_GHZ, DEFAULT_HITS, LEVELS, REAL_CYCLES, amatCycles, amatShares, cyclesOf } from '../src/widgets/hierarchy3ddata';
 import { DESK_TIERS } from '../src/widgets/analogy/mem';
 import {
-  CORE, NS0, PLACES, placeOf, SCALE, TICKS, accessNs, asSeconds, distOf, elapsedNs, flightSeconds, fmtNs, hierarchyAnchors, hierarchyParts, levelX, timeAt, type HPalette,
+  CORE, NS0, PLACES, placeOf, SCALE, TICKS, accessNs, asSeconds, distOf, elapsedNs, flightSeconds, fmtNs, hierarchyAnchors, levelX, timeAt,
 } from '../src/widgets/hierarchy3dparts';
+import { hierarchyModel, TOUR_LEVELS } from '../src/widgets/hierarchy3dkit';
+import { itemMatrix } from '../src/gl/kit/scene';
 
-const col = (i: number): [number, number, number] => [i / 20, 0.5, 0.5];
-const P: HPalette = { ground: col(1), road: col(2), tick: col(3), wood: col(4), shelf: col(5), wall: col(6), roof: col(7), door: col(8), core: col(9), metal: col(10), mark: col(11), live: col(12), courier: col(13) };
 const chapter = readFileSync(new URL('../src/chapters/ch-cache.ts', import.meta.url), 'utf8');
 const analogy = readFileSync(new URL('../src/chapters/analogies.ts', import.meta.url), 'utf8');
 const get = (id: string) => LEVELS.find((l) => l.id === id)!;
@@ -86,9 +86,15 @@ describe('the hierarchy model against the chapter', () => {
     const f = LEVELS.map((l) => flightSeconds(levelX(l)));
     for (let i = 1; i < f.length; i++) expect(f[i]).toBeGreaterThan(f[i - 1]);
     expect(f[5]).toBeLessThan(6);
-    const parts = hierarchyParts({ x: 30, phase: 'out', target: 2 }, P);
-    expect(parts.length).toBeGreaterThan(50);
-    for (const p of parts) for (const v of [...p.pos, ...(p.scale ?? [])]) expect(Number.isFinite(v)).toBe(true);
+    const m = hierarchyModel({ x: 30, phase: 'out', target: 2 });
+    expect(m.items.length).toBeGreaterThan(20);
+    for (const it of m.items) for (const v of it.geo.positions) expect(Number.isFinite(v)).toBe(true);
+    // the courier is where the pose puts it; the target's crate is the lit one
+    expect(itemMatrix(m.items.find((i) => i.name === 'courier')!, 0)[12]).toBe(30);
+    expect(m.items.filter((i) => i.mat.emit).map((i) => i.name)).toEqual([`${LEVELS[2].name}: its data`]);
+    // every crate stands at its level's distance, and the tour visits levels by their own views
+    LEVELS.forEach((l, k) => { const c = m.items.find((i) => i.name === `${l.name}: its data`)!.geo; expect((c.min[0] + c.max[0]) / 2, `${k}`).toBeCloseTo(levelX(l), 4); });
+    expect(m.beats).toHaveLength(TOUR_LEVELS.length);
     const labels = hierarchyAnchors().map((a) => a.text);
     expect(new Set(labels).size).toBe(labels.length);
     expect(labels).toEqual(['Core', 'Regs', 'L1\nDesk', 'L2\nShelf', 'L3\nLibrary', 'DRAM\nWarehouse', 'SSD\nAnother city']);

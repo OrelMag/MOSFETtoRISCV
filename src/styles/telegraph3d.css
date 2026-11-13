@@ -14,3 +14,4 @@
 /* a phone: the stage keeps a real height (the chips and the corner buttons take a corner each) */
 @media (max-width: 600px) { .tg3d .r3-stage { aspect-ratio: auto; height: 300px; min-height: 300px; } }
 @media (max-width: 400px) { .tg3d .r3-stage { height: 280px; min-height: 280px; } }
+.tg-below { margin-top: 8px; max-width: 640px; }

@@ -17,7 +17,6 @@ import { mat4LookAt, mat4Mul, norm3, type Mat4, type Vec3 } from './math';
 import { attachOrbit } from './orbit';
 import { lathe, normalMatrix, type Geo } from './kit/geo';
 import type { Colour, DataTex, Material } from './kit/materials';
-import type { PartScene } from './kit/fromparts';
 import { boundsOf, cutsAt, explodeOffset, itemMatrix, type Item, type Knobs, type Model3, type Moves } from './kit/scene';
 
 export interface StudioFlags {
@@ -60,8 +59,6 @@ export interface Studio {
   setHidden(names: ReadonlySet<string> | null): void;
   /** A set of instances (particles): the 18-float records of gl/instances.ts on a geometry, in a material. */
   setInstances(key: string, geo: Geo, mat: Material, data: Float32Array, count?: number, casts?: boolean): void;
-  /** Today's box / cyl parts (gl/kit/fromparts.ts): phase 0, a model unchanged on this renderer. */
-  showParts(scene: PartScene, resolve: (c: Colour) => RGB): void;
   /** Names / groups lit (the rest dimmed), or null for all. */
   setFocus(names: ReadonlySet<string> | null): void;
   /** The part under the pointer: drawn with a rim. */
@@ -107,6 +104,7 @@ in vec3 vN; in vec3 vW; in vec4 vL; in vec4 vC; in vec3 vE; in vec3 vVC; in vec2
 uniform vec3 uEye, uKeyDir, uKeyCol, uSky, uGround, uAccent;
 uniform vec3 uBase, uEmit, uTint;
 uniform float uMetal, uRough, uCoat, uTransmit, uExposure, uDim, uRim, uBloomK;
+uniform vec4 uHaze;       // depth haze: colour (sRGB), 1 / its distance (0: none)
 uniform int uMode;        // 0 opaque, 1 thin glass (blended), 2 glass over the frame copy, 3 floor, 4 beam (additive)
 uniform int uCutOn, uNCut;
 uniform vec4 uCut[2];
@@ -244,12 +242,15 @@ void main() {
       n = cn; cap = true;
     }
   }
-  float sh = shadowAt();
+  // a cap is shaded at the back face it is drawn from, inside the solid: the shadow map would darken every section
+  float sh = cap ? 1.0 : shadowAt();
   if (uMode == 0) {
     vec3 c = shade(n, V, base, uMetal, cap ? 0.75 : uRough, cap ? 0.0 : uCoat, sh) + emit;
     float NoV = max(dot(n, V), 0.0);
     c += lin(uAccent) * uRim * pow(1.0 - NoV, 2.0) * 1.6;
     vec3 outc = display(c);
+    // depth haze, in display space so it fades to the page's own background colour
+    if (uHaze.w > 0.0) outc = mix(outc, uHaze.rgb, 1.0 - exp(-length(vW - uEye) * uHaze.w));
     float l = dot(outc, vec3(0.299, 0.587, 0.114));
     outc = mix(outc, vec3(l) * 0.55 + 0.2, uDim);
     o = vec4(outc * vC.a, vC.a);
@@ -325,7 +326,7 @@ void main() {
 interface GpuGeo { vbo: WebGLBuffer; ibo: WebGLBuffer; vao: WebGLVertexArrayObject; count: number; cbo: WebGLBuffer | null; ubo: WebGLBuffer | null; rev: number }
 interface Draw { item: Item; geo: GpuGeo; src: Geo; mat: ResolvedMat; glass: boolean; key: string[] }
 interface ResolvedMat { base: RGB; emit: RGB; tint: RGB; metal: number; rough: number; coat: number; transmit: number; glow: number; bloom: number; beam: boolean; data: DataTex | null }
-interface InstSet { casts: boolean; geo: Geo; mat: ResolvedMat; vao: WebGLVertexArrayObject | null; buf: WebGLBuffer | null; data: Float32Array; count: number; gpu: GpuGeo | null }
+interface InstSet { casts: boolean; geo: Geo; src: Material; mat: ResolvedMat; vao: WebGLVertexArrayObject | null; buf: WebGLBuffer | null; data: Float32Array; count: number; gpu: GpuGeo | null }
 interface Target { fb: WebGLFramebuffer; tex: WebGLTexture; w: number; h: number }
 
 const SHADOW_SIZE_HI = 2048, SHADOW_SIZE_LO = 1024;
@@ -343,6 +344,9 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
   const dense = Math.min(opts.maxDpr ?? 2, window.devicePixelRatio || 1) >= 2, coarse = matchMedia('(pointer: coarse)').matches;
   const flags: StudioFlags = { shadows: true, msaa: true, refraction: true, env: true, floor: true, bloom: true, samples: dense ? 2 : 4, pcf: coarse ? 4 : 9, ...opts.flags };
   let env: StudioEnv = { sky: [0.75, 0.78, 0.84], ground: [0.36, 0.34, 0.32], key: [0.95, 0.93, 0.88], dir: norm3([-0.5, 0.85, 0.45]), exposure: 1.35, accent: [0.25, 0.6, 1.0] };
+  /** The key light a model gets back when its look stops naming one (a beat lowered it); the haze its look asks for. */
+  const homeDir = env.dir;
+  let haze: [number, number, number, number] = [0, 0, 0, 0];
   let model: Model3 | null = null, resolve: (c: Colour) => RGB = () => [1, 0, 1];
   let k: Knobs = { explode: 0, cut: 0 };
   let focus: ReadonlySet<string> | null = null, hover: string | null = null, hidden: ReadonlySet<string> | null = null;
@@ -466,6 +470,16 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
     draws = [];
     if (!model) return;
     for (const it of model.items) draws.push({ item: it, src: it.geo, geo: upGeo(it.geo), mat: resolveMat(it.mat), glass: (it.mat.transmit ?? 0) > 0.3 && !it.mat.beam, key: keysOf(it) });
+    // free what no item and no instance set draws any more: a model that builds a geometry per frame (a growing beam)
+    // would otherwise keep every one of them on the GPU
+    const used = new Set<Geo>(model.items.map((i) => i.geo));
+    for (const s of inst.values()) used.add(s.geo);
+    for (const [g, r] of geos) if (!used.has(g) && r !== floorGeo) {
+      gl.deleteVertexArray(r.vao); gl.deleteBuffer(r.vbo); gl.deleteBuffer(r.ibo);
+      if (r.cbo) gl.deleteBuffer(r.cbo);
+      if (r.ubo) gl.deleteBuffer(r.ubo);
+      geos.delete(g);
+    }
     shadowDirty = true;
   };
 
@@ -681,6 +695,7 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
     gl.uniform3fv(U.uEye, eye); gl.uniform3fv(U.uKeyDir, norm3(env.dir));
     gl.uniform3fv(U.uKeyCol, env.key); gl.uniform3fv(U.uSky, env.sky); gl.uniform3fv(U.uGround, env.ground); gl.uniform3fv(U.uAccent, env.accent);
     gl.uniform1f(U.uExposure, env.exposure);
+    gl.uniform4f(U.uHaze, haze[0], haze[1], haze[2], haze[3]);
     gl.uniform1i(U.uShadowOn, flags.shadows ? 1 : 0); gl.uniform1i(U.uEnvOn, flags.env ? 1 : 0);
     gl.uniform1f(U.uShadowTexel, 1 / shadowSize); gl.uniform1i(U.uPcf, flags.pcf);
     gl.uniform2f(U.uView, W, H);
@@ -835,8 +850,12 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
     camera, canvas, flags, render, invalidate,
     setModel(m, r) {
       model = m; resolve = r;
+      // instance sets resolved before this resolver came (a model filling them while it builds) take its colours now
+      for (const s of inst.values()) s.mat = resolveMat(s.src);
       if (m.look?.exposure !== undefined) env.exposure = m.look.exposure;
-      if (m.look?.keyDir) { env.dir = norm3(m.look.keyDir); shadowDirty = true; }
+      const dir = m.look?.keyDir ? norm3(m.look.keyDir) : homeDir;
+      if (dir.some((v, i) => v !== env.dir[i])) { env.dir = dir; shadowDirty = true; }
+      haze = m.look?.haze ? [...r(m.look.haze.colour), 1 / m.look.haze.dist] : [0, 0, 0, 0];
       if (!lost) build();
       invalidate();
     },
@@ -853,17 +872,11 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
     setInstances(key, geo, mat, data, count, casts = false) {
       let s = inst.get(key);
       const rm = resolveMat(mat);
-      if (!s || s.geo !== geo) { s = { casts, geo, mat: rm, vao: null, buf: null, data, count: count ?? data.length / INSTANCE_FLOATS, gpu: null }; inst.set(key, s); }
-      s.mat = rm; s.data = data; s.count = count ?? data.length / INSTANCE_FLOATS; s.casts = casts;
+      if (s && s.geo !== geo && !lost) { if (s.vao) gl.deleteVertexArray(s.vao); if (s.buf) gl.deleteBuffer(s.buf); }
+      if (!s || s.geo !== geo) { s = { casts, geo, src: mat, mat: rm, vao: null, buf: null, data, count: count ?? data.length / INSTANCE_FLOATS, gpu: null }; inst.set(key, s); }
+      s.src = mat; s.mat = rm; s.data = data; s.count = count ?? data.length / INSTANCE_FLOATS; s.casts = casts;
       if (!lost && s.vao && s.buf) { gl.bindBuffer(gl.ARRAY_BUFFER, s.buf); gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW); }
       if (casts) shadowDirty = true;
-      invalidate();
-    },
-    showParts(scene, r) {
-      resolve = r;
-      model = { ...(model ?? {}), items: scene.items };
-      if (!lost) build();
-      for (const x of scene.sets) self.setInstances(x.key, x.geo, x.mat, x.data, undefined, true);
       invalidate();
     },
     setFocus(f) { focus = f; invalidate(); },
