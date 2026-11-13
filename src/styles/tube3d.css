@@ -64,3 +64,9 @@
 .t3-bar { height: 7px; border-radius: 4px; background: var(--border); margin: 4px 0 2px; overflow: hidden; }
 .t3-bar i { display: block; height: 100%; background: var(--tb-orange); border-radius: 4px; }
 .t3-bar.over i { background: var(--bad); }
+.tube3d .r3-chip.t3-field { pointer-events: auto; cursor: pointer; }
+.tube3d .r3-chip.t3-field[aria-pressed='true'] { color: var(--tb-electron); background: color-mix(in srgb, var(--tb-electron) 16%, var(--surface)); border-color: var(--tb-electron); }
+@media (pointer: coarse) { .tube3d .r3-chip.t3-field { min-height: 40px; padding: 0 14px; } }
+.r3-plot .t3-sheet { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 2; }
+.r3-plot .t3-sheetdot { fill: var(--muted); }
+.r3-plot .t3-model { stroke: var(--tb-vp); }

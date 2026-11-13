@@ -2,7 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import type { RGB, RGBA } from '../src/gl/instances';
 import { quatRotate, type Vec3 } from '../src/gl/math';
-import { box, cyl, flatFaces, rod } from '../src/gl/parts';
+import { box, cyl, flatFaces, flatView, rod } from '../src/gl/parts';
+import { OrbitCamera } from '../src/gl/camera';
 
 const GREY: RGB = [0.5, 0.5, 0.5], CLEAR: RGBA = [0.5, 0.5, 0.5, 0.4];
 
@@ -25,6 +26,17 @@ describe('the kit', () => {
     const n = flatFaces([cyl(GREY, 0, 0, 0, 1, 1)], 0.3, 0.5).length;
     expect(n).toBeGreaterThanOrEqual(6);
     expect(n).toBeLessThanOrEqual(8);
+  });
+
+  it('the flat view looks from where the camera’s eye is, with the same right hand', () => {
+    for (const yaw of [0, 0.7, Math.PI / 2, -2.1]) for (const pitch of [0, 0.4]) {
+      const cam = new OrbitCamera({ target: [0, 0, 0], yaw, pitch, dist: 10 }), eye = cam.eye(), pr = flatView(yaw, pitch);
+      // the eye's own direction is the nearest a point can be; a point to the camera's right has X > 0
+      expect(pr(eye)[2]).toBeCloseTo(10, 6);
+      const right: Vec3 = [Math.cos(yaw), 0, -Math.sin(yaw)];
+      expect(pr(right)[0]).toBeCloseTo(1, 6);
+      expect(pr([0, 1, 0])[1]).toBeCloseTo(Math.cos(pitch), 6);
+    }
   });
 
   it('keeps a part’s alpha in the flat view', () => {

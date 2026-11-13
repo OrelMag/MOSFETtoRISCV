@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import {
-  AMP, beamPath, cellOf, deflectionOf, DIGITS, funnelRadius, LINES, meshParts, poseParts, spotCentre, spotYZ, staticParts, WGEOM, williamsAnchors, type WilliamsPose,
-} from '../src/widgets/williams3dparts';
-import type { CrtPalette } from '../src/widgets/crt3dparts';
-import type { RGB } from '../src/gl/instances';
+import { beamPath, cellOf, deflectionOf, DIGITS, funnelRadius, LINES, spotCentre, spotYZ, WGEOM } from '../src/widgets/williams3dparts';
+import { BOX, chargeAt, CHASSIS, lightAt, newTex, PLATE_HALF, PLATE_X, PX, ROW, stamp, staticFace, TEX, williamsModel, type WilliamsState } from '../src/widgets/williams3dkit';
+import { DIGIT_S, LEAK_S, Store, THRESH } from '../src/widgets/williams3dview';
+import { boundsOf } from '../src/gl/kit/scene';
 
-const c = (v: number): RGB => [v, v, v];
-const P: CrtPalette = { glass: c(0.8), aquadag: c(0.2), copper: c(0.7), ferrite: c(0.3), metal: c(0.6), pin: c(0.5), cellOff: c(0.1), mask: c(0.4), heater: c(0.9), ghost: c(0.5), bezel: c(0.2) };
-const pose = (o: Partial<WilliamsPose> = {}): WilliamsPose => ({ beam: null, bit: (i) => i & 1, glow: () => 0, plate: 0, ...o });
+const state = (o: Partial<WilliamsState> = {}): WilliamsState => ({ cell: null, plate: 0, active: null, pickup: 'mesh', charge: newTex('emit'), display: newTex('emit'), acc: newTex('emit'), ctl: newTex('emit'), ...o });
+const px = (tex: ReturnType<typeof newTex>, line: number, digit: number, i: number, j: number) => { const o = ((line * PX + j) * TEX + digit * PX + i) * 4; return [...tex.pixels.slice(o, o + 3)]; };
 
 describe('the Williams tube geometry', () => {
   it('quotes its figures: the CV1131 face drawn 12-inch (300 mm) after Lavington (Computer50 says 6), 32 x 32 spots, a raster inside the glass', () => {
@@ -53,44 +51,130 @@ describe('the Williams tube geometry', () => {
   });
 });
 
-describe('the parts', () => {
-  it('builds 1 024 spots: a dash is longer than a dot, along the line; a lit one glows', () => {
-    const ps = poseParts(P, pose({ glow: (i) => (i === 1 ? 1 : 0) }));
-    const spots = ps.filter((p) => p.kind === 'box' && p.pos[0] > WGEOM.FACE_X - 1 && p.pos[0] < WGEOM.FACE_X + 0.5);
-    expect(spots.length).toBe(1024);
-    expect(spots.filter((p) => p.emissive).length).toBe(1);
-    expect(spots[cellOf(0, 1)].scale![2]).toBeCloseTo(WGEOM.DASH, 9); // pose.bit(1) = 1
-    expect(spots[cellOf(0, 0)].scale![2]).toBeCloseTo(WGEOM.DOT, 9);
-    expect(WGEOM.DASH).toBeGreaterThan(WGEOM.DOT);
+
+describe('the model', () => {
+  const m = williamsModel(state());
+  const named = (n: string) => m.items.filter((i) => i.name === n);
+  const box = (n: string) => boundsOf({ items: named(n) });
+
+  it('draws the parts the sources name: gun, plates, the face as charge, a pick-up plate covering the raster, the screening box', () => {
+    for (const n of ['electron gun', 'Y plates', 'X plates', 'stored charge', 'pick-up plate (wire mesh)', 'screening box', 'glass envelope']) expect(named(n).length, n).toBeGreaterThan(0);
+    const p = box('pick-up plate (wire mesh)');
+    expect(p.min[0]).toBeGreaterThan(WGEOM.FACE_X + WGEOM.GLASS); // in front of the glass
+    expect(PLATE_HALF).toBeGreaterThan(WGEOM.RASTER / 2); // over the whole raster
+    expect(Math.min(-p.min[1], p.max[1], -p.min[2], p.max[2])).toBeGreaterThanOrEqual(WGEOM.RASTER / 2);
+    expect(williamsModel(state({ pickup: 'plate' })).items.some((i) => i.name === 'pick-up plate')).toBe(true);
   });
 
-  it('the beam is drawn only when it is on, and it ends on its spot', () => {
-    const none = poseParts(P, pose()).length, on = poseParts(P, pose({ beam: { line: 3, digit: 5 } })).length;
-    expect(on - none).toBe(beamPath(spotCentre(3, 5)).length - 1);
+  it('the glass is the CV1131’s 300 mm face (sources differ: the card says so), and the charge fills the raster on the face', () => {
+    const g = box('glass envelope');
+    expect(g.max[1] - g.min[1]).toBeGreaterThan(WGEOM.FACE_D);
+    expect(g.max[1] - g.min[1]).toBeLessThan(WGEOM.FACE_D + 20);
+    expect(named('glass envelope')[0].info?.dim).toMatch(/sources differ/);
+    const f = box('stored charge');
+    expect(f.max[1] - f.min[1]).toBeCloseTo(WGEOM.RASTER, 3);
+    expect(f.max[0]).toBeCloseTo(WGEOM.FACE_X, 3);
   });
 
-  it('the pick-up mesh is a grid of wires in front of the glass, covering the raster, with a lead to the amplifier box', () => {
-    const m = meshParts(P, 0);
-    expect(new Set(m.map((p) => p.pos[0])).size).toBe(1);
-    expect(m[0].pos[0]).toBeGreaterThan(WGEOM.FACE_X + WGEOM.GLASS);
-    expect(Math.max(...m.map((p) => Math.abs(p.pos[1])))).toBeGreaterThanOrEqual(WGEOM.RASTER / 2);
-    const lit = poseParts(P, pose({ plate: 1 })).filter((p) => p.emissive);
-    expect(lit.length).toBeGreaterThan(m.length); // mesh and amplifier glow with the signal
-    expect(AMP.at[2]).toBeGreaterThan(WGEOM.RASTER / 2);
+  it('the screening box encloses the tube, the plate and the beam; the pick-up sits inside it', () => {
+    const b = box('screening box'), all = boundsOf({ items: m.items.filter((i) => i.group === 'tube' || i.group === 'pickup') });
+    for (let a = 0; a < 3; a++) { expect(b.min[a]).toBeLessThanOrEqual(all.min[a]); expect(b.max[a]).toBeGreaterThanOrEqual(all.max[a]); }
+    expect(BOX.x1).toBeGreaterThan(PLATE_X);
   });
 
-  it('the plates take their voltage tints', () => {
-    const glow = (ps: ReturnType<typeof staticParts>) => ps.reduce((a, p) => a + (p.emissive ? p.emissive[0] + p.emissive[1] + p.emissive[2] : 0), 0);
-    expect(glow(staticParts(P, 1, 1))).toBeGreaterThan(glow(staticParts(P, 0, 0)));
+  it('three store tubes and a display tube in a row, apart; only the display has no plate in front', () => {
+    for (const n of ['display tube', 'accumulator tube', 'control tube']) expect(named(n).length, n).toBe(1);
+    expect(m.items.filter((i) => i.name === 'pick-up plate').length).toBe(2); // the accumulator's and the control tube's
+    const zs = [0, ROW.display, ROW.acc, ROW.ctl];
+    for (let k = 1; k < zs.length; k++) expect(zs[k - 1] - zs[k]).toBeGreaterThan(2 * BOX.half);
   });
 
-  it('names its parts, and a phone gets three labels', () => {
-    for (const d of ['overview', 'face', 'plates'] as const) {
-      const a = williamsAnchors(d);
-      expect(a.length).toBeGreaterThan(3);
-      for (const x of a) expect(x.text.length).toBeGreaterThan(2);
-    }
-    expect(williamsAnchors('overview', true).length).toBe(3);
-    expect(williamsAnchors('overview').map((a) => a.text).join()).toMatch(/gun.*plates.*pick-up.*amplifier/s);
+  it('the beam is drawn only when on, ends on its spot; the regenerator lights the stage working; three chassis', () => {
+    expect(m.items.some((i) => i.name === 'electron beam')).toBe(false);
+    const on = williamsModel(state({ cell: cellOf(3, 5), active: 'disc', plate: 1 }));
+    const beam = boundsOf({ items: on.items.filter((i) => i.name === 'electron beam') }), s = spotCentre(3, 5);
+    expect(beam.max[0]).toBeCloseTo(s[0], 0);
+    expect(CHASSIS.map((c) => c.name)).toEqual(['amplifier', 'discriminator', 'beam control']);
+    expect(on.items.find((i) => i.name === 'discriminator')!.mat.glow).toBeGreaterThan(0);
+    expect(on.items.find((i) => i.name === 'amplifier')!.mat.glow ?? 0).toBe(0);
+  });
+
+  it('every part a reader can point at has a name, and the tour frames named groups', () => {
+    const lit = williamsModel(state({ cell: 0 })), groups = new Set(lit.items.flatMap((i) => [i.group, i.name]));
+    for (const b of m.beats!) for (const g of [...(b.frame ?? []), ...(b.show ?? []), ...(b.hide ?? [])]) expect(groups.has(g), `${b.title}: ${g}`).toBe(true);
+    expect(m.beats!.length).toBeGreaterThanOrEqual(4);
+    for (const a of m.anchors!) expect(groups.has(a.on!), a.text).toBe(true);
+  });
+});
+
+describe('charge and light', () => {
+  it('a patch is positive at its centre with a negative ring; a dash is drawn out along the line', () => {
+    expect(chargeAt('dot', 0, 0)).toBeGreaterThan(0.9);
+    expect(Math.min(...[1.5, 1.75, 2].map((r) => chargeAt('dot', r, 0)))).toBeLessThan(-0.3);
+    expect(chargeAt('dash', 1.4, 0)).toBeGreaterThan(0.9); // still the centre's charge along the line
+    expect(chargeAt('dot', 1.4, 0)).toBeLessThan(0);
+    expect(chargeAt('dash', 0, 1.4)).toBeCloseTo(chargeAt('dot', 0, 1.4), 9); // across the line: the same
+    expect(lightAt('dash', 2, 0)).toBeGreaterThan(0);
+    expect(lightAt('dot', 2, 0)).toBe(0);
+  });
+
+  it('stamps a spot into its own cell of the texture, amber at the centre; nothing outside the cell changes', () => {
+    const t = newTex('emit'), before = [...t.pixels];
+    stamp(t, 2, 3, 'dot', 1, 'charge');
+    const c = px(t, 2, 3, PX / 2, PX / 2);
+    expect(c[0]).toBeGreaterThan(c[2]); // positive: warm
+    let changed = 0;
+    for (let k = 0; k < t.pixels.length; k += 4) if (t.pixels[k] !== before[k]) { const p = k / 4, u = p % TEX, v = Math.floor(p / TEX); expect(Math.floor(u / PX)).toBe(3); expect(Math.floor(v / PX)).toBe(2); changed++; }
+    expect(changed).toBeGreaterThan(0);
+    const s = staticFace([1], newTex('emit'));
+    expect(px(s, 0, 0, PX / 2 + 2, PX / 2)[0]).toBeGreaterThan(px(s, 0, 1, PX / 2 + 2, PX / 2)[0]); // digit 0 a dash, digit 1 a dot
+    expect(px(s, 1, 0, PX / 2, PX / 2)[0]).toBeLessThan(20); // an unused line is blank
+  });
+});
+
+describe('the store', () => {
+  const bits: number[] = Array.from({ length: LINES * DIGITS }, (_, i) => (i % 3 === 0 ? 1 : 0)), ones = bits.reduce((a, b) => a + b, 0);
+  it('regenerating, the beam goes round and keeps every bit: the charge never leaks below the threshold', () => {
+    const s = new Store(bits);
+    s.scan(10 * LINES * DIGITS);
+    expect(s.ones()).toBe(ones);
+    expect(s.shape.map((x) => (x === 'dash' ? 1 : 0))).toEqual(bits);
+    // a full pass is 1 024 digits of 8.5 µs: 8.7 ms, against a 0.2 s leak
+    expect(Math.exp(-(LINES * DIGITS * DIGIT_S) / LEAK_S)).toBeGreaterThan(0.95);
+  });
+  it('reading without writing back leaves a dot: after one pass every bit reads 0', () => {
+    const s = new Store(bits);
+    s.rewrite = false;
+    s.scan(LINES * DIGITS / 2);
+    expect(s.ones()).toBe(bits.slice(LINES * DIGITS / 2).reduce((a, b) => a + b, 0));
+    s.scan(LINES * DIGITS / 2);
+    expect(s.ones()).toBe(0);
+  });
+  it('left alone the patches leak: past the threshold’s time a one reads as a zero, and the beam cannot bring it back', () => {
+    const s = new Store(bits);
+    s.tau = -LEAK_S * Math.log(THRESH) * 0.9;
+    expect(s.ones()).toBe(ones);
+    s.tau = -LEAK_S * Math.log(THRESH) * 1.1;
+    expect(s.ones()).toBe(0);
+    s.scan(LINES * DIGITS);
+    expect(s.ones()).toBe(0);
+  });
+});
+
+describe('the face’s texture', () => {
+  it('is turned onto the face by the item’s rotation (transform() keeps no UVs): u along the digits to −z, v down the lines to −y, facing +x', async () => {
+    const { quatRotate } = await import('../src/gl/math');
+    const { FACE_Q } = await import('../src/widgets/williams3dkit');
+    const r = (v: [number, number, number]) => quatRotate(FACE_Q, v).map((x) => Math.round(x * 1e9) / 1e9 + 0);
+    expect(r([1, 0, 0])).toEqual([0, 0, -1]);
+    expect(r([0, 1, 0])).toEqual([1, 0, 0]);
+    expect(r([0, 0, 1])).toEqual([0, -1, 0]);
+    const face = williamsModel(state()).items.find((i) => i.name === 'stored charge')!;
+    expect(face.geo.uvs?.length).toBe(8);
+    expect(face.mat.data).toBeDefined();
+    // texel (digit 0, line 0) is the plane's u = 0, v = 0 corner: after the turn, on spot (0, 0)'s side of the face
+    const corner = quatRotate(FACE_Q, [-WGEOM.RASTER / 2, 0, -WGEOM.RASTER / 2]), [y, z] = spotYZ(0, 0);
+    expect(Math.sign(corner[1])).toBe(Math.sign(y));
+    expect(Math.sign(corner[2])).toBe(Math.sign(z));
   });
 });

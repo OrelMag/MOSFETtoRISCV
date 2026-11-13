@@ -24,6 +24,8 @@
   stroke: hsl(228 24% 22%);
   stroke-width: 0.24;
 }
+/* a display's digits on that slate, either theme: the light theme's bus-label blue was 1.5:1 on it (PS-15) */
+:root[data-look='vivid'] :is(.ed-disp-value, .ed-kbd-char) { fill: #dde8ff; }
 :root[data-look='vivid']:not([data-modules='plain']) .sym.cat .sym-body,
 :root[data-look='vivid'] .sym.chip .sym-box {
   fill: hsl(var(--chip-h) 62% 50%);

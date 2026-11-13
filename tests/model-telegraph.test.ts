@@ -1,12 +1,13 @@
 // The telegraph key and sounder: the drawing held to phys/telegraph.ts and phys/relay.ts.
 import { describe, expect, it } from 'vitest';
-import type { RGB } from '../src/gl/instances';
 import { RELAY, T_OFF } from '../src/phys/relay';
 import { loopCurrent, margin, ohmsPerKm, PULL_I, PULL_V, reachKm, SOUNDER, SOUNDER_R, SOUNDER_RELEASE, type Metal } from '../src/phys/telegraph';
-import { armTheta, CLOSER_TIP, coilVolts, KEY_TIP, lineCurrent, pressX, pulls, releaseX, tgAnchors, tgParts, type Line, type TgPalette } from '../src/widgets/telegraph3dparts';
+import { armTheta, CLOSER_TIP, coilVolts, KEY_TIP, lineCurrent, pressX, pulls, releaseX, type Line } from '../src/widgets/telegraph3dparts';
 import { SOS_UNITS } from '../src/widgets/telegraph3dview';
+import { tgModel, tgPose, U } from '../src/widgets/telegraph3dkit';
+import { LEVER_L } from '../src/widgets/telegraph3dparts';
+const LEVER_MM = LEVER_L * U;
 
-const G: RGB = [0.5, 0.5, 0.5], P: TgPalette = { board: G, metal: G, brass: G, wood: G, live: [0, 1, 0], coil: G, glow: G, wire: G };
 const METALS: Metal[] = ['iron', 'copper'];
 const at = (V: number, m: Metal, f: number): Line => ({ V, metal: m, km: reachKm(V, m) * f });
 const settled = (l: Line) => pressX(l, 0.2);
@@ -60,11 +61,15 @@ describe('the sounder against the line model', () => {
     expect(armTheta(RELAY.travel)).toBeGreaterThan(0);
   });
 
-  it('draws parts and labels, and the coils glow only while current flows', () => {
-    const glow = (flowing: boolean, i: number) => tgParts({ kd: flowing ? 1 : 0, x: 0, flowing, i }, P).filter((p) => p.emissive).length;
-    expect(glow(false, 0)).toBe(0);
-    expect(glow(true, PULL_I)).toBeGreaterThan(0);
-    expect(tgAnchors({ kd: 0, x: 0, flowing: false, i: 0 }).map((a) => a.text)).toContain('anvil');
+  it('the model: labels on named groups, and the coils and wires light only while current flows', () => {
+    const off = tgModel({ kd: 0, x: 0, flowing: false, i: 0 }), on = tgModel({ kd: 1, x: 0, flowing: true, i: PULL_I });
+    const lit = (m: ReturnType<typeof tgModel>) => m.items.filter((i) => (i.mat.glow ?? 0) > 0).length;
+    expect(lit(off)).toBe(0);
+    expect(lit(on)).toBeGreaterThan(0);
+    const groups = new Set(on.items.map((i) => i.group));
+    for (const a of on.anchors!) expect(groups.has(a.on!)).toBe(true);
+    expect(on.anchors!.map((a) => a.text)).toContain('anvil');
+    for (const it of on.items) for (const v of it.geo.positions) expect(Number.isFinite(v)).toBe(true);
   });
 
   it('Ohm and the numbers by hand: a 120 Ω main-line coil, 38.0 mA, reach 64 km on iron at 24 V', () => {
@@ -110,15 +115,18 @@ describe('the sounder against the line model', () => {
     expect(KEY_TIP(0)[0] - KEY_TIP(0, 0)[0]).toBeGreaterThan(34);
   });
 
-  it('draws the closer, springs, screws and a key trunnion; the wires carry current through the closer only while it is shut', () => {
+  it('the pose turns the key, closer and armature about their own pivots; the closer wires carry current only while it is shut', () => {
     const base = { kd: 0, x: 0, flowing: false, i: 0 };
-    const open = tgParts({ ...base, cd: 0 }, P), shut = tgParts({ ...base, cd: 1, flowing: true, i: 0.05 }, P);
-    expect(open.length).toBe(shut.length);
-    expect(open.length).toBeGreaterThan(90);
-    expect(open.length).toBeLessThan(110);
-    const names = tgAnchors({ ...base, cd: 1 }).map((a) => a.text);
-    for (const t of ['circuit closer', 'retractor spring', 'gap screw']) expect(names).toContain(t);
-    expect(shut.filter((p) => p.emissive).length).toBeGreaterThan(open.filter((p) => p.emissive).length);
+    const mv = tgPose({ ...base, kd: 1, cd: 1, x: RELAY.travel }), at = (m: Float32Array, p: number[]) => [m[0] * p[0] + m[4] * p[1] + m[12], m[1] * p[0] + m[5] * p[1] + m[13]];
+    for (const [g, p] of [['key', [-40, 6]], ['closer', [-34, 7]], ['armature', [72, 13]]] as const) {
+      const q = at(mv.get(g)!, [p[0] * U, p[1] * U]);
+      expect(q[0]).toBeCloseTo(p[0] * U, 3); expect(q[1]).toBeCloseTo(p[1] * U, 3);
+    }
+    expect(at(mv.get('key')!, [-4 * U, 6 * U])[1]).toBeLessThan(at(tgPose(base).get('key')!, [-4 * U, 6 * U])[1]); // pressed: the tip goes down
+    const wires = (cd: number) => tgModel({ ...base, cd, flowing: true, i: 0.05 }).items.filter((i) => i.name === 'circuit closer' && i.group === 'wires')[0].mat.glow ?? 0;
+    expect(wires(1)).toBeGreaterThan(0);
+    expect(wires(0)).toBe(0);
+    expect(LEVER_MM).toBeGreaterThanOrEqual(100); expect(LEVER_MM).toBeLessThanOrEqual(127); // Pope: four to five inches
   });
 
   it('SOS is three dots, three dashes, three dots with the standard gaps: 27 units', () => {

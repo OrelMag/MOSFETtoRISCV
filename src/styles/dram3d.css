@@ -1,6 +1,9 @@
 /* The DRAM array model: materials, scoped under .m3d (model3d.css holds the shared ones). */
-.m3d {
+.m3d, .dr3 {
   --m3-dram-plate: light-dark(#cfd5e3, #3a4258);
+  --m3-dram-nit: light-dark(#c9b98a, #a8996a);
+  --m3-dram-tin: light-dark(#b89a5a, #d2b46e);
+  --m3-dram-plate2: light-dark(#9fb3cf, #7f93b0);
   --m3-dram-line: light-dark(#8f98a8, #7a8398);
   --m3-dram-wl: light-dark(#e08a1e, #ffb347);
   --m3-dram-charge: light-dark(#1f9a63, #3ecb8a);
@@ -17,3 +20,6 @@
 .dr-ops { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; align-items: center; }
 .dr-note { margin-top: 8px; font-size: 12.5px; color: var(--text-2); min-height: 2.6em; }
 @media (pointer: coarse) { .dr-seg .btn, .dr-ops .btn { min-height: 40px; } }
+/* the canvas takes the whole column; the readout sits under it */
+.dr3 .r3 { grid-template-columns: minmax(0, 1fr); }
+.dr3 .r3-side .r3-kv { max-width: 560px; }

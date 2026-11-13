@@ -1,4 +1,4 @@
-// The Jacquard head in 3D (loaded on demand, modelhost.ts). The card read at a pick, the hooks its holes leave on the knife,
+// The Jacquard head in 3D on the studio renderer (loaded on demand, modelhost.ts; drawn by loom3dkit.ts). The card read at a pick, the hooks its holes leave on the knife,
 // the threads they lift and the cloth rows are loomWidget's own rule (cards.ts loomPick) on its presets; the motion between
 // them is a drawing of the classical single-lift head (loom3dparts.ts).
 
@@ -6,13 +6,12 @@ import '../styles/loom3d.css';
 import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
-import type { OrbitView } from '../gl/camera';
 import { SHED, ROWS } from './loom3dparts';
 import { HOOKS, LOOM_PRESETS, PICKS, WARP, loomPick } from './cards';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
-import { loomAnchors, loomParts, poseOf, steppedPose, type Cards, type LoomPalette } from './loom3dparts';
+import { studioStage } from './studiostage';
+import { TOUR_T, VIEWS, loomModel } from './loom3dkit';
+import { poseOf, steppedPose, type Cards } from './loom3dparts';
 
 /** Seconds a pick takes, and a stepped run's seconds a pick when motion is reduced. */
 const PICK_S = 6, STEP_S = 1.2;
@@ -21,10 +20,6 @@ const PHASES: [number, string][] = [
   [0.35, 'the shuttle carries the weft through the shed'], [0.6, 'the reed beats the weft up to the fell'],
   [0.72, 'the griffe sinks and the shed closes'], [0.85, 'the griffe is down: the cylinder withdraws and the hooks spring back over the knives'], [0.92, 'the cylinder turns to the next card'],
 ];
-const VIEWS: Record<'head' | 'whole', OrbitView> = {
-  head: { target: [0, 38, -8], yaw: 0.85, pitch: 0.25, dist: 165 },
-  whole: { target: [0, 24, 8], yaw: 0.55, pitch: 0.38, dist: 205 },
-};
 const phaseOf = (T: number) => PHASES.filter(([a]) => T >= a).pop()![1];
 const cardsOf = (k: string): Cards => LOOM_PRESETS[k].cards.map((r) => r.split('').map((c) => c === '1'));
 
@@ -34,22 +29,22 @@ export function loomView(): Widget {
   // done: picks completed; T: how far through pick done + 1; running: back to back; finishing: the current pick, then stop.
   let done = 0, T = 0, running = false, finishing = false, stepAcc = 0;
 
-  const panel = h('div', { class: 'panel' });
-  const stage = modelStage(panel, {
-    look: LOOKS.machine,
+  const panel = h('div', { class: 'panel lm3' });
+  let ready = false;
+  const stage = studioStage({
+    home: { ...VIEWS.head },
+    fit: false,
+    aspect: 1.5,
+    limits: { minDist: 40, maxDist: 600, maxPan: 120 },
+    // a beat stops the pick at its moment
+    onBeat: (i) => { if (i < 0 || reducedMotion()) return; running = false; finishing = false; T = TOUR_T[i]; if (ready) { readout(true); paint(); } },
+    build: () => { const o = pose(); return loomModel(cards, o, whole); },
     aria: 'A Jacquard head in 3D: a square cylinder carrying a chain of punched cards against sprung needles, vertical hooks over the griffe knife, harness cords with lingoes lifting warp threads, a shuttle, a reed and the cloth',
-    camera: { ...VIEWS.head },
-    limits: { minDist: 90, maxDist: 600 },
-    note: `The widget’s ${HOOKS} hooks and ${WARP} threads are drawn: ${HOOKS} hooks as ${ROWS} rows of ${HOOKS / ROWS} (two needle heights, a knife on the griffe for each row, a card of ${ROWS} × ${HOOKS / ROWS} holes). A real head has needles in rows of 4, 8 or 12 heights, each with its own knife (Posselt, 1888, “General Arrangement and Application”), and the 400 head of his plates is 8 rows of 50 (his straight-through tie-up, Fig. XXV); he lists 100 to 1200 as the usual sizes, with a harness of thousands of cords. Cards are drawn some ten times thicker than pasteboard, with square holes where real ones are round; the prism, needles, hooks, springs and lingoes are scaled up for visibility. The prism is perforated: a pit under each hole position lets the needle go through the card (Posselt’s “quadrilateral and perforated cylinder”, same section). The shed is exaggerated the other way: it is only ${SHED} units high against a thread pitch of 2 (5 : 1), where a real shed of a few centimetres on silk threads a fraction of a millimetre apart is on the order of 100 : 1. The weft is thrown in the open shed near the fell and the reed beats it up a short way. The chain hangs in a curtain, and a chain shorter than four cards is drawn repeated on the cylinder’s faces.`,
-    draw: () => paint(),
+    note: `The widget’s ${HOOKS} hooks and ${WARP} threads are drawn: ${HOOKS} hooks as ${ROWS} rows of ${HOOKS / ROWS} (two needle heights, a knife on the griffe for each row, a card of ${ROWS} × ${HOOKS / ROWS} holes). A real head has needles in rows of 4, 8 or 12 heights, each with its own knife (Posselt, 1888, “General Arrangement and Application”), and the 400 head of his plates is 8 rows of 50 (his straight-through tie-up, Fig. XXV); he lists 100 to 1200 as the usual sizes, with a harness of thousands of cords. Cards are drawn some ten times thicker than pasteboard; the prism, needles, hooks, springs and lingoes are scaled up for visibility. The prism is perforated: a pit under each hole position lets the needle go through the card (Posselt’s “quadrilateral and perforated cylinder”, same section). The shed is exaggerated the other way: it is only ${SHED} units high against a thread pitch of 2 (5 : 1), where a real shed of a few centimetres on silk threads a fraction of a millimetre apart is on the order of 100 : 1. The weft is thrown in the open shed near the fell and the reed beats it up a short way. The frame’s front posts and rails and the needle and spring boards are left out so the card and the needles show. The chain hangs in a curtain, and a chain shorter than four cards is drawn repeated on the cylinder’s faces.`,
   });
-  const palette = (): LoomPalette => ({
-    wood: stage.rgb('--lm-wood'), iron: stage.rgb('--lm-iron'), steel: stage.rgb('--lm-steel'), spring: stage.rgb('--lm-spring'), card: stage.rgb('--lm-card'),
-    hole: stage.rgb('--lm-hole'), warp: stage.rgb('--lm-warp'), weft: stage.rgb('--lm-weft'), cord: stage.rgb('--lm-cord'), lead: stage.rgb('--lm-lead'),
-    brass: stage.rgb('--lm-brass'), live: stage.rgb('--m3-charge'),
-  });
-  const pose = () => (reducedMotion() ? steppedPose(cards, done) : poseOf(cards, done + 1, T));
-  function paint(): void { const o = pose(); stage.paint(loomParts(cards, o, palette()), loomAnchors(cards, o, whole)); }
+  ready = true;
+  function pose() { return reducedMotion() ? steppedPose(cards, done) : poseOf(cards, done + 1, T); }
+  function paint(): void { if (ready) stage.refresh(); }
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' });
   const live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
@@ -106,7 +101,7 @@ export function loomView(): Widget {
     whole = !whole;
     viewBtn.setAttribute('aria-pressed', String(whole));
     viewBtn.textContent = whole ? 'Head close-up' : 'Whole loom';
-    stage.setView({ ...VIEWS[whole ? 'whole' : 'head'] }); paint();
+    stage.goTo({ ...VIEWS[whole ? 'whole' : 'head'] }); paint();
   });
   const resetBtn = h('button', { type: 'button', class: 'btn sm' }, 'Reset');
   const restart = () => { running = false; finishing = false; done = 0; T = 0; stepAcc = 0; readout(true); kick(); };
@@ -117,11 +112,9 @@ export function loomView(): Widget {
   panel.append(
     h('h3', { class: 'm3-title' }, 'The head of a Jacquard loom'),
     h('p', { class: 'm3-sub' }, `The same chain, hooks and harness as the loom above (${HOOKS} hooks, ${WARP} threads; hook j lifts every ${HOOKS}th thread from j). The cylinder, a square prism, presses a card on the sprung needles. A solid place pushes its needle and hook back off the knife of the griffe; a hole lets the needle in, and its hook stays over the knife. The griffe rises with the hooks still on it, their cords lift the threads through the comber board (lingoes pull the others down), the shuttle crosses the shed, the reed beats the weft up and the cloth takes up a row. Then the cylinder turns a quarter to the next card; the chain loops.`),
-    h('div', { class: 'r3' },
-      h('div', { class: 'r3-main' },
-        h('div', { class: 'r3-ctl' }, h('div', { class: 'r3-btns' }, presets, stepBtn, runBtn, resetBtn, viewBtn, stage.resetBtn)),
-        stage.el, stage.hint, live),
-      h('div', { class: 'r3-side' }, h('h4', null, 'This head ', h('span', { class: 'r3-badge' }, 'the loom’s chain')), kv)));
+    h('div', { class: 'r3-ctl' }, h('div', { class: 'r3-btns' }, presets, stepBtn, runBtn, resetBtn, viewBtn)),
+    stage.el, live,
+    h('div', { class: 'r3' }, h('div', { class: 'r3-side' }, h('h4', null, 'This head ', h('span', { class: 'r3-badge' }, 'the loom’s chain')), kv)));
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (running || finishing)) { running = false; finishing = false; readout(true); kick(); } });
   readout(true);
   paint();

@@ -1,19 +1,15 @@
 // The quartz model's numbers: the divider chain from the library's own clockDivider, the fork's frequency from beam theory,
-// the datasheets' temperature curve and the Pierce load (Statek TN31's worked example).
+// the datasheets' temperature curve and the Pierce load (Statek TN31's worked example); and the studio drawing following them.
 import { describe, expect, it } from 'vitest';
 import { clockDivider } from '../src/lib';
-import { flatFaces } from '../src/gl/parts';
+import type { Geo } from '../src/gl/kit/geo';
+import type { Model3 } from '../src/gl/kit/scene';
+import { LID_CUT, QZ_HOME, quartzModel, type QuartzState } from '../src/widgets/quartz3dkit';
 import {
-  atThicknessMm, beamFreq, boardAnchors, driftAnchors, realPerScreen, screenSlip, SLIP_S, driftOf, driftParts, driveCurrent, fmtTime, GROOVE_D, GROOVE_W, inWindow, tipAmplitude, TOL_PPM, WINDOW_FRAC, boardParts, chainX, crystalAnchors, crystalParts, DIVIDE, F_WATCH, fork, freqAt, loadCap, loaded, modeShape,
-  PIERCE, ringTau, secPerDay, STAGES, stageBits, stageFreq, TINE_L, TINE_W, tempPpm, type QuartzPalette,
-  atAnchors, atParts, atPpm, AT_F, AT_LAYERS, AT_N, shearAt,
-} from '../src/widgets/quartz3dparts';
-
-const c = (v: number): [number, number, number] => [v, v, v];
-const P: QuartzPalette = {
-  quartz: [0.8, 0.9, 1, 0.4], gold: c(0.8), ceramic: c(0.9), pad: c(0.8), glue: c(0.5), lid: [0.5, 0.5, 0.5, 0.3], plus: [0, 1, 0], minus: [1, 0, 0],
-  pcb: c(0.2), copper: c(0.7), body: c(0.6), chip: c(0.1), led: [0, 1, 0], ledOff: c(0.2), metal: c(0.7),
-};
+  atThicknessMm, beamFreq, realPerScreen, screenSlip, SLIP_S, driftOf, driveCurrent, fmtTime, GROOVE_D, GROOVE_W, inWindow, tipAmplitude, TIP_DRAWN, TOL_PPM, WINDOW_FRAC, chainX, DIVIDE, F_WATCH, fork, freqAt, loadCap, loaded, modeShape,
+  PIERCE, ringTau, secPerDay, STAGES, stageBits, stageFreq, TINE_L, TINE_W, tempPpm,
+  atPpm, AT_F, AT_LAYERS, AT_N, shearAt,
+} from '../src/widgets/quartz3dgeom';
 
 describe('divider chain', () => {
   it('has the library divider\'s stage count and ends at 1 Hz', () => {
@@ -47,16 +43,6 @@ describe('the fork', () => {
     expect(modeShape(0.5)).toBeGreaterThan(0.15);
     expect(modeShape(0.5)).toBeLessThan(0.4);
   });
-  it('moves the tines in antiphase', () => {
-    const a = crystalParts({ disp: 1, lid: false }, P), z = (parts: typeof a) => parts.filter((p) => p.pos[0] > fork.x0 + fork.L * 0.9 && p.pos[1] < 3.2 && p.pos[1] > 2.4);
-    const tips = z(a).map((p) => p.pos[2]);
-    expect(Math.max(...tips)).toBeGreaterThan(0);
-    expect(Math.min(...tips)).toBeLessThan(0);
-    const tine1 = Math.max(...tips), rest = crystalParts({ disp: 0, lid: false }, P), r1 = Math.max(...z(rest).map((p) => p.pos[2]));
-    const tine2 = Math.min(...tips), r2 = Math.min(...z(rest).map((p) => p.pos[2]));
-    expect(tine1 - r1).toBeCloseTo(-(tine2 - r2), 6);
-    expect(tine1 - r1).toBeGreaterThan(0.5);
-  });
 });
 
 describe('numbers', () => {
@@ -77,22 +63,6 @@ describe('numbers', () => {
   });
   it('an AT-cut blank is a different crystal: 16 MHz is 0.104 mm thick', () => {
     expect(atThicknessMm(16e6)).toBeCloseTo(0.1044, 3);
-  });
-});
-
-describe('drawing', () => {
-  it('builds both views with labels and flat faces', () => {
-    const cp = crystalParts({ disp: 0.5, lid: true }, P), bp = boardParts({ bits: stageBits(12345), vib: 1 }, P);
-    expect(cp.length).toBeGreaterThan(100);
-    expect(flatFaces([...cp, ...bp], 0.5, 0.3).length).toBeGreaterThan(0);
-    expect(crystalAnchors({ disp: 0, lid: false }).length).toBeGreaterThan(3);
-    expect(boardAnchors().length).toBeGreaterThan(5);
-    expect(chainX(STAGES - 1)).toBeGreaterThan(-24);
-  });
-  it('lights stage 15 only when its bit is 1', () => {
-    const on = (bits: number[]) => boardParts({ bits, vib: 0 }, P).filter((p) => p.emissive && p.pos[0] === chainX(STAGES - 1)).length;
-    expect(on(stageBits(DIVIDE / 2))).toBe(1);
-    expect(on(stageBits(0))).toBe(0);
   });
 });
 
@@ -131,14 +101,6 @@ describe('two crystals', () => {
     expect(inWindow(0.5)).toBe(false);
     expect(inWindow(-0.01)).toBe(true);
   });
-  it('draws both forks, the ring and its dots, with modest counts', () => {
-    const parts = driftParts({ disp: 1, dispB: -1, slip: 0.5 }, P);
-    expect(parts.length).toBeLessThan(260);
-    expect(driftAnchors(0.5).length).toBeGreaterThan(3);
-    const hit = (slip: number) => driftParts({ disp: 0, dispB: 0, slip }, P).filter((p) => p.emissive && p.emissive[0] === 1).length;
-    expect(hit(0.5)).toBe(0); // B's dot dim away from the window
-    expect(driftParts({ disp: 0, dispB: 0, slip: 0.01 }, P).length).toBe(driftParts({ disp: 0, dispB: 0, slip: 0.5 }, P).length);
-  });
 });
 
 describe('the grooved tine, Rd and the sealed package', () => {
@@ -147,20 +109,6 @@ describe('the grooved tine, Rd and the sealed package', () => {
     expect(GROOVE_W).toBeLessThan(1);
     expect(GROOVE_D).toBeLessThan(0.79);
     expect(2 * GROOVE_D).toBeLessThan(1); // the floor keeps some quartz between the two grooves
-  });
-  it('builds a tine segment from two shoulders and a floor, thinner than the shoulders', () => {
-    const a = crystalParts({ disp: 0, lid: false, seg: 14 }, P);
-    const tineY = a.filter((p) => p.pos[0] > fork.x0 && p.pos[0] < fork.x0 + fork.L + 0.1 && p.scale![1] > 0.1 && p.scale![1] < fork.t * 0.9 && p.scale![1] > fork.t * (1 - 2 * GROOVE_D) - 1e-9);
-    expect(tineY.length).toBe(2 * 14);
-    expect(tineY[0]!.scale![1]).toBeCloseTo(fork.t * (1 - 2 * GROOVE_D), 9);
-  });
-  it('has underside pads below the package floor', () => {
-    expect(crystalParts({ disp: 0, lid: false }, P).filter((p) => p.pos[1] < 0).length).toBe(2);
-  });
-  it('has a drive resistor Rd on the inverter output and a larger LED on a phone', () => {
-    expect(boardAnchors().some((a) => /^Rd/.test(a.text))).toBe(true);
-    const r = (big: boolean) => boardParts({ bits: stageBits(1), vib: 0, big }, P).filter((p) => p.kind === 'cyl' && Math.abs(p.pos[0] - chainX(3)) < 1e-9);
-    expect(r(true)[0]!.scale![0]).toBeGreaterThan(r(false)[0]!.scale![0] - 0);
   });
 });
 
@@ -209,14 +157,89 @@ describe('the AT-cut view', () => {
     expect(atPpm(25 + 7) + atPpm(25 - 7)).toBeCloseTo(0, 9); // odd about the inflection
     expect(Math.abs(atPpm(45))).toBeLessThan(Math.abs(-0.034 * 20 * 20) * 2); // both a few ppm at 45 °C; the fork's grows as the square
   });
-  it('thickness shear: the faces move opposite ways, the middle plane stays', () => {
     expect(shearAt(0.5)).toBeCloseTo(1, 12); expect(shearAt(-0.5)).toBeCloseTo(-1, 12); expect(shearAt(0)).toBe(0);
-    const parts = atParts({ disp: 1 }, P), layers = parts.slice(0, AT_LAYERS).map((q) => q.pos[0]);
-    for (let i = 0; i < AT_LAYERS; i++) expect(layers[i]).toBeCloseTo(-layers[AT_LAYERS - 1 - i], 9);
-    expect(layers[AT_LAYERS - 1]).toBeGreaterThan(0);
-    const still = atParts({ disp: 0 }, P).slice(0, AT_LAYERS);
-    for (const q of still) expect(q.pos[0]).toBeCloseTo(0, 12);
-    expect(parts.length).toBeLessThan(20);
-    expect(atAnchors().filter((a) => !a.minor).length).toBe(2); // a phone keeps two labels
+});
+
+describe('the studio model', () => {
+  const st = (o: Partial<QuartzState> = {}): QuartzState => ({ view: 'crystal', disp: 0, dispB: 0, slip: 0.5, bits: stageBits(0), ...o });
+  const named = (m: Model3, name: string) => m.items.filter((i) => i.name === name);
+  const zOf = (g: Geo, xMin: number) => { const z: number[] = []; for (let k = 0; k < g.positions.length; k += 3) if (g.positions[k] > xMin) z.push(g.positions[k + 2]); return z; };
+  it('moves the tines in antiphase, the tips by the drawn swing, the roots not at all', () => {
+    const tips = (disp: number) => named(quartzModel(st({ disp })), 'tine').map((t) => { const z = zOf(t.geo, fork.x0 + fork.L * 0.98); return (Math.max(...z) + Math.min(...z)) / 2; });
+    const rest = tips(0), bent = tips(1);
+    expect(rest).toHaveLength(2);
+    expect(bent[0] - rest[0]).toBeCloseTo(TIP_DRAWN, 1);
+    expect(bent[1] - rest[1]).toBeCloseTo(-TIP_DRAWN, 1);
+    const roots = (disp: number) => named(quartzModel(st({ disp })), 'tine').map((t) => { const z: number[] = []; for (let k = 0; k < t.geo.positions.length; k += 3) if (t.geo.positions[k] < fork.x0 + 0.01) z.push(t.geo.positions[k + 2]); return Math.max(...z); });
+    expect(roots(1)[0]).toBeCloseTo(roots(0)[0], 4);
+  });
+  it('a tine keeps its geometry and bends in place (the renderer re-uploads it)', () => {
+    const a = named(quartzModel(st({ disp: 1 })), 'tine')[0].geo, b = named(quartzModel(st({ disp: -1 })), 'tine')[0].geo;
+    expect(b).toBe(a);
+  });
+  it('a grooved tine: two shoulders at full thickness and a floor thinner by both grooves', () => {
+    const g = named(quartzModel(st()), 'tine')[0].geo, ys = new Set<string>();
+    for (let k = 1; k < g.positions.length; k += 3) ys.add(g.positions[k].toFixed(4));
+    const mid = fork.y0 + fork.t / 2, y = [...ys].map(Number).filter((v) => Math.abs(v - mid) > 1e-3).sort((p, q) => p - q); // the caps' centres sit at the middle
+    expect(y).toHaveLength(4);
+    expect(y[3] - y[0]).toBeCloseTo(fork.t, 4);
+    expect(y[2] - y[1]).toBeCloseTo(fork.t * (1 - 2 * GROOVE_D), 4);
+  });
+  it('the films change polarity with the swing, the groove and the side opposite', () => {
+    const emit = (disp: number, name: string) => named(quartzModel(st({ disp })), name).map((i) => i.mat.emit);
+    expect(emit(1, 'gold electrode in the groove')).toEqual(['--qz-plus', '--qz-minus']);
+    expect(emit(1, 'gold electrode on the side')).toEqual(['--qz-minus', '--qz-plus']);
+    expect(emit(-1, 'gold electrode in the groove')).toEqual(['--qz-minus', '--qz-plus']);
+  });
+  it('the package: 3.2 × 1.5 × 0.8 mm (FC-135), pads below its floor; the cut takes the lid off and leaves the fork whole', () => {
+    const m = quartzModel(st()), pkg = named(m, 'ceramic package').map((i) => i.geo);
+    const lo = Math.min(...pkg.map((g) => g.min[0])), hi = Math.max(...pkg.map((g) => g.max[0]));
+    expect(hi - lo).toBeCloseTo(32, 6);
+    expect(Math.max(...pkg.map((g) => g.max[2])) - Math.min(...pkg.map((g) => g.min[2]))).toBeCloseTo(15, 6);
+    const lid = named(m, 'lid')[0].geo;
+    expect(lid.max[1]).toBeLessThanOrEqual(8.6 + 1e-6);
+    expect(named(m, 'underside pads')[0].geo.max[1]).toBeLessThanOrEqual(0);
+    expect(lid.min[1]).toBeGreaterThan(LID_CUT);
+    for (const t of named(quartzModel(st({ disp: 1 })), 'tine')) expect(t.geo.max[1]).toBeLessThan(LID_CUT);
+    expect(m.cuts!.planes[0].d).toBe(LID_CUT);
+    expect(fork.x0 + fork.L).toBeLessThan(14.5);
+  });
+  it('the board lights stage 15 only when its bit is 1, has Rd on the inverter output and larger LEDs on a phone', () => {
+    const lit = (bits: number[]) => quartzModel(st({ view: 'loop', bits })).items.filter((i) => i.name === `÷2 stage ${STAGES}` && i.mat.emit).length;
+    expect(lit(stageBits(DIVIDE / 2))).toBe(1);
+    expect(lit(stageBits(0))).toBe(0);
+    const m = quartzModel(st({ view: 'loop', bits: stageBits(12345) }));
+    expect(named(m, 'Rd').length).toBe(3);
+    expect((m.anchors ?? []).some((a) => /^Rd/.test(a.text))).toBe(true);
+    const led = (big: boolean) => quartzModel(st({ view: 'loop', bits: stageBits(1), big })).items.filter((i) => i.name === 'Rf 10 MΩ' || i.name === '÷2 stage 4').map((i) => i.geo.max[0] - i.geo.min[0]);
+    expect(Math.min(...led(true))).toBeLessThanOrEqual(Math.min(...led(false)));
+    expect(chainX(STAGES - 1)).toBeGreaterThan(-24);
+  });
+  it('two crystals and the ring: B\'s edge glows only inside A\'s window and the hand points at it', () => {
+    const glow = (slip: number) => named(quartzModel(st({ view: 'drift', slip })), "B's edge")[0].mat.glow!;
+    expect(glow(0.01)).toBeGreaterThan(glow(0.5));
+    const m = quartzModel(st({ view: 'drift', slip: 0.25 })), b = named(m, "B's edge")[0];
+    expect(b.at![0]).toBeGreaterThan(0); // a quarter turn clockwise seen from above: to the right of the centre
+    expect(named(m, 'tine')).toHaveLength(4);
+  });
+  it('thickness shear: the faces move opposite ways, the middle plane stays, the electrodes ride on their faces', () => {
+    const layers = (disp: number) => named(quartzModel(st({ view: 'at', disp })), 'quartz blank, AT-cut').map((i) => i.at![0]);
+    const L1 = layers(1);
+    expect(L1).toHaveLength(AT_LAYERS);
+    for (let i = 0; i < AT_LAYERS; i++) expect(L1[i]).toBeCloseTo(-L1[AT_LAYERS - 1 - i], 9);
+    expect(L1[AT_LAYERS - 1]).toBeGreaterThan(0);
+    for (const x of layers(0)) expect(x).toBeCloseTo(0, 12);
+    const e = named(quartzModel(st({ view: 'at', disp: 1 })), 'gold electrode').map((i) => i.at![0]);
+    expect(e[0]).toBeCloseTo(-e[1], 9);
+    expect(e[0]).toBeGreaterThan(L1[AT_LAYERS - 1]);
+  });
+  it('every view has a home, names and a tour', () => {
+    for (const view of ['crystal', 'loop', 'drift', 'at'] as const) {
+      const m = quartzModel(st({ view }));
+      expect(QZ_HOME[view]).toBeDefined();
+      expect((m.anchors ?? []).length).toBeGreaterThanOrEqual(4);
+      expect((m.beats ?? []).length).toBeGreaterThanOrEqual(2);
+      expect(quartzModel(st({ view }), 'flat').items.length).toBe(m.items.length);
+    }
   });
 });

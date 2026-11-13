@@ -13,9 +13,10 @@ import type { Widget } from '../view/stage';
 import { RELAY, relaySummary } from '../phys/relay';
 import { CELL_V, margin, ohmsPerKm, PULL_I, reachKm, SOUNDER, SOUNDER_R, SOUNDER_RELEASE, type Metal } from '../phys/telegraph';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
-import { coilVolts, lineCurrent, pressX, pulls, releaseX, runFor, SLOW, tgAnchors, tgParts, type Line, type TgPalette, type TgPose } from './telegraph3dparts';
+import { studioStage } from './studiostage';
+import { coilVolts, lineCurrent, pressX, pulls, releaseX, runFor, SLOW, type Line, type TgPose } from './telegraph3dparts';
+import { drawnRetractor, retractorGeo, retractorLen, tgModel, tgPose, TG_HOME } from './telegraph3dkit';
+import { refresh } from '../gl/kit/geo';
 
 /** Two short noise bursts through a high-pass: made on the first key press (a user gesture), nothing without Web Audio. */
 class Clicker {
@@ -64,21 +65,25 @@ export function telegraphView(): Widget {
   let seated = true, lifting = false, was = true, wpm = 20, sos: { t: number; closerWas: boolean } | null = null;
   const clicker = new Clicker();
   const panel = h('div', { class: 'panel tg3d' });
-  const stage = modelStage(panel, {
-    look: LOOKS.machine,
-    aria: 'A telegraph key with its circuit closer, a line on poles and a main-line sounder with two coils, a retractor spring, an armature and an anvil, in 3D',
-    camera: { target: [2, 8, 4], yaw: 0.8, pitch: 0.85, dist: 245 },
-    limits: { minDist: 90, maxDist: 440 },
-    note: `Drawn after an American closed-circuit line: the loop carries current at idle, the circuit closer (the brass lever in front of the key) shorts the key and keeps the sounder's armature down, and to send you open the closer and work the key. With the closer open the loop is the open-circuit convention (current only while the key is down). The sounder is a ${SOUNDER_R} Ω main-line coil, the Western Union 15B's resistance: the model's relay rewound with the same turns, so the same ${mA(PULL_I)} pull-in current, which is the model's estimate and no datasheet value (long lines used a finer-wound relay and a 4 Ω local sounder: the next step). It has no telephone quench: release runs through a model discharge path of ${SOUNDER_RELEASE} Ω standing for the key's spark and condenser, an estimate. The line is drawn short and its length is not to scale; the armature gap is drawn five times its size; the proportions of coils, levers and springs are drawn for legibility, not measured from an instrument. Near pull-in the model has not seated the armature by the end of its run, so the last stretch onto the anvil is eased, not computed.`,
-    draw: () => stage.paint(tgParts(pose(), palette()), tgAnchors(pose())),
-  });
-  const palette = (): TgPalette => ({
-    board: stage.rgb('--tg-board'), metal: stage.rgb('--m3-metal'), brass: stage.rgb('--tg-brass'), wood: stage.rgb('--tg-wood'),
-    live: stage.rgb('--m3-charge'), coil: stage.rgb('--tg-coil'), glow: stage.rgb('--tg-glow'), wire: stage.rgb('--tg-wire'),
-  });
+  // before the stage: it builds the model at once
   /** The loop is closed while the circuit closer is shut or the key is down. */
   const closed = () => closer || keyDown;
   const pose = (): TgPose => ({ kd, x, flowing: closed(), i: closed() ? lineCurrent(line) : 0, cd });
+  const stage = studioStage({
+    aria: 'A telegraph key with its circuit closer, a line on poles and a main-line sounder with two coils, a retractor spring, an armature and an anvil, in 3D',
+    home: TG_HOME,
+    // home: the key, the closer and the sounder; the line between them is drawn short
+    homeFrame: ['key', 'keybase', 'closer', 'sounder', 'armature', 'battery', 'earth return'],
+    scaleBar: (len) => `${len} mm`,
+    limits: { minDist: 120, maxDist: 2000 },
+    note: `Drawn after an American closed-circuit line: the loop carries current at idle, the circuit closer (the brass lever in front of the key) shorts the key and keeps the sounder's armature down, and to send you open the closer and work the key. With the closer open the loop is the open-circuit convention (current only while the key is down). The sounder is a ${SOUNDER_R} Ω main-line coil, the Western Union 15B's resistance: the model's relay rewound with the same turns, so the same ${mA(PULL_I)} pull-in current, which is the model's estimate and no datasheet value (long lines used a finer-wound relay and a 4 Ω local sounder: the next step). It has no telephone quench: release runs through a model discharge path of ${SOUNDER_RELEASE} Ω standing for the key's spark and condenser, an estimate. The line is drawn short and its length is not to scale; the armature gap is drawn five times its size; the key lever is 108 mm (Pope: about four to five inches) and the sounder's board 120 × 72 mm (a Western Electric 15B is 140 × 113 × 77 mm), but the coils, springs, screws and posts are drawn, not measured from an instrument, and the two gravity cells are drawn small (a cell was about 150 × 200 mm). Near pull-in the model has not seated the armature by the end of its run, so the last stretch onto the anvil is eased, not computed.`,
+    build: (detail) => tgModel(pose(), detail),
+  });
+  /** The pose: levers and armature moved, the retractor stretched; then a rebuild (cheap: cached geometry, the lit materials by level). */
+  const paint = () => {
+    for (const det of ['full', 'flat'] as const) { const g = drawnRetractor(det); if (g) refresh(g, retractorGeo(retractorLen(x), det)); }
+    stage.move(tgPose(pose())); stage.refresh();
+  };
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' });
   stage.chips.append(chip);
@@ -103,7 +108,7 @@ export function telegraphView(): Widget {
     cd += ((closer ? 1 : 0) - cd) * (1 - Math.exp(-dt * 20));
     if (Math.abs(cd - (closer ? 1 : 0)) < 0.005) cd = closer ? 1 : 0;
     readout();
-    stage.paint(tgParts(pose(), palette()), tgAnchors(pose()));
+    paint();
   }, () => settling() || kd !== (keyDown ? 1 : 0) || cd !== (closer ? 1 : 0) || sos !== null);
 
   function readout(): void {
@@ -130,7 +135,7 @@ export function telegraphView(): Widget {
   function repaint(): void {
     if (reducedMotion()) { tReal = 1e6; kd = keyDown ? 1 : 0; cd = closer ? 1 : 0; }
     armature(); readout();
-    stage.paint(tgParts(pose(), palette()), tgAnchors(pose()));
+    paint();
     loop.kick();
   }
   /** The line changed: a loop that now pulls in is struck down again, one that no longer does lets go at once. */
@@ -197,13 +202,12 @@ export function telegraphView(): Widget {
   panel.append(
     h('h3', { class: 'm3-title' }, 'The key, the closer and the sounder'),
     h('p', { class: 'm3-sub' }, `An American landline ran closed circuit: the loop (battery, key, line, sounder coil, earth) carries current at idle, and the circuit closer lever shorts the key to keep it so. The coil is ${SOUNDER_R} Ω and pulls in at ${mA(PULL_I)}, so the armature rests on the anvil while the line is quiet. To send, open the closer and work the key: each press closes the loop and the armature clicks down, each release lets it go with a second click. Open the closer and leave it, and you have the open-circuit convention. Below the pull-in current the armature does not move at all. Space or Enter works on the focused key.`),
-    h('div', { class: 'r3' },
-      h('div', { class: 'r3-main' },
-        h('div', { class: 'r3-ctl' }, km.el, volts.el),
-        stage.el, stage.hint, verdict,
-        h('div', { class: 'r3-btns tg-btns' }, closerBtn, key, sosBtn, ...metals, edge, over, snd, stage.resetBtn),
-        h('div', { class: 'r3-ctl' }, speed.el)),
-      h('div', { class: 'r3-side' }, h('h4', null, 'This loop ', h('span', { class: 'r3-badge' }, 'model')), kv)));
+    stage.el, verdict,
+    h('div', { class: 'tg-below' }, h('h4', null, 'This loop ', h('span', { class: 'r3-badge' }, 'model')), kv));
+  stage.slot.append(
+    h('div', { class: 'r3-ctl' }, km.el, volts.el),
+    h('div', { class: 'r3-btns tg-btns' }, closerBtn, key, sosBtn, ...metals, edge, over, snd),
+    h('div', { class: 'r3-ctl' }, speed.el));
   repaint();
   return { el: panel, destroy() { loop.stop(); clicker.destroy(); stage.destroy(); } };
 }

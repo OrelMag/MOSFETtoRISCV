@@ -10,3 +10,4 @@
   --pr-coil: light-dark(#b9773c, #c98a4f);
 }
 .pr-stroke output { width: 44px; }
+.pr3 .r3 { grid-template-columns: minmax(0, 1fr); }

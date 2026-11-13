@@ -420,7 +420,7 @@ export class PalettePanel {
   private typedAt = 0;
 
   constructor(private ctx: () => PaletteCtx, private hooks: PaletteHooks) {
-    this.search = h('input', { type: 'search', placeholder: 'Search parts…', 'aria-label': 'Search parts' }) as HTMLInputElement;
+    this.search = h('input', { type: 'search', placeholder: 'Search…', 'aria-label': 'Search parts' }) as HTMLInputElement;
     this.search.addEventListener('input', () => { this.searchX.hidden = !this.search.value; this.render(); });
     this.searchX = h('button', { class: 'sb-search-x', type: 'button', title: 'Clear the search', 'aria-label': 'Clear the search', hidden: true,
       onclick: () => { this.clearSearch(); this.search.focus(); } }, icon('close', 13)) as HTMLButtonElement;
@@ -440,6 +440,7 @@ export class PalettePanel {
     this.purist.checked = purist;
     const filter = this.search.value;
     const hadFocus = this.list.contains(document.activeElement);
+    let renameAt: HTMLElement | null = null;
     this.list.replaceChildren();
     const favs = this.favorites(filter);
     const pinned = new Set(ctx.ws.favorites);
@@ -495,10 +496,9 @@ export class PalettePanel {
         for (const it of items) if (!it.section) det.append(this.itemButton(itemKey(g.id, it.id), it, pinned.has(itemKey(g.id, it.id))));
         this.list.append(det);
         if (queue) {
-          const q = queue;
           this.pendingRename = null;
           det.open = true;
-          this.editFolder(q, q.querySelector('span')!.textContent!);
+          renameAt = queue;
         }
         continue;
       }
@@ -526,6 +526,8 @@ export class PalettePanel {
     if (!this.list.childElementCount) this.list.append(h('p', { class: 'sb-empty' }, 'Nothing matches.'));
     this.syncRover();
     if (hadFocus) this.stops().find((el) => stopKey(el) === this.rover)?.focus({ preventScroll: true });
+    // a new folder's name box last: the focus given back above took it from the box, which closed at once (S-4)
+    if (renameAt) this.editFolder(renameAt, renameAt.querySelector('span')!.textContent!);
   }
 
   // ---- the list as one Tab stop (WCAG 2.1.1: ~75 buttons were each a stop) -----------------------

@@ -11,6 +11,26 @@ import { vectorSaxpy } from '../riscv/vecprograms';
 
 export const C_RAM_K = 6;
 
+/**
+ * The fetch loop and the halt detector as wires: the ROM left of the core with its data into `instr`, the pc round the top (when the core
+ * puts it above `instrOut`) or under the core back to the ROM's address, and the `j .` comparator right of the core with its halt part.
+ * `clkPin`: the clock pin sits inside the pc loop with a wire straight to the core's clock (the core has no other sink).
+ */
+function fetchFrame(s: Sheet, pc: string, clkPin: boolean): void {
+  const A = s.port('imem', 'addr').pos, D = s.port('imem', 'data').pos, I = s.port('cpu', 'instr').pos;
+  const P = s.port('cpu', pc).pos, Q = s.port('cpu', 'instrOut').pos, C = s.port('cpu', 'clk').pos;
+  s.wire('imem.data', 'cpu.instr', D[1] === I[1] ? [] : [[D[0] + 3, D[1]], [D[0] + 3, I[1]]]);
+  if (clkPin) { s.pin('clk', 'in', [6, C[1]], 1, { kind: 'clock' }); s.wire('pin:clk', 'cpu.clk'); }
+  const x = P[0] + 2, over = P[1] < Q[1], loop = over ? 3 : Math.max(P[1], Q[1]) + 6;
+  s.wire(`cpu.${pc}`, 'imem.addr', [[x, P[1]], [x, loop], [A[0] - 3, loop], [A[0] - 3, A[1]]]);
+  s.part('hj', { const: { width: 32, value: 0x6f } }, [Q[0] + 4, Q[1] - 5], { label: 'j .' });
+  s.part('eq', { lib: 'eq32' }, [Q[0] + 13, Q[1] - 2]);
+  s.part('halt', { display: 'halt', width: 1 }, [Q[0] + 21, Q[1] - 3]);
+  s.wire('cpu.instrOut', 'eq.b', [[Q[0] + 8, Q[1]], [Q[0] + 8, Q[1] + 2]]);
+  s.wire('hj.y', 'eq.a', [[Q[0] + 11, Q[1] - 4], [Q[0] + 11, Q[1]]]);
+  s.wire('eq.eq', 'halt.a');
+}
+
 /** The C program: compressed and full-size instructions mixed, so 32-bit ones straddle words. */
 export const RVC_SOURCE = `# RV32IC: .option rvc packs every instruction that has a 16-bit form
         .option rvc
@@ -41,34 +61,30 @@ export const NOTES_RVC = 'The C extension on a sandbox core. The program ROM (se
 /** The sandbox's RV32C computer: the C core, a halfword-reading ROM, a RAM and a console. */
 export function rvcChip(id: string, name: string, src = RVC_SOURCE): ChipDoc {
   const s = new Sheet();
-  s.pin('clk', 'in', [2, 2], 1, { kind: 'clock' });
+  s.pin('clk', 'in', [2, 22], 1, { kind: 'clock' });
   s.tap('pin:clk', 'clk');
-  s.part('imem', { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src, c: true } }, [6, 5], { label: 'program (C)' });
-  s.tap('imem.addr', 'pc'); s.tap('imem.data', 'window');
+  s.part('imem', { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src, c: true } }, [6, 12], { label: 'program (C)' });
   s.part('cpu', { lib: 'rv32ic_core' }, [30, 6], { label: 'RV32IC core' });
-  s.part('hart', { const: { width: 32, value: 0 } }, [24, 14]);
-  s.part('grant', { const: { width: 1, value: 1 } }, [20, 18]);
-  s.tap('cpu.clk', 'clk'); s.tap('cpu.instr', 'window'); s.tap('cpu.memRData', 'rdata'); s.tap('cpu.pcOut', 'pc');
+  s.part('hart', { const: { width: 32, value: 0 } }, [24, 15]);
+  s.part('grant', { const: { width: 1, value: 1 } }, [24, 19]);
+  s.tap('cpu.clk', 'clk'); s.tap('cpu.memRData', 'rdata');
   s.wire('hart.y', 'cpu.hartid'); s.wire('grant.y', 'cpu.grant');
-  s.tap('cpu.memAddr', 'addr'); s.tap('cpu.memWData', 'wdata'); s.tap('cpu.memWE', 'we'); s.tap('cpu.instrOut', 'instr');
   // the halt detector: the instruction the core runs is `j .` (jal x0, 0), whether it was spelled c.j or jal
-  s.part('hj', { const: { width: 32, value: 0x6f } }, [2, 20], { label: 'j .' });
-  s.part('eq', { lib: 'eq32' }, [10, 19]);
-  s.part('halt', { display: 'halt', width: 1 }, [16, 21]);
-  s.wire('hj.y', 'eq.a'); s.tap('eq.b', 'instr'); s.wire('eq.eq', 'halt.a');
+  fetchFrame(s, 'pcOut', false);
   // memory map: a31 = 0 the RAM, 1 the console
-  s.part('as', { split: [2, C_RAM_K, 31 - 2 - C_RAM_K, 1] }, [60, 4]);
-  s.tap('as.in', 'addr'); s.tap('as.o1', 'aw'); s.tap('as.o3', 'a31');
-  s.part('bs', { split: [8, 24] }, [60, 14]);
-  s.tap('bs.in', 'wdata'); s.tap('bs.o0', 'byte');
-  s.part('n31', { lib: 'not' }, [72, 4]);
-  s.part('ramst', { lib: 'and' }, [78, 4], { label: 'RAM store' });
+  s.part('as', { split: [2, C_RAM_K, 31 - 2 - C_RAM_K, 1] }, [52, 16]);
+  s.wire('cpu.memAddr', 'as.in', [[49, 16], [49, 20]]); s.tap('as.o1', 'aw'); s.tap('as.o3', 'a31');
+  s.part('bs', { split: [8, 24] }, [52, 28]);
+  s.tap('cpu.memWData', 'wdata'); s.tap('bs.in', 'wdata'); s.tap('bs.o0', 'byte');
+  s.tap('cpu.memWE', 'we');
+  s.part('n31', { lib: 'not' }, [60, 16]);
+  s.part('ramst', { lib: 'and' }, [66, 16], { label: 'RAM store' });
   s.tap('n31.a', 'a31'); s.wire('n31.y', 'ramst.a'); s.tap('ramst.b', 'we'); s.tap('ramst.y', 'ramWe');
-  s.part('cwe', { lib: 'and' }, [78, 12], { label: 'console store' });
+  s.part('cwe', { lib: 'and' }, [66, 24], { label: 'console store' });
   s.tap('cwe.a', 'a31'); s.tap('cwe.b', 'we'); s.tap('cwe.y', 'conWe');
-  s.part('ram', { ram: { k: C_RAM_K, w: 32 } }, [92, 2], { label: `RAM ${2 ** C_RAM_K} × 32` });
+  s.part('ram', { ram: { k: C_RAM_K, w: 32 } }, [78, 12], { label: `RAM ${2 ** C_RAM_K} × 32` });
   s.tap('ram.addr', 'aw'); s.tap('ram.din', 'wdata'); s.tap('ram.we', 'ramWe'); s.tap('ram.clk', 'clk'); s.tap('ram.dout', 'rdata');
-  s.part('con', { console: { cols: 32, rows: 8 } }, [92, 16], { label: 'console' });
+  s.part('con', { console: { cols: 32, rows: 8 } }, [78, 26], { label: 'console' });
   s.tap('con.data', 'byte'); s.tap('con.we', 'conWe'); s.tap('con.clk', 'clk');
   return s.doc(id, name, { notes: NOTES_RVC });
 }
@@ -103,16 +119,9 @@ export const NOTES_RV64 = 'The 64-bit core in the sandbox. rv64im_core is the ch
 /** The sandbox's RV64 computer: the 64-bit core and its program ROM. */
 export function rv64Chip(id: string, name: string, src = RV64_SOURCE): ChipDoc {
   const s = new Sheet();
-  s.pin('clk', 'in', [2, 2], 1, { kind: 'clock' });
-  s.tap('pin:clk', 'clk');
-  s.part('imem', { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src, xlen: 64 } }, [6, 5], { label: 'program (RV64)' });
-  s.tap('imem.addr', 'pc'); s.tap('imem.data', 'instr');
+  s.part('imem', { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src, xlen: 64 } }, [6, 12], { label: 'program (RV64)' });
   s.part('cpu', { lib: 'rv64im_core' }, [30, 6], { label: 'RV64IM core' });
-  s.tap('cpu.clk', 'clk'); s.tap('cpu.instr', 'instr'); s.tap('cpu.pcLow', 'pc'); s.tap('cpu.instrOut', 'run');
-  s.part('hj', { const: { width: 32, value: 0x6f } }, [2, 20], { label: 'j .' });
-  s.part('eq', { lib: 'eq32' }, [10, 19]);
-  s.part('halt', { display: 'halt', width: 1 }, [16, 21]);
-  s.wire('hj.y', 'eq.a'); s.tap('eq.b', 'run'); s.wire('eq.eq', 'halt.a');
+  fetchFrame(s, 'pcLow', true);
   return s.doc(id, name, { notes: NOTES_RV64 });
 }
 
@@ -126,15 +135,8 @@ export const NOTES_RVV = 'The vector core in the sandbox. rv32iv_core is chapter
 /** The sandbox's vector computer: rv32iv_core and its program ROM. */
 export function rvvChip(id: string, name: string, src = RVV_SOURCE): ChipDoc {
   const s = new Sheet();
-  s.pin('clk', 'in', [2, 2], 1, { kind: 'clock' });
-  s.tap('pin:clk', 'clk');
-  s.part('imem', { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src } }, [6, 5], { label: 'program' });
-  s.tap('imem.addr', 'pc'); s.tap('imem.data', 'instr');
+  s.part('imem', { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src } }, [6, 12], { label: 'program' });
   s.part('cpu', { lib: 'rv32iv_core' }, [30, 6], { label: 'RV32I + vector core' });
-  s.tap('cpu.clk', 'clk'); s.tap('cpu.instr', 'instr'); s.tap('cpu.pcOut', 'pc'); s.tap('cpu.instrOut', 'run');
-  s.part('hj', { const: { width: 32, value: 0x6f } }, [2, 20], { label: 'j .' });
-  s.part('eq', { lib: 'eq32' }, [10, 19]);
-  s.part('halt', { display: 'halt', width: 1 }, [16, 21]);
-  s.wire('hj.y', 'eq.a'); s.tap('eq.b', 'run'); s.wire('eq.eq', 'halt.a');
+  fetchFrame(s, 'pcOut', true);
   return s.doc(id, name, { notes: NOTES_RVV });
 }

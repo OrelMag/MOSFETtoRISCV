@@ -94,6 +94,12 @@ export const STEP_MOVES: readonly (readonly StepMove[])[] = [
     { from: 'converters', step: 5, to: 'converters', toStep: 6, title: 'The loop in gates, and its CIC' },
     { from: 'converters', step: 6, to: 'converters', toStep: 7, title: 'Many bits from one' },
   ],
+  // exchange: "The crossbar itself" (the 3D crossbar switch) joins at step 5, after the relay crossbar; the steps behind it move up one
+  [
+    { from: 'exchange', step: 5, to: 'exchange', toStep: 6, title: 'What a switching network costs' },
+    { from: 'exchange', step: 6, to: 'exchange', toStep: 7, title: 'The busy tone' },
+    { from: 'exchange', step: 7, to: 'exchange', toStep: 8, title: 'Start-stop' },
+  ],
 ];
 
 export interface StepPlace { chapter: string; step: number }

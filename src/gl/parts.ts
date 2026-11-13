@@ -39,10 +39,11 @@ export interface FlatFace { pts: [number, number][]; depth: number; color: RGBA 
 const LIGHT: Vec3 = norm3([-0.35, 0.8, 0.5]);
 const SIDES = 12;
 
-/** A fixed view: world point → x right, y up, depth (larger is nearer). */
+/** A fixed view: world point → x right, y up, depth (larger is nearer), seen from where OrbitCamera.eye() puts the eye at
+ *  this yaw and pitch: (sin yaw, cos yaw) in xz, so depth runs along that and right along (cos yaw, −sin yaw). */
 export function flatView(yaw: number, pitch: number): (p: Vec3) => [number, number, number] {
   const c = Math.cos(yaw), s = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
-  return ([x, y, z]) => { const X = x * c + z * s, Z = -x * s + z * c; return [X, y * cp - Z * sp, y * sp + Z * cp]; };
+  return ([x, y, z]) => { const X = x * c - z * s, Z = x * s + z * c; return [X, y * cp - Z * sp, y * sp + Z * cp]; };
 }
 
 /** The faces of a part in its own unit coordinates: corners and outward normal. */

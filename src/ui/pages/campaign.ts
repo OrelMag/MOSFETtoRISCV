@@ -193,11 +193,10 @@ export class CampaignPage implements Page {
     const panel = this.main.querySelector<HTMLElement>('.cp-panel');
     if (panel && panelTop) panel.scrollTop = panelTop;
     refocus();
-    if (this.mxFocus) {
-      const f = this.mxFocus;
-      this.mxFocus = null;
-      (f === 'open' ? this.main.querySelector<HTMLElement>('#mx-open-t') : this.main.querySelector<HTMLElement>(`.mx-card[data-id="${f}"] [data-mx]`))?.focus();
-    }
+    const f = this.mxFocus;
+    this.mxFocus = null;
+    if (f) (f === 'open' ? this.main.querySelector<HTMLElement>('#mx-open-t') : this.main.querySelector<HTMLElement>(`.mx-card[data-id="${f}"] [data-mx]`))?.focus({ preventScroll: true });
+    // (an opened model scrolls into view in revealEntry)
     // chosen from the keyboard: the level's details are next, not 90 more cards (Esc there goes back to its card)
     if (changed && a === 'n' && b && document.activeElement?.matches('.cp-node:focus-visible')) this.main.querySelector<HTMLElement>('.cp-node-panel h2')?.focus({ preventScroll: true });
     if (changed && b) {
@@ -235,6 +234,10 @@ export class CampaignPage implements Page {
       const r = row.getBoundingClientRect(), v = list.getBoundingClientRect();
       if (r.top < v.top + 40 || r.bottom > v.bottom - 8) list.scrollTop += r.top - v.top - list.clientHeight / 3;
     }
+    // a 3D model opened (Open here, or its address): its viewer to the top, its canvas in view (it sat under the
+    // index's introduction, on a phone entirely below the fold)
+    const mx = this.main.querySelector<HTMLElement>('.mx-open');
+    if (mx) return void mx.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
     const top = this.main.querySelector<HTMLElement>('.cp-codex-entry')?.getBoundingClientRect().top;
     if (top !== undefined && (top < 0 || top > innerHeight * 0.6)) this.main.querySelector<HTMLElement>('.cp-codex-entry')!.scrollIntoView({ block: 'start' });
   }
@@ -269,13 +272,16 @@ export class CampaignPage implements Page {
         tab('#/campaign/intro', 'The CPU', view === 'intro', 'chip'),
         tab('#/campaign/codex', 'Codex', view === 'codex', 'book')),
       h('div', { class: 'cp-actions' }, unlock,
-        h('button', { class: 'btn sm ghost', title: 'Your progress and your level chips, as one .json file', onclick: () => this.exportFile() }, 'Export campaign'),
-        h('button', { class: 'btn sm ghost', title: 'Merge a campaign file into your progress (your chips are never overwritten)', onclick: () => file.click() }, 'Import campaign'),
+        h('button', { class: 'btn sm', title: 'Your progress and your level chips, as one .json file', onclick: () => this.exportFile() }, 'Export campaign'),
+        h('button', { class: 'btn sm', title: 'Merge a campaign file into your progress (your chips are never overwritten)', onclick: () => file.click() }, 'Import campaign'),
         file, this.note));
   }
 
-  private say(msg: string): void {
+  private say(msg: string, bad = false): void {
     this.note.textContent = msg;
+    // a failure in the error colour and announced at once; it was the success's green and polite
+    this.note.classList.toggle('bad', bad);
+    this.note.setAttribute('role', bad ? 'alert' : 'status');
     setTimeout(() => { if (this.note.textContent === msg) this.note.textContent = ''; }, 6000);
   }
 
@@ -291,9 +297,9 @@ export class CampaignPage implements Page {
 
   private importText(text: string): void {
     const r = importCampaign(text, progress().state, loadWorkspace());
-    if ('error' in r) return this.say(`Import failed: ${r.error}`);
+    if ('error' in r) return this.say(`Import failed: ${r.error}`, true);
     const saved = saveWorkspace(r.ws);
-    if (!saved.ok) return this.say(`Import failed: ${saved.reason}`);
+    if (!saved.ok) return this.say(`Import failed: ${saved.reason}`, true);
     progress().replace(r.state);
     this.say(`Imported: progress merged, ${r.chips.added.length} chip${r.chips.added.length === 1 ? '' : 's'} added`);
   }
@@ -673,7 +679,8 @@ export class CampaignPage implements Page {
         const hits = searchCodex(q).filter((e) => !this.cxKind || e.kind === this.cxKind);
         ranked.replaceChildren(...hits.map((e) => {
           const li = item(e), why = matchNote(e, q);
-          if (why) li.append(h('span', { class: 'cx-why' }, why));
+          // matchNote marks the hit between « »: drawn as a highlight, not as the marks
+          if (why) li.append(h('span', { class: 'cx-why' }, ...why.split(/[«»]/).map((s, i) => (i % 2 ? h('mark', null, s) : s))));
           return li;
         }));
         // 3D models by title, after the entries (they open in the model index)

@@ -52,7 +52,7 @@ export class PathPage implements Page {
     const cur = currentTier(views, start);
     if (!this.open.size) this.open.add(cur);
     this.main.replaceChildren(...views.map((v) => this.tier(v, ctx, cur, start)),
-      h('div', { class: 'lp-legend' }, ...(['mastered', 'practised', 'rusty', 'learning', 'new'] as SkillState[]).map((s) => h('span', null, h('span', { class: `lp-chip ${s}` }, 'a'), STATE_LABEL[s]))),
+      h('div', { class: 'lp-legend' }, ...(['mastered', 'practised', 'rusty', 'learning', 'new'] as SkillState[]).map((s) => h('span', null, h('span', { class: `lp-chip ${s}`, 'aria-hidden': 'true' }), STATE_LABEL[s]))),
       h('p', { class: 'lp-note' }, 'Mastered: understood (a question right), built (its level or challenge), and remembered (right twice, days apart). Times are estimates.'));
     this.side.replaceChildren(this.next(nextUp(ctx, start)), ...views.filter((v) => v.tier === cur && v.capstone).map((v) => this.capCard(v)), this.capGroup('Communication capstones', COMM_CAPSTONES, ctx, cur), this.capGroup('Signal processing capstones', DSP_CAPSTONES, ctx, cur));
   }
@@ -68,6 +68,8 @@ export class PathPage implements Page {
       h('div', { class: 'lp-meter', role: 'img', 'aria-label': `${pct}% of tier ${v.tier}` }, h('i', { style: `width:${pct}%` })));
     if (!isOpen) return card;
     card.append(h('p', { class: 'lp-blurb' }, v.blurb));
+    // like the menus: Esc closes an open Test out and puts the focus back on its button
+    card.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.testing) { const id = this.testing; this.testing = null; this.render(); document.querySelector<HTMLElement>(`[data-testout="${id}"]`)?.focus(); } });
     for (const c of tierChapters(v.tier)) {
       const mine = v.skills.filter((x) => x.skill.chapter === c.id);
       const seen = settings.visited(c.id).filter((i) => i < c.steps.length).length;
@@ -76,7 +78,7 @@ export class PathPage implements Page {
       const row = h('div', { class: 'lp-row' },
         h('a', { class: 'lp-ch', href: `#/c/${c.id}/${Math.min(seen, c.steps.length - 1)}` }, c.title, h('small', null, `${c.label ?? `ch ${c.num}`} · ${seen} / ${c.steps.length} steps${tested ? ' · tested out' : ''}`)),
         h('div', { class: 'lp-chips' }, ...mine.map(({ skill, state }) => h('a', { class: `lp-chip ${state}`, href: `#/campaign/codex/${skill.id}`, title: `${skill.title}: ${STATE_LABEL[state]}` }, skill.title))),
-        h('div', { class: 'lp-rowact' }, !tested && !allDone && c.recap?.checks ? h('button', { class: 'btn sm', type: 'button', title: this.testing === c.id ? 'Close the questions' : `Skip ${c.title}: answer its recap questions, all right to count it as known`, onclick: () => { this.testing = this.testing === c.id ? null : c.id; this.render(); } }, this.testing === c.id ? 'Close' : 'Test out') : null,
+        h('div', { class: 'lp-rowact' }, !tested && !allDone && c.recap?.checks ? h('button', { class: 'btn sm', type: 'button', 'data-testout': c.id, title: this.testing === c.id ? 'Close the questions' : `Skip ${c.title}: answer its recap questions, all right to count it as known`, onclick: () => { this.testing = this.testing === c.id ? null : c.id; this.render(); document.querySelector<HTMLElement>(this.testing ? '.lp-test' : `[data-testout="${c.id}"]`)?.focus(); } }, this.testing === c.id ? 'Close' : 'Test out') : null,
           tested ? h('button', { class: 'btn sm', type: 'button', title: 'Count this chapter as not tested out', onclick: () => learn().untest(c.id) }, 'Undo test-out') : null));
       card.append(row);
       if (this.testing === c.id) card.append(this.testOut(c.id));
@@ -86,9 +88,9 @@ export class PathPage implements Page {
 
   private testOut(chapter: string): HTMLElement {
     const c = chapterById(chapter)!;
-    const close = () => { this.testing = null; this.render(); };
+    const close = () => { this.testing = null; this.render(); document.querySelector<HTMLElement>(`[data-testout="${chapter}"]`)?.focus(); };
     // the questions are a chunk of their own (learn/placement.ts), loaded on this click, not with the page
-    const box = h('div', { class: 'lp-test', 'aria-busy': 'true' }, h('p', { class: 'lp-sub', role: 'status' }, `Loading the questions of ${c.title}…`));
+    const box = h('div', { class: 'lp-test', tabindex: '-1', 'aria-busy': 'true' }, h('p', { class: 'lp-sub', role: 'status' }, `Loading the questions of ${c.title}…`));
     testOutItems(chapter).then((items) => {
       box.removeAttribute('aria-busy');
       box.replaceChildren(h('p', { class: 'lp-sub' }, `Test out of ${c.title}: ${items.length} questions, all right to pass. Nothing here counts toward the chapter's own checks.`),

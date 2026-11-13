@@ -7,6 +7,7 @@ import { labelOverlaps, routeNetlist, wireOverlaps, type NetTag } from '../src/v
 import { drawnNetlist, MAX_CROSSINGS_PER_NET, MORE_CROSSINGS_PER_NET, WHOLE_NETS, wireCrossings, wiresThroughParts } from '../src/view/wirefirst';
 import { registry } from '../src/lib/define';
 import { tick } from './yieldtick';
+import { dramCtrl } from '../src/lib/dramctrl';
 
 const hasTags = (nl: Netlist) => nl.nets.some((n) => n.tags === true || (n.tags?.length ?? 0) > 0);
 /** Every level a stage can show: the ones reachable from the families and every registered part. */
@@ -23,6 +24,15 @@ describe('wires first', () => {
     const nl = netlistOf(DFF_EDGE6)!, dn = drawnNetlist(DFF_EDGE6, nl);
     expect(dn.nets.map((n) => n.ends)).toEqual(nl.nets.map((n) => n.ends));
     expect(dn.instances).toBe(nl.instances);
+  });
+
+  it('wires a pin to the parts it feeds instead of a pointer beside it: z in the DRAM controller state machine', () => {
+    // z (the wait counter at 0) enters on a pin and reaches six inverters in the first column: drawn as a wire on a trunk
+    const fsm = netlistOf(dramCtrl({ k: 6, banks: 2, rowWords: 16, policy: 'open' }))!.instances.find((i) => i.name === 'fsm')!.def;
+    const nl = netlistOf(fsm)!, z = (d: Netlist) => d.nets.find((n) => n.ends[0] === 'z')!;
+    expect(z(nl).tags).toBe(true);
+    // wired from the pin: at most a sink whose wire would run through a part keeps a pointer
+    expect(z(drawnNetlist(fsm, nl)).tags).not.toBe(true);
   });
 
   it('counts a crossing once, between two nets only', () => {

@@ -74,21 +74,45 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./masks3d').then((m) => m.masks3d()),
   },
   {
+    id: 'euv', title: 'EUV lithography', category: 'devices', chapter: 'silicon', step: 10,
+    summary: 'Tin droplets struck twice by a laser at the focus of a curved mirror, and the ten mirrors that carry the 13.5 nm light to the wafer.',
+    files: ['euv3d', 'euv3dview', 'euv3dkit'], factory: 'euv3d',
+    open: () => import('./euv3d').then((m) => m.euv3d()),
+  },
+  {
+    id: 'finfet', title: 'Planar, fin and nanosheet', category: 'devices', chapter: 'silicon', step: 6,
+    summary: 'Three transistors cut across the gate: one side gated, three (Intel 22 nm fins), four (IBM 2 nm sheets), and what each leaks.',
+    files: ['finfet3d', 'finfet3dview', 'finfet3dkit'], factory: 'finfet3d', codex: ['cmos'],
+    open: () => import('./finfet3d').then((m) => m.finfet3d()),
+  },
+  {
+    id: 'nmosgate', title: 'A 6502-style NMOS gate', category: 'devices', chapter: 'appendix-6502', step: 7,
+    summary: 'A two-input NOR in diffusion, polysilicon and aluminium: two pull-downs and a depletion load, three transistors, a ratio of four.',
+    files: ['nmosgate3d', 'nmosgate3dview', 'nmosgate3dkit'], factory: 'nmosGate3d', codex: ['cmos'],
+    open: () => import('./nmosgate3d').then((m) => m.nmosGate3d()),
+  },
+  {
     id: 'package', title: 'A package, opened up', category: 'devices', chapter: 'wire', step: 8,
     summary: 'Die, pads, bond wires, lead frame and board, with the ground bounce that more ground wires divide.',
-    files: ['package3d', 'package3dview', 'package3dparts'], factory: 'package3d',
+    files: ['package3d', 'package3dview', 'package3dkit'], factory: 'package3d',
     open: () => import('./package3d').then((m) => m.package3d()),
+  },
+  {
+    id: 'flipchip', title: 'A flip-chip package, cut open', category: 'devices', chapter: 'wire', step: 8,
+    summary: 'A lidded BGA to scale: the die face down on solder bumps in underfill, the substrate fanning out to 1 560 balls, a lid on the thermal paste.',
+    files: ['flipchip3d', 'flipchip3dview', 'flipchip3dkit'], factory: 'flipchip3d',
+    open: () => import('./flipchip3d').then((m) => m.flipchip3d()),
   },
   {
     id: 'dram', title: 'The DRAM array', category: 'memory', chapter: 'dram', step: 4,
     summary: 'The chapter\'s 4 × 4 array on the switch-level simulator: every cell\'s charge as a height, step by step through the protocol.',
-    files: ['dram3d', 'dram3dview', 'dram3dparts', 'dram3dbench'], factory: 'dram3d', codex: ['senseamp', 'dramtiming'],
+    files: ['dram3d', 'dram3dview', 'dram3dkit', 'dram3dparts', 'dram3dbench'], factory: 'dram3d', codex: ['senseamp', 'dramtiming'],
     open: () => import('./dram3d').then((m) => m.dram3d()),
   },
   {
     id: 'fgate', title: 'The floating gate', category: 'memory', chapter: 'flash', step: 1,
     summary: 'A NAND string of four flash cells: program a cell pulse by pulse, erase the block, read with the others at the pass voltage.',
-    files: ['fgate3d', 'fgate3dview', 'fgate3dparts'], factory: 'fgate3d', codex: ['ftl', 'boot'],
+    files: ['fgate3d', 'fgate3dview', 'fgate3dkit', 'fgate3dparts'], factory: 'fgate3d', codex: ['ftl', 'boot'],
     open: () => import('./fgate3d').then((m) => m.fgate3d()),
   },
   {
@@ -100,7 +124,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'press', title: 'Hollerith\'s pin press', category: 'machines', chapter: 'cards', step: 1,
     summary: 'The census card under the press: pins reach mercury through the holes and the dials count.',
-    files: ['press3d', 'press3dview', 'press3dparts'], factory: 'press3d', codex: ['hollerith'],
+    files: ['press3d', 'press3dview', 'press3dkit', 'press3dgeom'], factory: 'press3d', codex: ['hollerith'],
     open: () => import('./press3d').then((m) => m.press3d()),
   },
   {
@@ -118,7 +142,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'tide', title: 'Kelvin\'s tide predictor', category: 'analogies', chapter: 'signals', step: 0,
     summary: 'Ten cranks turn the chapter\'s harmonics and one cord over their pulleys adds them on a pen: Fourier synthesis in brass.',
-    files: ['tide3d', 'tide3dview', 'tide3dparts'], factory: 'tide3d', codex: ['fourier'],
+    files: ['tide3d', 'tide3dview', 'tide3dparts', 'tide3dkit'], factory: 'tide3d', codex: ['fourier'],
     open: () => import('./tide3d').then((m) => m.tide3d()),
   },
   {
@@ -130,13 +154,13 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'fibre', title: 'An optical fibre, cut open', category: 'comms', chapter: 'glass', step: 1,
     summary: 'Core, cladding and coating to scale: rays held by total internal reflection, and a pulse spread by the modes.',
-    files: ['fibre3d', 'fibre3dview', 'fibre3dparts'], factory: 'fibre3d', codex: ['dispersion'],
+    files: ['fibre3d', 'fibre3dview', 'fibre3dkit', 'fibre3dparts'], factory: 'fibre3d', codex: ['dispersion'],
     open: () => import('./fibre3d').then((m) => m.fibre3d()),
   },
   {
     id: 'telegraph', title: 'Telegraph key and sounder', category: 'comms', chapter: 'telegraph', step: 1,
     summary: 'Hold the key to send: the sounder\'s armature moves as the relay model moves it at the voltage the line leaves.',
-    files: ['telegraph3d', 'telegraph3dview', 'telegraph3dparts'], factory: 'telegraph3d', codex: ['relay'],
+    files: ['telegraph3d', 'telegraph3dview', 'telegraph3dparts', 'telegraph3dkit'], factory: 'telegraph3d', codex: ['relay'],
     open: () => import('./telegraph3d').then((m) => m.telegraph3d()),
   },
   {
@@ -146,16 +170,40 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./dipole3d').then((m) => m.dipole3d()),
   },
   {
+    id: 'teletype', title: 'The Teletype Model 33 selector', category: 'comms', chapter: 'exchange', step: 8,
+    summary: 'A start-stop receiver made of cams: the start edge releases a clutch and eight notched cams read the line mid-unit.',
+    files: ['teletype3d', 'teletype3dview', 'teletype3dkit'], factory: 'teletype3d', codex: ['uart'],
+    open: () => import('./teletype3d').then((m) => m.teletype3d()),
+  },
+  {
     id: 'strowger', title: 'The Strowger selector', category: 'comms', chapter: 'exchange', step: 3,
     summary: 'The stepping switch behind the exchange: dial a level, mark lines busy, hang up.',
     files: ['strowger3d', 'strowger3dview', 'strowger3dkit'], factory: 'strowger3d', codex: ['relay'],
     open: () => import('./strowger3d').then((m) => m.strowger3d()),
   },
   {
+    id: 'crossbar', title: 'The crossbar switch', category: 'comms', chapter: 'exchange', step: 5,
+    summary: 'A Bell System Type B: 200 crosspoints on 30 magnets. Select bars swing fingers to a level, a holding bar traps one, the select lets go.',
+    files: ['crossbar3d', 'crossbar3dview', 'crossbar3dkit'], factory: 'crossbar3d', codex: ['relay'],
+    open: () => import('./crossbar3d').then((m) => m.crossbar3d()),
+  },
+  {
     id: 'speaker', title: 'Loudspeaker and microphone', category: 'dsp', chapter: 'speech', step: 0,
     summary: 'A Dayton RS180-8 cut open: the DAC\'s held samples move the cone; run backwards, the coil makes the microphone\'s millivolts.',
-    files: ['speaker3d', 'speaker3dview', 'speaker3dparts'], factory: 'speaker3d',
+    files: ['speaker3d', 'speaker3dview', 'speaker3dparts', 'speaker3dkit'], factory: 'speaker3d',
     open: () => import('./speaker3d').then((m) => m.speaker3d()),
+  },
+  {
+    id: 'mems', title: 'MEMS microphone', category: 'dsp', chapter: 'converters', step: 7,
+    summary: 'An Infineon IM69D130 cut open: sound bows a membrane between two plates, and the chapter\'s sigma-delta loop and CIC turn it into bits and words.',
+    files: ['mems3d', 'mems3dview', 'mems3dkit'], factory: 'mems3d', codex: ['sigmadelta', 'cic'],
+    open: () => import('./mems3d').then((m) => m.mems3d()),
+  },
+  {
+    id: 'nand3d', title: '3D NAND string', category: 'memory', chapter: 'flash', step: 7,
+    summary: 'A block of Samsung\'s 32-layer V-NAND cut through a row of holes: each hole a string of 32 charge-trap cells, programmed and read by the chapter\'s rule.',
+    files: ['nand3d', 'nand3dview', 'nand3dkit'], factory: 'nand3d', codex: ['ftl'],
+    open: () => import('./nand3d').then((m) => m.nand3d()),
   },
   {
     id: 'cable', title: 'Twisted pair and coax', category: 'comms', chapter: 'wire', step: 6,
@@ -178,13 +226,13 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'disk', title: 'A hard disk', category: 'memory', chapter: 'flash', step: 4,
     summary: 'Platters at 7200 rpm and a swinging arm: a sector read as seek, rotational latency and transfer, against a flash page read.',
-    files: ['disk3d', 'disk3dview', 'disk3dparts'], factory: 'disk3d', codex: ['ftl', 'wearlevel'],
+    files: ['disk3d', 'disk3dview', 'disk3dkit', 'disk3dparts'], factory: 'disk3d', codex: ['ftl', 'wearlevel'],
     open: () => import('./disk3d').then((m) => m.disk3d()),
   },
   {
     id: 'quartz', title: 'The quartz crystal oscillator', category: 'devices', chapter: 'clocks', step: 3,
     summary: 'A 32 768 Hz tuning fork bending in antiphase, its Pierce loop, and fifteen divide-by-two stages down to 1 Hz.',
-    files: ['quartz3d', 'quartz3dview', 'quartz3dparts'], factory: 'quartz3d', codex: ['clock', 'counter', 'cdc'],
+    files: ['quartz3d', 'quartz3dview', 'quartz3dkit', 'quartz3dgeom'], factory: 'quartz3d', codex: ['clock', 'counter', 'cdc'],
     open: () => import('./quartz3d').then((m) => m.quartz3d()),
   },
   {
@@ -196,14 +244,26 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'williams', title: 'A store on a picture tube', category: 'machines', chapter: 'appendix-baby', step: 1,
     summary: 'The Manchester Baby\'s Williams tube: a raster of dots and dashes held as charge, read through a wire-mesh pick-up plate and rewritten before it leaks away.',
-    files: ['williams3d', 'williams3dview', 'williams3dparts'], factory: 'williams3d',
+    files: ['williams3d', 'williams3dview', 'williams3dkit', 'williams3dparts'], factory: 'williams3d',
     open: () => import('./williams3d').then((m) => m.williams3d()),
+  },
+  {
+    id: 'eniac', title: 'ENIAC\'s decade ring', category: 'machines', chapter: 'tubes', step: 7,
+    summary: 'Two plug-in decade units: ten 6SN7 flip-flops in a ring, a neon each, the lit one moving a stage a pulse and carrying into the tens past nine.',
+    files: ['eniac3d', 'eniac3dview', 'eniac3dkit', 'eniac3dgeom'], factory: 'eniac3d', codex: ['ecclesjordan'],
+    open: () => import('./eniac3d').then((m) => m.eniac3d()),
   },
   {
     id: 'rope', title: 'Core rope', category: 'machines', chapter: 'appendix-agc', step: 6,
     summary: 'Cores of an Apollo rope module: a sense wire threads a core for a 1 and passes it for a 0; inhibit, set and reset wires read one core at a time.',
-    files: ['rope3d', 'rope3dview', 'rope3dparts'], factory: 'rope3d', codex: ['corerope'],
+    files: ['rope3d', 'rope3dview', 'rope3dkit', 'rope3dgeom'], factory: 'rope3d', codex: ['corerope'],
     open: () => import('./rope3d').then((m) => m.rope3d()),
+  },
+  {
+    id: 'agcmodule', title: 'AGC logic module', category: 'machines', chapter: 'appendix-agc', step: 8,
+    summary: 'The Apollo computer\'s one part: a dual NOR flatpack, 120 to a module, the module in its tray, one gate on the die down to its transistors.',
+    files: ['agcmodule3d', 'agcmodule3dview', 'agcmodule3dkit', 'agcmodule3dgeom'], factory: 'agcModule3d', codex: ['agc', 'nor'],
+    open: () => import('./agcmodule3d').then((m) => m.agcModule3d()),
   },
   {
     id: 'babbage', title: 'Babbage\'s carry', category: 'machines', chapter: 'fastadd', step: 5,
@@ -226,13 +286,13 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'sensordie', title: 'A sensor die, rolling and global', category: 'devices', chapter: 'sensors', step: 5,
     summary: 'The IMX183 array to scale with row drivers, column ADCs and readout, capturing a propeller with a rolling or a global shutter.',
-    files: ['sensordie3d', 'sensordie3dview', 'sensordie3dparts'], factory: 'sensorDie3d',
+    files: ['sensordie3d', 'sensordie3dview', 'sensordie3dkit', 'sensordie3dgeom'], factory: 'sensorDie3d',
     open: () => import('./sensordie3d').then((m) => m.sensorDie3d()),
   },
   {
     id: 'valve', title: 'Inside the valve', category: 'analogies', chapter: 'mosfet', step: 1,
     summary: 'A diaphragm valve in cutaway: spring preload as the threshold, no flow through the gate at rest, and the CMOS pair.',
-    files: ['valve3d', 'valve3dview', 'valve3dparts'], factory: 'valve3d', codex: ['cmos', 'inverter'],
+    files: ['valve3d', 'valve3dview', 'valve3dparts', 'valve3dkit'], factory: 'valve3d', codex: ['cmos', 'inverter'],
     open: () => import('./valve3d').then((m) => m.valve3d()),
   },
   {
@@ -244,13 +304,13 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'pixel4t', title: 'A CMOS pixel, cut open', category: 'devices', chapter: 'sensors', step: 2,
     summary: 'A 2.4 µm back-illuminated 4T pixel: each colour stops at its own depth, electrons fill the photodiode, a CDS read runs.',
-    files: ['pixel4t3d', 'pixel4t3dview', 'pixel4t3dparts'], factory: 'pixel4t3d', codex: ['aps', 'cds', 'qe', 'fullwell'],
+    files: ['pixel4t3d', 'pixel4t3dview', 'pixel4t3dkit', 'pixel4t3dgeom'], factory: 'pixel4t3d', codex: ['aps', 'cds', 'qe', 'fullwell'],
     open: () => import('./pixel4t3d').then((m) => m.pixel4t3d()),
   },
   {
     id: 'sensorstack', title: 'Four pixels, cut open', category: 'devices', chapter: 'sensors', step: 0,
     summary: 'A Bayer quad in cross-section, front- or back-side lit: rays traced through microlens, filter and metal to their absorption depth.',
-    files: ['sensorstack3d', 'sensorstack3dview', 'sensorstack3dparts', 'sensorstackoptics'], factory: 'sensorStack3d',
+    files: ['sensorstack3d', 'sensorstack3dview', 'sensorstack3dkit', 'sensorstack3dgeom', 'sensorstackoptics'], factory: 'sensorStack3d',
     open: () => import('./sensorstack3d').then((m) => m.sensorStack3d()),
   },
 ];

@@ -113,3 +113,4 @@ button.lv-chip { font: inherit; font-size: 12.5px; cursor: pointer; }
 /* a phone: the codex card already pads the page; the open model takes its width back */
 @media (max-width: 600px) { .mx-open { padding: 8px 6px; margin-inline: -10px; } }
 @media (pointer: coarse) { .mx-acts .btn, .mx-open-head .btn { min-height: 40px; } }
+.cx-ranked .cx-why mark { background: var(--accent-soft); color: var(--text); border-radius: 2px; padding: 0 1px; }

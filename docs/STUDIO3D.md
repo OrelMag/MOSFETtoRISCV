@@ -1,17 +1,20 @@
-# The studio renderer: API, frozen (Rock, 2026-11-12)
+# The studio renderer: API (Rock; frozen 2026-11-12, brought up to date with batch 3, 2026-11-13)
 
-The studio renderer and its kit replace box-and-cylinder for every 3D model on the site. This file is the API as
-built and tested on `feat/studio3d`. **It is frozen.** A model is converted with what is listed here; a change to
-it goes through Rock, so 34 conversions do not each grow their own engine.
+The studio renderer and its kit draw every 3D model on the site. This file is the API as it ships. A change to it
+goes through Rock, so the conversions do not each grow their own engine; the additions since the freeze are the ones
+the conversions needed, each opt-in (marked *since the freeze*).
 
 Everything here is in the code with tests. Nothing in this file is proposed: §8 lists what is left out.
 
 - Engine: `src/gl/studio.ts`. The stage: `src/widgets/studiostage.ts`. The kit, DOM-free and tested in Node: `src/gl/kit/`.
-- Models on it:
-  - the triode (`widgets/triode3dkit.ts` + `triode3dnext.ts`), shipped by default;
-  - the relay (`widgets/relay3dkit.ts` + `relay3dgeom.ts`, driven by `relay3dview.ts`), shipped by default, moved by `phys/relay.ts`;
-  - the other 32, unchanged in geometry, under `?studio3d` (phase 0, §6).
-- Tests: `tests/gl-geo.test.ts`, `gl-kit-api.test.ts`, `triode3dkit.test.ts`, `relay3dkit.test.ts`, `model-relay.test.ts`, `models3dindex.test.ts`.
+- Models: every entry of `widgets/models3dindex.ts` (the codex's model index and the smoke's 3D routes read it). Each is
+  `<name>3d.ts` (the tiny lazy entry a chapter imports, through `modelhost.ts` `lazyModel` / `withModel`), `<name>3dview.ts`
+  (the stage and the model's controls) and `<name>3dkit.ts` (DOM-free: geometry, materials, `xModel(state) → Model3`), with
+  `tests/model-<name>.test.ts` holding the drawing to its numbers. A `<name>3dparts.ts` / `3dgeom.ts` beside it is the
+  model's measured data and arithmetic, shared by the kit and its tests.
+- Phase 0's box-and-cylinder path (`widgets/modelstage.ts`, `?studio3d`, §6) is left only for the models not yet converted;
+  it goes with the last of them.
+- Tests: `tests/gl-geo.test.ts`, `gl-kit-api.test.ts`, `models3d.test.ts` (the flat view against the camera), `models3dindex.test.ts`, one `model-*.test.ts` per model.
 
 ## 1. How a model is written
 
@@ -105,9 +108,9 @@ Heat:
 Item { geo, mat, at?, rot?, scale?, name?, info?: { dim, source, note }, group?, explode?: Vec3,
        cut?: 'section' | 'open' | 'none', shadow?, order? }
 Model3 { items, cuts?: { planes: Cut[]; open: number[] }, anchors?: StudioAnchor[], beats?: Beat[], floor?,
-         lights?: GlowLight[], look?: { exposure?, keyDir? } }
-Beat { title, text, view, frame?: string[], show?, hide?, explode?, cut? }
-StudioAnchor { text, p, side, n, minor?, on?: string, under?: boolean }
+         lights?: GlowLight[], look?: { exposure?, keyDir?, haze? }, flatOrder?: 'faces' | 'items', cutLabels? }
+Beat { title, text, view, frame?: string[], show?, hide?, explode?, cut?, labels?: boolean }
+StudioAnchor { text, p, side, n, minor?, prio?, on?: string, under?: boolean, gutter?: 'l' | 'r', whenCut?: boolean }
 GlowLight { p, colour, power, range, on? }        // up to 4: a hot part lighting its neighbours, no shadow
 Moves = ReadonlyMap<nameOrGroup, Mat4>             // applied after the item's own placement
 ```
@@ -129,6 +132,17 @@ Moves:
 Beats:
 - `frame` fits those parts to the canvas from the beat's view direction.
 - `show` dims the rest. `hide` hides parts (a level of detail, or a second variant).
+- `labels: false`: no names in that beat (a field of copies).
+
+Labels (*since the freeze*):
+- `gutter` forces the side a name goes to; otherwise the side its point is nearer.
+- `prio`: which name gives way when two cannot both be shown.
+- `Model3.cutLabels`: a name whose point the cut has taken away hides.
+- `whenCut: true`: a name only while the model is cut more than half (a name on the section); `false`: only while it is not.
+  Off-state names also leave the phone list.
+- An anchor `on` a group hides with it (a beat's `hide`) and follows its explode.
+
+`flatOrder: 'items'` (*since the freeze*): the flat fallback paints whole items back to front, for models of thin stacked layers.
 
 Framing:
 - `fitView(box, yaw, pitch, fov, aspect, margin)` puts every corner inside the view, tightly.
@@ -138,7 +152,21 @@ Other functions: `boundsOf`, `boundsOfNamed`, `pick(m, o, d, knobs, { moves, hid
 
 ## 5. The stage: `widgets/studiostage.ts`
 
-`studioStage({ aria, home, fit?, limits, note, build })` returns `{ el, slot, chips, hint, refresh, instances, move, studio, isFlat, rgb, destroy }`.
+`studioStage({ aria, home, build, fit?, homeFrame?, homeRadius?, aspect?, hidden?, scaleBar?, onBeat?, knobs?, onKnobs?, limits?, note? })`
+returns `{ el, slot, chips, hint, refresh, goTo, look, instances, endTour, move, studio, isFlat, rgb, knobs, setKnobs, destroy }`.
+
+Options beyond the freeze, each for a case the conversions met:
+- `homeFrame` fits home to some parts (the subject, not its wiring); `homeRadius` to a sphere (a round model).
+- `aspect` fixes the canvas's shape (a model whose own aspect would mislead, or a host that moves the camera with `goTo`).
+- `hidden`: parts hidden outside the tour and in beats that do not say.
+- `scaleBar(len)`: a 1-2-5 scale bar under the canvas following the zoom, labelled in the model's units.
+- `onBeat(i)` is called before the beat is read, so a host can set its state for the beat (−1: the tour ended).
+- `knobs` opens the stage at a cut or explode; `onKnobs` follows the sliders.
+
+Methods beyond the freeze:
+- `goTo(view)` eases to a view and makes it home: a resize keeps it (it is never refitted), and a `refresh()` during the ease does not undo it.
+- `look(view)` puts the camera at a view now (a camera following a moving part).
+- `endTour()` leaves the tour (a host whose model changes under it); `setKnobs` moves the sliders.
 
 **Layout, top to bottom:** the canvas, the numbered list, the tour caption, `slot` (the model's own controls), the bar (Cutaway, Explode, Back, Tour, Reset view), the hint.
 - **Aspect:** the canvas takes the model's aspect from `aspectOf`, clamped to 0.62–1.9, but is never under 240 px tall: a long, low model (the relay) gets room above and below rather than a strip. Its width is held so a tall model fits about 78 % of the screen's height.
@@ -155,6 +183,8 @@ Other functions: `boundsOf`, `boundsOfNamed`, `pick(m, o, d, knobs, { moves, hid
 - Tab walks the parts.
 
 **Fallback:** with no WebGL2, or after a lost context, the same model is drawn flat in SVG, with moves, cuts and labels (`?flat3d` forces it).
+The flat view (`gl/parts.ts` `flatView`) looks from where `OrbitCamera.eye()` puts the eye: (sin yaw, cos yaw) in xz, right-hand
+(cos yaw, 0, −sin yaw). Before batch 3 it was mirrored in yaw, so a flat drawing with a home yaw other than 0 showed the far side.
 
 **`?stats`:** an overlay with CPU ms, GPU ms (where a timer query exists), draws, triangles, megapixels and the quality tier. It is in the shipped code path.
 
@@ -185,25 +215,22 @@ What it draws: hand-written WebGL2.
 4. Refraction off: glass stops bending what is behind it.
 5. Bloom off: the glow loses its halo; colours are unchanged.
 
-**Phase 0.** `fromParts(parts, look)` maps today's box and cylinder parts to instance sets, grouped by finish (matte, satin, metal, chosen by `spec`). See-through parts become glass items.
-- Each model's look is data in its own file: `look: LOOKS.machine | silicon | lab | field` in its `modelStage` call (`gl/kit/looks.ts`, a few numbers and no imports).
-- A look holds the exposure, the key light's direction, and what each finish becomes.
-- `lookOf(family, own)` adds a model's own adjustments to its family.
-- All 32 render under `?studio3d` with no errors.
+**Phase 0 (going).** `fromParts(parts, look)` maps box-and-cylinder parts to instance sets, grouped by finish (matte, satin, metal,
+chosen by `spec`); see-through parts become glass items. It is how the models not yet converted draw under `?studio3d`
+(`widgets/modelstage.ts`, a look per family from `gl/kit/looks.ts`). When the last of them is converted, `modelstage.ts`,
+`fromParts` and the flag go.
 
-## 7. Costs (production build, gzip; this machine)
+## 7. Costs (production build, gzip; batch 3, 2026-11-13, this machine)
 
-- **Triode, the first open:** about 48 KB.
-  - studio 11.9 KB, stage 8.4, triode3dnext 9.9, triode3dview (shared physics and plots) 10.1, kit geometry 3.8, loader and CSS.
-  - Today's close-up was 16 KB.
-- **Relay, the first open:** about 40 KB (its view 13.4 KB with the kit, plus the shared studio, stage and geometry).
-- **Frame time:** 0.2–0.6 ms CPU per frame for both models at home (`?stats`). The triode is 67 draws and 87k triangles, the relay 36 draws and 22k.
-- **Rebuilds:**
-  - model rebuild 0.08 ms;
-  - geometry built once (the triode's 44 ms);
-  - pick 0.4 ms;
-  - shadow redraw about 1.4 ms, only after a change.
-- **A real phone has not been measured.** `?stats` is how to read one.
+Measured by E:/audit/release/3d/integ/sweep.mjs over every model (the table: E:/audit/release/3d/INTEG.md).
+
+- **Shared, paid once a page view:** the engine (studio.ts) 10.7 KB, the stage 7.9, geometry 4.3, scene 1.9, the lazy entry
+  (modelhost) 2.2.
+- **Each model's own chunks:** 8.1 to 22.3 KB, median 11.9 (44 models; Enigma the largest, with its wiring and stroke font).
+- **Frame time while dragging (?stats, median):** 0.2 to 0.5 ms CPU and 0.1 to 0.3 ms GPU at 1440 px; 0.7 to 2.5 ms CPU at
+  390 px with the CPU throttled 4× (GPU unchanged). Shadows are redrawn only after a change.
+- **Rebuilds:** model rebuild about 0.1 ms (geometry cached by identity); pick 0.4 ms; a shadow redraw about 1.4 ms.
+- **A real phone has not been measured.** ?stats is how to read one.
 
 ## 8. Not in this API (and what to do instead)
 
@@ -212,6 +239,9 @@ What it draws: hand-written WebGL2.
 - **A second key light, or shadows from the glow lights:** use `GlowLight`s for fill.
 - **Two independent views:** two stages, a WebGL context each. Browsers allow about 8–16 per page.
 - **A ring or loop mode in `pick`:** one hit, the nearest.
+- **A cap exactly on the cut plane:** a cut solid's cap is shaded where the ray first meets an inner back face, not at the plane.
+  Two solids sharing a face then z-fight on the section (a shelf look, patchy colour). Inset touching solids a hair
+  (the NAND string uses 0.2 nm) where they show on a cut.
 
 ## 9. Converting a model (the order that worked twice)
 

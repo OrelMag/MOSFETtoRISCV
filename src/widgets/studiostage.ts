@@ -66,12 +66,16 @@ export interface StudioStage {
   look(view: OrbitView): void;
   /** `casts`: the set casts shadows (the shadow's fit then takes it in). */
   instances(key: string, geo: Geo, mat: Material, data: Float32Array, casts?: boolean): void;
+  /** Leave the tour (a host whose model changes under it: its beats may no longer be the same). */
+  endTour(): void;
   /** Parts moved by the physics this frame. */
   move(moves: Moves): void;
   studio(): Studio | null;
   isFlat(): boolean;
   rgb(token: string): RGB;
   knobs(): { cut: number; explode: number };
+  /** Set the cutaway and explode sliders (a control that needs the cut open, say). */
+  setKnobs(k: { cut?: number; explode?: number }): void;
   destroy(): void;
 }
 
@@ -126,7 +130,9 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   let beat = -1, tween = 0, pinned: Item | null = null, hoverRaf = 0, hiddenNow: ReadonlySet<string> | null = null;
   const defHidden: ReadonlySet<string> | null = o.hidden?.length ? new Set(o.hidden) : null;
   hiddenNow = defHidden;
-  const homeBox = () => (o.homeFrame ? boundsOfNamed(model, o.homeFrame) : boundsOf(model));
+  // home frames what home shows: parts hidden outside the tour (o.hidden) do not widen it
+  const shownModel = (): Model3 => (defHidden ? { ...model, items: model.items.filter((it) => !((it.group && defHidden.has(it.group)) || (it.name && defHidden.has(it.name)))) } : model);
+  const homeBox = () => (o.homeFrame ? boundsOfNamed(model, o.homeFrame) : boundsOf(shownModel()));
   const frame = modelFrame({ stage: view, name: o.aria, renderer: () => (mode === 'gl' ? (st as unknown as Renderer) : null), root: () => el.closest<HTMLElement>('.m3d, .widget') ?? el });
 
   // ---------------------------------------------------------------- framing
@@ -161,8 +167,10 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   };
   /** The width over height of the part of the canvas the model is fitted to (between the gutters). */
   const contentAspect = () => Math.max(0.2, ((canvas.clientWidth || 4) - 2 * gutNow) / (canvas.clientHeight || 3));
+  /** A home the host set with goTo is a view it chose (target and distance included): a resize keeps it, never refits it. */
+  let homeGiven = false;
   const homeView = (): OrbitView => {
-    if (o.fit === false || !st) return o.home;
+    if (o.fit === false || homeGiven || !st) return o.home;
     const box = homeBox();
     if (o.homeRadius) {
       const c: Vec3 = [(box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2];
@@ -223,20 +231,21 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     const k = st.knobs().explode;
     const seen: { r: typeof rows[number]; x: number; y: number; away: boolean }[] = [];
     const quiet = beat >= 0 && model.beats?.[beat]?.labels === false;
+    const cutNow = model.cutLabels ? cutsAt(model, st.knobs().cut) : [], isOpen = st.knobs().cut > 0.5;
     for (const r of rows) {
       const hiddenPart = !!hiddenNow && !!r.a.on && hiddenNow.has(r.a.on);
       const p3 = anchorAt(model, r.a, k, curMoves), p = st.project(p3);
-      const ok = !quiet && !hiddenPart && !!p && !!r.a.under === under && p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H;
+      const ok = !quiet && !hiddenPart && !isCut(cutNow, p3) && (r.a.whenCut === undefined || r.a.whenCut === isOpen) && !!p && !!r.a.under === under && p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H;
       r.el.style.display = 'none'; r.badge.style.display = 'none';
-      r.li.hidden = !!r.a.under !== under; r.li.classList.toggle('off', !ok);
+      r.li.hidden = !!r.a.under !== under || (r.a.whenCut !== undefined && r.a.whenCut !== isOpen) || hiddenPart; r.li.classList.toggle('off', !ok);
       if (!ok) continue;
       seen.push({ r, x: p![0], y: p![1], away: dot3(r.a.n, sub3(eye, p3)) < 0 });
     }
-    // Each label on the side its anchor is nearer, stacked in the order of their heights. Wide: the names in the gutters
+    // Each label on the side its anchor is nearer (or its `gutter`), stacked in the order of their heights. Wide: the names in the gutters
     // over the canvas's side bands; narrow: numbered badges just inside its edges (the names are in the list below).
     const lines: SVGElement[] = [];
     for (const side of ['l', 'r'] as const) {
-      const col = seen.filter((q) => (q.x < W / 2) === (side === 'l')).sort((a, b) => a.y - b.y);
+      const col = seen.filter((q) => (q.r.a.gutter ?? (q.x < W / 2 ? 'l' : 'r')) === side).sort((a, b) => a.y - b.y);
       // the right column stops above the corner buttons, the left above the scale bar
       const ys = spread(col.map((q) => q.y), narrow ? 24 : 22, 12, side === 'r' ? H - 56 : o.scaleBar ? H - 40 : H - 12);
       col.forEach((q, i) => {
@@ -329,13 +338,14 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     const beats = model.beats ?? [];
     if (!beats.length) return;
     beat = Math.max(0, Math.min(beats.length - 1, i));
-    const b = beats[beat];
+    // first, so a beat that changes the model's state (and rebuilds it) gets its caption from the rebuilt model
+    o.onBeat?.(beat);
+    const b = (model.beats ?? beats)[beat] ?? beats[beat];
     cap.replaceChildren(h('b', null, `${beat + 1} / ${beats.length} · ${b.title}. `), b.text);
     prev.disabled = beat === 0;
     next.textContent = beat === beats.length - 1 ? 'Done' : 'Next ›';
     st?.setFocus(b.show ? new Set(b.show) : null);
     hiddenNow = b.hide ? new Set(b.hide) : defHidden;
-    o.onBeat?.(beat);
     st?.setHidden(hiddenNow);
     const to = { explode: b.explode ?? knobs().explode, cut: b.cut ?? knobs().cut };
     // the beat's subject framed from its direction, at the knobs it ends on
@@ -366,6 +376,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     tween = requestAnimationFrame(step);
   };
   const goTo = (dest: OrbitView) => {
+    homeGiven = true;
     if (!st) { o.home = dest; return; }
     const c = st.camera, from = { target: [...c.target] as Vec3, yaw: c.yaw, pitch: c.pitch, dist: c.dist };
     cancelAnimationFrame(tween);
@@ -405,14 +416,20 @@ export function studioStage(o: StudioStageOptions): StudioStage {
       const base = resolve(it.mat.base), em = it.mat.emit ? resolve(it.mat.emit).map((v) => v * Math.min(1, it.mat.glow ?? 0)) : [0, 0, 0];
       for (let t = 0; t < I.length; t += 3) {
         const w = [I[t], I[t + 1], I[t + 2]].map((i) => applyMat(M, [P[3 * i], P[3 * i + 1], P[3 * i + 2]]));
-        const c: Vec3 = [(w[0][0] + w[1][0] + w[2][0]) / 3, (w[0][1] + w[1][1] + w[2][1]) / 3, (w[0][2] + w[1][2] + w[2][2]) / 3];
-        if (cut && isCut(cuts, c)) continue;
-        const q = w.map(pr), n = norm3(crossv(sub3(w[1], w[0]), sub3(w[2], w[0])));
+        // one plane: the triangle clipped to what is kept (a face straddling the cut is cut, not kept or dropped whole); a
+        // wedge (two planes keep the union of two sides) still goes by the triangle's centre
+        let poly: Vec3[] = w;
+        if (cut && cuts.length === 1) { poly = clipKeep(w, cuts[0]); if (poly.length < 3) continue; }
+        else if (cut) {
+          const c: Vec3 = [(w[0][0] + w[1][0] + w[2][0]) / 3, (w[0][1] + w[1][1] + w[2][1]) / 3, (w[0][2] + w[1][2] + w[2][2]) / 3];
+          if (isCut(cuts, c)) continue;
+        }
+        const q = poly.map(pr), n = norm3(crossv(sub3(w[1], w[0]), sub3(w[2], w[0])));
         if ((q[1][0] - q[0][0]) * (q[2][1] - q[0][1]) - (q[2][0] - q[0][0]) * (q[1][1] - q[0][1]) <= 0 && !glass) continue;
         const lit = 0.45 + 0.55 * Math.max(0, dot3(n, L)), col = base.map((v, i) => Math.min(1, v * lit + em[i]));
         const fill = `rgb(${col.map((v) => Math.round(v * 255)).join(' ')} / ${glass ? 0.12 : 1})`;
-        faces.push({ pts: q.map((v) => [v[0], v[1]]), z: (q[0][2] + q[1][2] + q[2][2]) / 3, fill, it: ii });
-        far[ii] = Math.min(far[ii], q[0][2], q[1][2], q[2][2]);
+        faces.push({ pts: q.map((v) => [v[0], v[1]]), z: q.reduce((a, v) => a + v[2], 0) / q.length, fill, it: ii });
+        far[ii] = Math.min(far[ii], ...q.map((v) => v[2]));
         for (const v of q) { x0 = Math.min(x0, v[0]); x1 = Math.max(x1, v[0]); y0 = Math.min(y0, v[1]); y1 = Math.max(y1, v[1]); }
       }
     }
@@ -429,6 +446,16 @@ export function studioStage(o: StudioStageOptions): StudioStage {
       g.append(s('text', { x: X(x), y: Y(y), class: 'm3-flat-lbl', 'text-anchor': 'middle' }, a.text));
     }
     flat.replaceChildren(g);
+  };
+  /** A convex polygon cut to the side a cut keeps (n·p ≤ d). */
+  const clipKeep = (pts: Vec3[], c: { n: Vec3; d: number }): Vec3[] => {
+    const out: Vec3[] = [], f = (p: Vec3) => dot3(c.n, p) - c.d;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length], fa = f(a), fb = f(b);
+      if (fa <= 0) out.push(a);
+      if ((fa <= 0) !== (fb <= 0)) { const t = fa / (fa - fb); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]); }
+    }
+    return out;
   };
   const crossv = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
@@ -486,6 +513,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
 
   return {
     el, slot, chips, hint, refresh, goTo,
+    endTour() { if (beat >= 0) endTour(); },
     look(v: OrbitView) {
       if (!st) { o.home = v; return; }
       cancelAnimationFrame(tween); tween = 0;
@@ -500,6 +528,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     isFlat: () => mode === 'flat',
     rgb: (t) => colors.rgb(t),
     knobs: () => knobs(),
+    setKnobs(k) { if (k.cut !== undefined) cutIn.value = String(k.cut); if (k.explode !== undefined) exIn.value = String(k.explode); applyKnobs(); },
     destroy() { dead = true; cancelAnimationFrame(tween); cancelAnimationFrame(hoverRaf); ro.disconnect(); frame.destroy(); unwatch(); st?.destroy(); st = null; colors.destroy(); },
   };
 }

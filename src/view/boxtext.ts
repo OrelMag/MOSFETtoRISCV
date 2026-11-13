@@ -19,7 +19,8 @@ export interface BoxText {
   ports: BoxPortText[];
   /** The label's baseline (centred on x), or null for none. */
   /** : the font shrunk so the label fits the box's width (C3: a label never runs past its box); absent, full size. */
-  label: { text: string; x: number; y: number; scale?: number } | null;
+  /** fit: squeezed (textLength) to this width, the span between the port names on its row */
+  label: { text: string; x: number; y: number; scale?: number; fit?: number } | null;
 }
 
 const textRect = (x: number, y: number, chars: number, font: number, em: number, anchor: 'start' | 'middle' | 'end'): Rect => {
@@ -97,7 +98,19 @@ export function boxText(def: ComponentDef, flip = false): BoxText {
   const fits = (c: number) => c - 0.8 >= 0 && c + 0.2 <= h && (!keep.length || labelRect({ text, x: w / 2, y: c, scale }).w <= w - 0.4);
   const y = rows.find((c) => fits(c) && clear(c));
   if (y === undefined && keep.length) return { ports, label: null };
-  return { ports, label: { text, x: w / 2, y: y ?? mid, ...(scale ? { scale } : {}) } };
+  const label: NonNullable<BoxText['label']> = { text, x: w / 2, y: y ?? mid, ...(scale ? { scale } : {}) };
+  // still too wide at the smallest size and no row clear (a user chip's long name): squeezed into the span between the
+  // port names on its row, not the whole box, so it does not cover them
+  if (scale !== undefined && y === undefined) {
+    const r = labelRect(label);
+    let lo = LABEL_PAD, hi = w - LABEL_PAD;
+    for (const q of rects) {
+      if (q.y >= r.y + r.h || q.y + q.h <= r.y) continue;
+      if (q.x + q.w / 2 < w / 2) lo = Math.max(lo, q.x + q.w + 0.2); else hi = Math.min(hi, q.x - 0.2);
+    }
+    if (hi - lo < r.w && hi - lo >= w / 3) { label.x = (lo + hi) / 2; label.fit = hi - lo; }
+  }
+  return { ports, label };
 }
 
 /** Port names and the label of a box that hide one another (for the layout tests). */

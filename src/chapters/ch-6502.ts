@@ -7,6 +7,8 @@ import { SwitchSim } from '../sim/switchsim';
 import { m6502Scene } from '../widgets/m6502';
 import { opcodeMatrix } from '../widgets/m6502isa';
 import { ledger } from '../widgets/m6502ledger';
+import { withModel } from '../widgets/modelhost';
+import { nmosGate3d } from '../widgets/nmosgate3d';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -416,7 +418,7 @@ ${PHASES}
           <tr><td>storage share</td><td>registers only</td><td>${LEDGER.storePct} %</td></tr>
           <tr><td>register bit</td><td>${LEDGER.bit6502}</td><td>about ${LEDGER.bitRf}</td></tr></table>`,
       },
-      widget: () => ledger(),
+      widget: () => withModel(ledger(), nmosGate3d()),
     },
   ],
 };

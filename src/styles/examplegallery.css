@@ -34,3 +34,5 @@
   .ex-card { min-height: 40px; }
   .ex-head .btn { min-width: 40px; min-height: 40px; }
 }
+/* a phone: thumbnails short enough for more than two cards a screen (S-10) */
+@media (max-width: 500px) { .ex-thumb { aspect-ratio: auto; height: 110px; } .ex-thumb img { object-fit: contain; } }

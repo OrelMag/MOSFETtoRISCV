@@ -169,11 +169,16 @@ export function searchGroups(srcs: readonly SearchSource[], raw: string, scope: 
     const n = scope === ALL ? per : 80;
     groups.push({ id: s.id, title: s.title, items: ranked.slice(0, n), more: Math.max(0, ranked.length - n), scope: s.id });
   }
-  // a group that opens on an exact id / title match comes first: "nand" finds the part before 196 chapter steps
+  // first a group opening on an exact id / title / alias ("nand": the part), then on a title starting with the query
   if (text && scope === ALL) {
     const q = text.toLowerCase();
-    const exact = (g: Group) => { const it = g.items[0]; return !!it && !it.locked && (it.title.toLowerCase() === q || it.id.toLowerCase() === q); };
-    groups.sort((a, b) => Number(exact(b)) - Number(exact(a)));
+    const strength = (g: Group) => {
+      const it = g.items[0];
+      if (!it || it.locked) return 0;
+      const t = it.title.toLowerCase();
+      return t === q || it.id.toLowerCase() === q || (it.alt ?? '').toLowerCase() === q ? 2 : t.startsWith(q) ? 1 : 0;
+    };
+    groups.sort((a, b) => strength(b) - strength(a));
   }
   // the other scopes' counts, for their chips
   if (text && scope !== ALL) {
