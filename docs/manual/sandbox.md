@@ -77,7 +77,7 @@ inside (see [Look inside a part](#look-inside-a-part)).
 - **Tabs and toolbar** (second row): your open chips as tabs, **New chip** (and the arrow beside it for other kinds of
   chip), the save state (**Saved**), **File**, undo / redo, zoom out / in, **Fit to screen**, the section tool, **Cut**,
   **I/O**, **Examples**, **Package**, **Timing**, **Tests**, **Play**, the inspector, the keys sheet (**?**) and the
-  bookmark. On a narrow window the least used of these move into **More**.
+  bookmark (**Bookmark this chip in My notes**: see [What works everywhere](everywhere.md)). On a narrow window the least used of these move into **More**.
 - **Left**: the project switcher (**Project: Main project**), the parts search, **Purist** (only NAND and the parts
   built from it), and the parts list in groups.
 - **Middle**: the canvas. A line of hints along its bottom edge names the basic gestures.
@@ -131,6 +131,12 @@ Right-click a part, a wire or empty canvas to see what you can do with it. On a 
 **Rename**, **Look inside**, **Inspect**, **Measure**, **Explain**, **Take it elsewhere**, **Flip**, **Rotate clockwise**,
 **Rotate anticlockwise**, **Group in a section**, **Duplicate**, **Copy**, **Cut** and **Delete**, each with its key. On
 a touch screen, press and hold.
+
+Three rows open a further menu:
+
+- **Measure**: **Slack through here** and **Power** (each says when it does not apply, as for a single gate).
+- **Explain**: the part's **Truth table**, its codex entry, the chapter that teaches it, and **Where it is used**.
+- **Take it elsewhere**: **Copy into a new chip**, **Copy Verilog**, **Save an image as SVG** or **PNG**, and **Share link…**.
 
 ![The right-click menu of a NAND gate](img/sandbox/16-part-menu.png)
 
@@ -423,16 +429,21 @@ view. Drag its frame to pan, or click to jump.
 - **Export Verilog**, **Export Verilog for FPGA…** (a .zip ready for a Tang Nano 9K board) and **Export for Digital
   (.dig)…**.
 - **Export image (SVG)** and **Export image (PNG)**.
-- **Instruction sets…** (your own instruction sets), **Memory map…** (on a chip with a bus), **Manage chips…** and
-  **Delete local data…**.
+- **Instruction sets…** (your own instruction sets) and **Memory map…** (on a chip with a bus).
+- **Manage chips…**: a table of your chips with their size, which chips use them and their folder; each row has **Open**,
+  **Duplicate** and **Delete**, and there are **New folder** and **Export all** buttons.
+- **Delete local data…**: a dialog says that everything you make lives only in this browser and that deleting cannot be
+  undone. It offers to delete your chips, favourites and sandbox preferences, or **Everything** (all progress and
+  settings too), with **Export all chips**, **Cancel** and **Delete and reload**.
 
 #### Save a chip to a file and bring it back
 
 1. Open the chip, then **File ▾** › **Export this chip…**. Your browser saves a file named after the chip, ending in
    `.chip.json`, holding the chip and every chip inside it.
 2. To bring it back (on another computer, or after clearing the browser), **File ▾** › **Import…** and pick the file, or
-   drop it on the canvas. A summary says what was added. Nothing is overwritten: a chip identical to one you have is
-   listed under **Already here** and not added twice.
+   drop it on the canvas. A summary says what was added, and **Ctrl Z** undoes the import. Nothing is overwritten: a chip
+   identical to one you have is listed under **Already here** and not added twice; a different chip that has the same id
+   as one of yours comes in under a new id, listed under **Renamed**. **OK** closes the summary.
 
 #### Send a circuit as a link
 
