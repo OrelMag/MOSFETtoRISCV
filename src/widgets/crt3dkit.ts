@@ -277,8 +277,7 @@ function tubeModel(look: CrtLook): Model3 {
   if ((look.cut ?? 1) > 0.98) items.push({ geo: once(`edge${full}`, () => cutEdge(full ? 8 : 4)), mat: edge, name: 'glass envelope (cut)', group: 'funnel', cut: 'none', shadow: false });
   // frames
   const fb = (g: string, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) => items.push({ geo: once(`f${g}`, () => boxAt(x0, x1, y0, y1, z0, z1)), mat: ghostMat, group: g, cut: 'none', shadow: false });
-  // the face's half width only at mid-depth: a box is wider than the tube's hull at the neck end, and would leave it small
-  fb('tubebox', G.NECK_X0 - 18, G.D + WALL.panel, -GY, GY, -0.5 * GZ, 0.5 * GZ);
+  fb('tubebox', G.NECK_X0 - 18, G.D + WALL.panel, -GY, GY, -GZ, GZ);
   fb('screenbox', G.D - 40, G.D + WALL.panel, -GY, GY, -GZ, GZ);
   fb('gunbox', G.NECK_X0 - 18, -50, -G.NECK_R - 2, G.NECK_R + 2, -G.NECK_R - 2, G.NECK_R + 2);
   fb('yokebox', -62, 24, -funnelR(18) - 18, funnelR(18) + 18, -funnelR(18) - 18, funnelR(18) + 18);
@@ -311,10 +310,10 @@ function tubeAnchors(view: CrtView): StudioAnchor[] {
     { text: `neck, ${G.NECK_OD} mm`, p: [-125, -G.NECK_R, -2], side: 'b', n: down, on: 'neck' },
   ];
   if (view === 'yoke') return [
-    { text: 'horizontal coils (sweep)', p: [-20, G.NECK_R + 6, -3], side: 't', n: up, on: 'yoke' },
-    { text: 'vertical coils (step)', p: [-20, 0, -(G.NECK_R + 10)], side: 'r', n: side, on: 'yoke' },
+    { text: 'sweep coils', p: [-20, G.NECK_R + 6, -3], side: 't', n: up, on: 'yoke' },
+    { text: 'step coils', p: [-20, 0, -(G.NECK_R + 10)], side: 'r', n: side, on: 'yoke' },
     { text: 'ferrite core', p: [8, funnelR(8) + 17, 0], side: 't', n: up, on: 'yoke' },
-    { text: 'purity + convergence magnets', p: [-52, -(G.NECK_R + 2.9), 0], side: 'b', n: down, on: 'yoke' },
+    { text: 'purity magnets', p: [-52, -(G.NECK_R + 2.9), 0], side: 'b', n: down, on: 'yoke' },
     { text: 'neck / funnel join', p: [G.JOIN_X, -G.NECK_R - 2, -2], side: 'b', n: down },
   ];
   const fn = sectionPoint(90, Math.PI), sp = spotOf(W * 0.2, W * 0.85);

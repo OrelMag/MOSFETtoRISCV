@@ -285,10 +285,12 @@ function anchors(look: BabbageLook): StudioAnchor[] {
     { text: 'one column (drawn)', p: [WHEEL.tip, wheelBase(24), 0], side: 'r', n: front },
     { text: 'a person, 1.75 m', p: [-650, -260 + PERSON_MM * 0.95, 0], side: 'l', n: front },
   ];
+  // the wheels named on the rim that faces the home camera, so a leader ends on the wheel, not behind it at the axes
+  const ey = Math.sin(HOME.yaw), ez = Math.cos(HOME.yaw), rim = (y: number): Vec3 => [WHEEL.tip * ey, y, WHEEL.tip * ez], toCam: Vec3 = [ey, 0.2, ez];
   const a: StudioAnchor[] = [
-    { text: 'figure wheel', p: [WHEEL.tip, wheelBase(20) + WHEEL.teethH, 0], side: 'r', n: front, on: 'figure wheel' },
-    { text: 'units wheel', p: [WHEEL.tip, wheelBase(0) + WHEEL.teethH, 0], side: 'r', n: front, on: 'units wheel' },
-    { text: 'top wheel (overflow)', p: [WHEEL.tip, wheelBase(DIGITS - 1) + WHEEL.teethH, 0], side: 'r', n: front, on: 'top wheel (overflow)' },
+    { text: 'figure wheel', p: rim(wheelBase(20) + WHEEL.teethH), side: 'r', n: toCam, on: 'figure wheel' },
+    { text: 'units wheel', p: rim(wheelBase(0) + WHEEL.teethH), side: 'r', n: toCam, on: 'units wheel' },
+    { text: 'top wheel (overflow)', p: rim(wheelBase(DIGITS - 1) + WHEEL.teethH), side: 'r', n: toCam, on: 'top wheel (overflow)' },
     { text: armed >= 0 ? 'carry lever (warned)' : 'carry lever', p: [(W_AXIS[0] + lx) / 2, leverY(k) + LEVER.t, (W_AXIS[1] + lz) / 2], side: 'l', n: back, on: 'levers' },
     { text: 'warning axis', p: [W_AXIS[0], wheelBase(26), W_AXIS[1]], side: 'r', n: back },
     { text: 'carry axis', p: [C_AXIS[0], wheelBase(24), C_AXIS[1]], side: 'l', n: left },

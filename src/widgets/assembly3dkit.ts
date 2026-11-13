@@ -91,7 +91,8 @@ const kindTok: Record<Kind, `--${string}`> = { alu: '--as-alu', load: '--as-load
 
 export function asmModel(look: AsmLook): Model3 {
   const { plan, t, ctx, rgb } = look, c = plan[t], full = look.detail === 'full', items: Item[] = [];
-  const x0 = stationX(-1.4), x1 = stationX(5.4);
+  // the belt ends just past Fetch and Writeback, inside the home frame (the gutters' names stay off it)
+  const x0 = stationX(-0.68), x1 = stationX(4.58);
   const steel = M.make({ ...M.steel, base: '--as-frame', metal: 0.6, rough: 0.4, label: 'steel frame' });
   const belt = M.make({ ...M.rubber, base: '--as-belt', label: 'rubber belt' });
   const plate = M.make({ base: '--as-plate', metal: 0.4, rough: 0.35, label: 'pallet (a pipeline register’s slot)' });
@@ -147,19 +148,20 @@ export function asmModel(look: AsmLook): Model3 {
   // frames
   const ghost = M.make({ base: [0, 0, 0], metal: 0, rough: 1, label: 'frame' });
   const fb = (g: string, a: number, b: number, ya: number, yb: number, za: number, zb: number) => items.push({ geo: once(`f${g}`, () => boxAt(a, b, ya, yb, za, zb)), mat: ghost, group: g, cut: 'none', shadow: false });
-  fb('homebox', x0, x1, -4, 26, -12, 12);
+  // home: the five stations and their pallets, low and near (the chutes may run off the top)
+  fb('homebox', stationX(-0.72), stationX(4.62), -3, 21, -11, 12);
   fb('chutebox', stationX(1.5), stationX(4.5), 0, 32, -14, 12);
   fb('stallbox', stationX(0.5), stationX(3.5), 0, 22, -8, 12);
   fb('flushbox', stationX(-0.6), stationX(2.6), 0, 26, -34, 12);
 
-  return { items, anchors: anchorsOf(pallets, c), beats: BEATS, floor: -16, look: { exposure: 1.05 } };
+  return { items, anchors: anchorsOf(c), beats: BEATS, floor: -16, look: { exposure: 1.05 } };
 }
 
-function anchorsOf(pallets: readonly Pallet[], c: Cycle): StudioAnchor[] {
+function anchorsOf(c: Cycle): StudioAnchor[] {
   const front: Vec3 = [0, 0.3, 1], up: Vec3 = [0, 1, 0];
-  const named = pallets.filter((p) => p.leaving !== 'retired' && p.kind !== 'bubble');
-  const out: StudioAnchor[] = STATIONS.map((n, i) => ({ text: n, p: [stationX(i), -2, 11], side: 'b', n: front, on: `st${i}` }));
-  for (const p of named) out.push({ text: `${p.wrong ? '✗ ' : ''}${p.text}`, p: [0, PLATE.h + CARGO.h + 1, 0], side: 't', n: up, on: `pal${p.seq}` });
+  // the five stations only: a pallet's instruction is on hover and in the readout ("forwarded" on a clock that forwards)
+  // the first three to the left gutter, Memory and Writeback to the right one (left to themselves they sat on the rail)
+  const out: StudioAnchor[] = STATIONS.map((n, i) => ({ text: n, p: [stationX(i), -2, 11], side: 'b', n: front, on: `st${i}`, gutter: i < 3 ? 'l' : 'r' }));
   if (chutesUsed(c).size) out.push({ text: 'forwarded', p: [stationX(2.5), 30, -10], side: 't', n: up, on: 'chutes' });
   return out;
 }
@@ -172,11 +174,13 @@ export function clockOf(plan: readonly Cycle[], e: BeatEvent): number | null {
   const i = plan.findIndex((c) => (e === 'full' || e === 'cpi' ? c.slots.every((s) => s.valid) : e === 'forward' ? chutesUsed(c).size > 0 : e === 'stall' ? c.stall : c.flush));
   return i < 0 ? null : i;
 }
+/** Home: a little from the front and low, so the pallets read as pallets. */
+export const HOME_YAW = 0.22, HOME_PITCH = 0.3;
 const V = (yaw: number, pitch: number) => ({ target: [0, 0, 0] as Vec3, yaw, pitch, dist: 200 });
 const BEATS: Beat[] = [
-  { title: 'Five stations, one clock', text: 'Fetch, Decode, Execute, Memory, Writeback: a pallet per instruction. Every clock moves every pallet one station on, so once the line is full one instruction leaves Writeback every clock.', view: V(0.35, 0.42), frame: ['homebox'] },
+  { title: 'Five stations, one clock', text: 'Fetch, Decode, Execute, Memory, Writeback: a pallet per instruction. Every clock moves every pallet one station on, so once the line is full one instruction leaves Writeback every clock.', view: V(HOME_YAW, HOME_PITCH), frame: ['homebox'] },
   { title: 'Forwarding', text: 'The instruction in Execute needs a result that is still in Memory or Writeback, not yet in the register file. The hazard unit sees the register numbers match and the result rides a chute straight back to the ALU: no clock is lost. The chute lights only on a clock the circuit’s forwardA or forwardB selects it.', view: V(0.15, 0.3), frame: ['chutebox'] },
   { title: 'A load makes the next one wait', text: 'A load’s value exists only after Memory, too late for an instruction right behind it in Execute. Fetch and Decode hold (their lamps), and an empty pallet, the bubble, goes into Execute: one clock lost. Then forwarding from Writeback does the rest.', view: V(0.45, 0.45), frame: ['stallbox'] },
   { title: 'A branch is known in Execute', text: 'Whether a branch is taken is decided in Execute. By then the two instructions behind it were fetched on a guess that the road went straight on; when it does not, the arm sweeps them off the line and Fetch starts again at the target: two clocks lost.', view: V(-0.25, 0.5), frame: ['flushbox'] },
-  { title: 'Cycles per instruction', text: 'Cycles = instructions + 4 to fill the line + one per load-use stall + two per flush. The readout keeps the count: the closer to one per clock, the better the line is used.', view: V(0.35, 0.42), frame: ['homebox'] },
+  { title: 'Cycles per instruction', text: 'Cycles = instructions + 4 to fill the line + one per load-use stall + two per flush. The readout keeps the count: the closer to one per clock, the better the line is used.', view: V(HOME_YAW, HOME_PITCH), frame: ['homebox'] },
 ];

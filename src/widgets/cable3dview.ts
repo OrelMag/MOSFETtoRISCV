@@ -48,7 +48,7 @@ export function cableView(): Widget {
     home,
     homeFrame: ['homebox'],
     // a fixed shape: a rebuild after a layer or mode change would otherwise resize the canvas and refit home over the new view
-    aspect: 1.6,
+    aspect: 1.9,
     hidden: [...FRAME_GROUPS],
     knobs: { cut: 0, explode: 0 },
     onKnobs: () => put(),

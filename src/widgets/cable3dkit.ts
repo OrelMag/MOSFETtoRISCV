@@ -243,7 +243,7 @@ function pairModel(look: CableLook): Model3 {
   }
   // the frames the views fit to (the stage hides them)
   const r = (CAT5E.insulated / 2) * UPM;
-  frameBox(items, 'homebox', -LEN / 2 - 5, LEN / 2 + 5, -H_DRAWN - 2, H_DRAWN + 2, -A - 1.2, A + 1.2);
+  frameBox(items, 'homebox', -LEN / 2 - 2.5, LEN / 2 + 2.5, -H_DRAWN - 1, H_DRAWN + 1, -A - 1.2, A + 1.2);
   frameBox(items, 'loopbox', -LEN / 2 - 1, -LEN / 2 + (2 * LEN) / (n + 1) + 1, -8, 8, -A - 1, A + 1);
   frameBox(items, 'sidebox', -LEN / 2 - 4, LEN / 2 + 4, -3, 3, -A - 1, 12);
   frameBox(items, 'truebox', -LEN / 2 - 4, LEN / 2 + 4, -r - 3, 8, TRUE_Z - r - 1, A + 1);
@@ -263,7 +263,7 @@ function pairAnchors(look: CableLook): StudioAnchor[] {
     { text: 'receiver', p: [LEN / 2 + 3.2, 0, 0], side: 'r', n: up, on: 'receiver' },
   ];
   if (e.length > 2) a.push({ text: 'next loop', p: [mid(1), 0, A * 0.4], side: 'r', n: up });
-  if (layers.has('field')) a.push({ text: 'field B', p: [mid(Math.min(e.length - 2, 2)), 7, 0], side: 'r', n: up, on: 'field' });
+  if (layers.has('field')) a.push({ text: 'field B', p: [mid(Math.min(e.length - 2, 2)), 2, 0], side: 'r', n: up, on: 'field' });
   if (layers.has('electric') && e.length > 2) a.push({ text: 'field E', p: [(e[1] - 0.5) * LEN, 0, 10], side: 'l', n: front, on: 'electric' });
   if (st.neighbour !== 'off') a.push({ text: `neighbour, lay ${(st.neighbour === 'same' ? LAY_A_MM : LAY_B_MM).toFixed(1)} mm`, p: [-LEN * 0.38, 0, NEIGHBOUR_Z], side: 'l', n: front, on: 'neighbour' });
   if (layers.has('true')) {
@@ -273,7 +273,7 @@ function pairAnchors(look: CableLook): StudioAnchor[] {
   return a;
 }
 
-export const PAIR_HOME = { target: [0, 0, 0] as Vec3, yaw: -0.95, pitch: 0.5, dist: 90 };
+export const PAIR_HOME = { target: [0, 0, 0] as Vec3, yaw: -0.95, pitch: 0.38, dist: 90 };
 export const PAIR_LAYERS: readonly (readonly CableLayer[])[] = [['field'], ['field'], ['field', 'push'], ['electric'], ['true'], []];
 
 function pairBeats(look: CableLook): Beat[] {
