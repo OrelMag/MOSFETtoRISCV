@@ -504,6 +504,9 @@ The [sandbox page](sandbox.md) lists every mouse and touch gesture.
   finished. The card names the level to do first: click it, or **Back to the map**, or tick **Unlock all**.
 - **Check says Not yet, and an output reads X.** Either nothing drives that output to a 0 or a 1 yet, or two parts
   drive it against each other. Wire the output to a part, and check that no input it depends on is left open.
+- **You clicked a part, but nothing was placed.** A part lands where you next click on the canvas. While the test
+  player is open it takes the lower part of the canvas, and a click on the player places nothing: click higher up,
+  or close the player with its **✕** first.
 - **Your circuit vanished after Show answer.** It is still there: Show answer opens the walkthrough on a separate
   copy. Click **Leave the walkthrough** to get back to it. After **Do it for me**, press
   **Ctrl Z** (Undo) instead.
