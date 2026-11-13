@@ -1968,9 +1968,15 @@ const STUDIO_LABELS = `(() => {
     const v = view.getBoundingClientRect(), tools = view.querySelector('.r3-tools');
     const tr = tools && tools.offsetWidth ? tools.getBoundingClientRect() : null;
     const names = [...st.querySelectorAll('.st-gutter .st-lbl')].filter((e) => e.offsetParent && e.style.display !== 'none');
+    // a name slides to its place (transition: transform 120 ms, studio3d.css) and the spread only keeps the places apart:
+    // measured mid-slide two can overlap for a frame (the CRT's codex route, once). Read where they are going, not where they are.
+    for (const e of names) e.style.transition = 'none';
+    void st.offsetWidth;
+    const at = names.map((e) => e.getBoundingClientRect());
+    for (const e of names) e.style.transition = '';
     for (const [i, a] of names.entries()) {
       if (a.scrollWidth > a.clientWidth + 1) out.push('3D name cut in its gutter: ' + a.textContent);
-      for (const b of names.slice(i + 1)) if (a.parentElement === b.parentElement && hit(a.getBoundingClientRect(), b.getBoundingClientRect(), 0, -1)) out.push('3D names touch: ' + a.textContent + ' / ' + b.textContent);
+      for (const [j, b] of names.entries()) if (j > i && a.parentElement === b.parentElement && hit(at[i], at[j], 0, -1)) out.push('3D names touch: ' + a.textContent + ' / ' + b.textContent);
     }
     const badges = [...st.querySelectorAll('.st-badge')].filter((e) => e.offsetParent && e.style.display !== 'none').map((e) => ({ t: e.textContent, r: e.getBoundingClientRect() }));
     for (const [i, a] of badges.entries()) {
