@@ -76,3 +76,58 @@ export function stateAt(frames: readonly Frame[], t: number): State {
 export function verticalPulling(frames: readonly Frame[], t: number): boolean {
   return frames.some((f) => f.s.mode === 'climb' && t >= f.t - BREAK_MS && t < f.t);
 }
+
+// ---------------------------------------------------------------- the mechanism between frames
+// What a drawing needs that the frames leave out: where the shaft and the wipers are part-way through a step, and how
+// far each armature has moved. The frames stay the state; this only fills in between them, landing exactly on each frame.
+
+/** The vertical armature's return after the break (its spring), and the rotary armature's share of a hunt step spent
+ *  pulling (the rest is its return once the interrupter springs open its circuit): assumptions, like HUNT_MS. */
+export const ARM_RETURN_MS = 20, ROTARY_PULL = 0.6;
+export interface Motion {
+  /** The shaft's height in levels and the wipers' angle in lines, fractional between frames. */
+  level: number; line: number;
+  /** Armature travel, 0 (released) to 1 (pulled home against the core). */
+  vArm: number; rArm: number; relArm: number;
+  /** The coils carrying current. */
+  vOn: boolean; rOn: boolean; relOn: boolean;
+  /** The holding pawls are in the ratchets (the release magnet lifts them). */
+  held: boolean;
+}
+const smooth = (u: number): number => { const x = Math.min(1, Math.max(0, u)); return x * x * (3 - 2 * x); };
+
+/** The mechanism at t (ms). The vertical armature closes over the break and lifts the shaft one tooth, the tooth
+ *  completing as the frame lands (the level steps at the end of the break, as stateAt has it); it springs back in the
+ *  make. A rotary step: the armature pulls for ROTARY_PULL of HUNT_MS, turning the wipers one contact, then its own
+ *  interrupter lets it go. Release: the magnet holds the pawls off while the spring turns the shaft home, then it drops. */
+export function motionAt(frames: readonly Frame[], t: number): Motion {
+  let i = 0;
+  for (let k = 0; k < frames.length; k++) if (frames[k].t <= t) i = k;
+  const f = frames[i], s = f.s, n = frames[i + 1];
+  const m: Motion = { level: s.level, line: s.line, vArm: 0, rArm: 0, relArm: 0, vOn: false, rOn: false, relOn: false, held: s.level > 0 };
+  // the vertical armature springing back after the step just taken
+  if (s.mode === 'climb' && i > 0 && frames[i - 1].s.level < s.level) m.vArm = 1 - smooth((t - f.t) / ARM_RETURN_MS);
+  if (s.mode === 'release') {
+    m.relOn = true; m.relArm = 1; m.held = false;
+    if (n) {
+      const u = (t - f.t) / (n.t - f.t);
+      if (s.line && !n.s.line) m.line = s.line * (1 - smooth(u)); // the spring turns it home
+      else if (!s.line && n.s.level < s.level) { const v = Math.min(1, Math.max(0, u)); m.level = s.level * (1 - v * v); } // then it falls
+    }
+    return m;
+  }
+  if (!n) return m;
+  if (n.s.mode === 'climb' && n.s.level > s.level) {
+    const u = (t - (n.t - BREAK_MS)) / BREAK_MS;
+    if (u >= 0) { m.vOn = true; m.vArm = smooth(u); m.level = s.level + smooth(u); }
+  } else if (n.s.level === s.level && n.s.line === s.line + 1) {
+    const u = (t - (n.t - HUNT_MS)) / HUNT_MS;
+    if (u > 0) {
+      const p = u / ROTARY_PULL;
+      m.rOn = u < ROTARY_PULL;
+      m.rArm = u < ROTARY_PULL ? smooth(p) : 1 - smooth((u - ROTARY_PULL) / (1 - ROTARY_PULL));
+      m.line = s.line + smooth(p);
+    }
+  }
+  return m;
+}

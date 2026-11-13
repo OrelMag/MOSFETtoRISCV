@@ -148,7 +148,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'strowger', title: 'The Strowger selector', category: 'comms', chapter: 'exchange', step: 3,
     summary: 'The stepping switch behind the exchange: dial a level, mark lines busy, hang up.',
-    files: ['strowger3d', 'strowger3dview', 'strowger3dparts'], factory: 'strowger3d', codex: ['relay'],
+    files: ['strowger3d', 'strowger3dview', 'strowger3dkit'], factory: 'strowger3d', codex: ['relay'],
     open: () => import('./strowger3d').then((m) => m.strowger3d()),
   },
   {
@@ -220,7 +220,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'hierarchy', title: 'The memory hierarchy as distances', category: 'analogies', chapter: 'cache', step: 6,
     summary: 'Desk, shelf, library, warehouse, another city: each level as far away as its latency on a log scale, with a courier for one access.',
-    files: ['hierarchy3d', 'hierarchy3dview', 'hierarchy3dparts', 'hierarchy3ddata'], factory: 'hierarchy3d', codex: ['cache', 'memwall', 'amat'],
+    files: ['hierarchy3d', 'hierarchy3dview', 'hierarchy3dkit', 'hierarchy3dparts', 'hierarchy3ddata'], factory: 'hierarchy3d', codex: ['cache', 'memwall', 'amat'],
     open: () => import('./hierarchy3d').then((m) => m.hierarchy3d()),
   },
   {
