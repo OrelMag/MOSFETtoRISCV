@@ -442,4 +442,24 @@ describe('repeated blocks read alike', () => {
       rects.forEach((a, i) => rects.slice(i + 1).forEach((c) => { if (a && c) expect(a.x < c.x + c.w && c.x < a.x + a.w && a.y < c.y + c.h && c.y < a.y + a.h, `scale ${scale}`).toBe(false); }));
     }
   });
+  it('a tight column of five multipliers (iir-5\'s biquad on a phone) names every one alike', async () => {
+    const { biquad } = await import('../src/lib/biquad');
+    const insts = biquad().netlist!().instances;
+    const blocks = insts.map((i) => { const { w, h } = symbolGeom(i.def), at = i.at ?? [0, 0]; return { x: at[0], y: at[1], w, h }; });
+    const named = insts.flatMap((i, k) => {
+      const { w, h } = symbolGeom(i.def), t = i.def.symbol.label ?? i.def.name;
+      return i.def.symbol.kind === 'box' && nameEligible(t, w, h) ? [{ n: i.name, box: { cx: blocks[k].x + w / 2, cy: blocks[k].y + h / 2, w, h, chars: t.length, rot: nameRotated(w, h), text: t } as NameBox }] : [];
+    });
+    const muls = named.flatMap((x, i) => (/^m[ab]\d$/.test(x.n) ? [i] : []));
+    expect(muls.length).toBe(5);
+    // 1.75 is the phone's fit: before, two names at NAME_PX, one none and two squeezed small. (Further out, at 1.2, a readable
+    // name is wider than the gap to the parts beside the column: every other one named, as before.)
+    for (const scale of [1.5, 1.75, 2, 2.5]) {
+      const plan = planLayouts(named.map((x) => x.box), scale, 10, blocks);
+      expect(new Set(muls.map((i) => JSON.stringify(plan[i]))).size, `scale ${scale}`).toBe(1);
+      expect(muls.every((i) => plan[i]), `scale ${scale}`).toBe(true);
+      const rects = plan.map((l, k) => (l ? nameRect(named[k].box, l, scale) : null));
+      rects.forEach((a, i) => rects.slice(i + 1).forEach((c) => { if (a && c) expect(a.x < c.x + c.w && c.x < a.x + a.w && a.y < c.y + c.h && c.y < a.y + a.h, `scale ${scale}`).toBe(false); }));
+    }
+  });
 });
