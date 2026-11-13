@@ -841,20 +841,21 @@ export function axiFlashWindow(k: number, read = FLASH_TIMES.read): ComponentDef
 
 /** The sandbox's interconnect for the given slave codes: two masters, every link packed (lib/soc.ts SANDBOX_PARTS.bus; the memory-map designer's). */
 export function sandboxBus(codes: number[]): ComponentDef {
-  return packedBus(2, codes);
+  const BUS = axiBus(2, codes);
+  return bundled(BUS, [['m0_', 'slave'], ['m1_', 'slave'], ...codes.map((_, k): [string, 'master'] => [`s${k}_`, 'master'])], `${BUS.id}_b`);
 }
 
 /** An interconnect of M masters with every link packed: ports m<i>_req / m<i>_rsp and s<k>_req / s<k>_rsp. */
 export function packedBus(M: number, codes: number[]): ComponentDef {
   const BUS = axiBus(M, codes);
-  return bundled(BUS, [...Array.from({ length: M }, (_, m): [string, 'slave'] => [`m${m}_`, 'slave']), ...codes.map((_, k): [string, 'master'] => [`s${k}_`, 'master'])], `${BUS.id}_b`);
+  return packed(BUS, [...Array.from({ length: M }, (_, m): [string, 'slave'] => [`m${m}_`, 'slave']), ...codes.map((_, k): [string, 'master'] => [`s${k}_`, 'master'])], `${BUS.id}_p`);
 }
-/** A slave with its link packed (ports req in, rsp out): the computers' and the sandbox's (`<id>_b`). */
-export const packedSlave = (d: ComponentDef): ComponentDef => bundled(d, [['', 'slave']], `${d.id}_b`);
+/** A slave with its link packed (ports req in, rsp out), drawn natively: the chapters' computers (`<id>_p`; the sandbox's are bundled `<id>_b`). */
+export const packedSlave = (d: ComponentDef): ComponentDef => packed(d, [['', 'slave']], `${d.id}_p`);
 /** A master with its link packed (req out, rsp in). */
-export const packedMaster = (d: ComponentDef, id = `${d.id}_b`, base?: string): ComponentDef => bundled(d, [['', 'master', base]], id);
+export const packedMaster = (d: ComponentDef, id = `${d.id}_p`, base?: string): ComponentDef => packed(d, [['', 'master', base]], id);
 /** A part that is both: a slave on its own link and a master on m_ (the DMA engine, the NIC). */
-export const packedBoth = (d: ComponentDef, id = `${d.id}_b`): ComponentDef => bundled(d, [['', 'slave'], ['m_', 'master']], id);
+export const packedBoth = (d: ComponentDef, id = `${d.id}_p`): ComponentDef => packed(d, [['', 'slave'], ['m_', 'master']], id);
 
 /** The channel signals a master drives, packed bit 0 first (M_OUT order): 105 bits. */
 export const REQ_BITS = M_OUT.reduce((s, x) => s + wOf(x), 0);
@@ -873,10 +874,10 @@ const packName = (l: Link, kind: 'req' | 'rsp') => `${l[2] ?? l[0]}${kind}`;
  * Native, not a wrapper: the part's own drawing, moved right, with a splitter beside each incoming bus's pin and
  * a merger beside each outgoing one, at the same level (a wrapper level holding one box was a hollow level a
  * learner had to open for nothing). The channel signals stay named nets inside it, so a reader can find
- * `awvalid` there (sim/flatten.ts signalBits). The ports and the symbol are what the old wrapper had, so a stored
- * chip placing a `_b` part keeps its wires.
+ * `awvalid` there (sim/flatten.ts signalBits). The chapters' computers only (`_p` ids): their readers had the parts'
+ * own paths (cpu.rf), which this keeps. The sandbox's parts stay bundled (below), whose level holds the part as `core`.
  */
-export function bundled(def: ComponentDef, groups: Link[], id: string): ComponentDef {
+export function packed(def: ComponentDef, groups: Link[], id: string): ComponentDef {
   return memo(id, () => {
     const own = new Set(groups.flatMap(([p]) => [...M_OUT, ...M_IN].map((s) => p + s)));
     const other = def.ports.filter((p) => !own.has(p.name));
@@ -890,6 +891,42 @@ export function bundled(def: ComponentDef, groups: Link[], id: string): Componen
       netlist: def.behavior
         ? function (this: ComponentDef) { innerSignals.set(this, new Map([...own].map((sg) => [sg, `core.${sg}`]))); return laid(leafLevel(def, groups, other), { keepOrder: true }).call(this); }
         : function (this: ComponentDef) { return packedNetlist(this, def, groups, own, ports); },
+    });
+  });
+}
+
+/**
+ * The sandbox's bus parts (`<id>_b`): the part as instance `core` between a splitter per incoming packed bus and a
+ * merger per outgoing one, exactly as before the chapters' computers were packed natively, so a stored chip, its probes
+ * and every reader walking `<part>.core.…` keep working (tests/bus-stored.test.ts loads main's documents).
+ */
+export function bundled(def: ComponentDef, groups: [string, 'master' | 'slave'][], id: string): ComponentDef {
+  return memo(id, () => {
+    const b = new Builder(10, 14);
+    const own = new Set(groups.flatMap(([p]) => [...M_OUT, ...M_IN].map((s) => p + s)));
+    const other = def.ports.filter((p) => !own.has(p.name));
+    const from = new Map<string, string>();
+    for (const [p, side] of groups) {
+      const sigs = side === 'master' ? M_IN : M_OUT;
+      const s = b.op(splitter(sigs.map(wOf)), [side === 'master' ? `${p}rsp` : `${p}req`]);
+      sigs.forEach((sg, i) => from.set(p + sg, `${s}.o${i}`));
+    }
+    b.next();
+    const core = b.op(def, def.ports.filter((pt) => pt.dir === 'in').map((pt) => from.get(pt.name) ?? pt.name), def.name, 'core');
+    b.next();
+    for (const [p, side] of groups) {
+      const sigs = side === 'master' ? M_OUT : M_IN;
+      b.wire(b.op1(merger(sigs.map(wOf)), sigs.map((sg) => `${core}.${p}${sg}`)), side === 'master' ? `${p}req` : `${p}rsp`);
+    }
+    for (const pt of other) if (pt.dir === 'out') b.wire(`${core}.${pt.name}`, pt.name);
+    const packIn = groups.map(([p, side]) => bus(side === 'master' ? `${p}rsp` : `${p}req`, side === 'master' ? RSP_BITS : REQ_BITS, 'in'));
+    const packOut = groups.map(([p, side]) => bus(side === 'master' ? `${p}req` : `${p}rsp`, side === 'master' ? REQ_BITS : RSP_BITS, 'out'));
+    const ports: PortDef[] = [...other.filter((p) => p.dir === 'in'), ...packIn, ...other.filter((p) => p.dir === 'out'), ...packOut];
+    return define({
+      id, name: `${def.name}, bus bundled`, category: def.category,
+      summary: `${def.summary ?? def.name} Its bus ports packed: per link a request bus (the master's ${M_OUT.length} signals, ${REQ_BITS} bits) and a response bus (${M_IN.length} signals, ${RSP_BITS} bits).`,
+      ports, symbol: { ...def.symbol, kind: 'box' },
+      netlist: laid(b, { keepOrder: true }),
     });
   });
 }
