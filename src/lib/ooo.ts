@@ -663,7 +663,7 @@ export function robCell(D: number, V: number): ComponentDef {
     const qs = b.op(splitter([1, D, V]), ['q'], undefined, 'qs');
     // the inputs every entry reads, bundled: dispatch fields and values of both slots, both result buses' values
     const sh = b.op(splitter(SHARED(D, V)), ['sh'], undefined, 'shs');
-    const [dd0, dd1, dn0, dn1, dv0, dv1, bv0, bv1] = SHARED_NAMES.map((_, i) => `${sh}.o${i}`);
+    const [dd0, dd1, dn0, dn1, dv0, dv1, bv0, bv1] = SHARED_NAMES.map((n, i) => b.name(`${sh}.o${i}`, n, true));
     const one = b.op1(TIE1, [], undefined, 'one');
     b.next();
     const vb = b.op1(busMux2(V), [b.op1(busMux2(V), [`${qs}.o2`, bv1, 'b1'], undefined, 'vb1'), bv0, 'b0'], undefined, 'vb0');
