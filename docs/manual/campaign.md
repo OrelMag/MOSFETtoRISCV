@@ -501,7 +501,8 @@ The [sandbox page](sandbox.md) lists every mouse and touch gesture.
 ## If something looks wrong
 
 - **"… is locked" appears instead of the level.** A link took you to a level whose requirements you have not
-  finished. The card names the level to do first: click it, or **Back to the map**, or tick **Unlock all**.
+  finished. The card lists the levels to finish or skip first: click one, or **Back to the map**, or tick
+  **Unlock all** on the map.
 - **Check says Not yet, and an output reads X.** Either nothing drives that output to a 0 or a 1 yet, or two parts
   drive it against each other. Wire the output to a part, and check that no input it depends on is left open.
 - **You clicked a part, but nothing was placed.** A part lands where you next click on the canvas. While the test
