@@ -40,7 +40,8 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
     const st = stageRef;
     return st ? { live: st.rgb('--m3-charge'), brass: st.rgb('--cr-brass'), cellOff: st.rgb('--cr-lamp'), lampOff: st.rgb('--cr-lamp'), alarm: st.rgb('--cr-alarm'), beam: st.rgb('--cr-beam') } : FALLBACK;
   };
-  const look = (detail: ReaderLook['detail']): ReaderLook => ({ detail, run, L: readerLayout(run, u), next, rgb: rgb() });
+  let truth = false;
+  const look = (detail: ReaderLook['detail']): ReaderLook => ({ detail, run, L: readerLayout(run, u), next, rgb: rgb(), truth });
   let cutCol = cutColumn(run, readerLayout(run, 1));
 
   const panel = h('div', { class: 'panel' });
@@ -69,7 +70,7 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
   };
   /** What decides the model's own parts: the machine, the cards in each place and how they lie, the cut's column. */
   let key = '', flatAt = 0;
-  const keyOf = (L: ReturnType<typeof readerLayout>) => [run.mode, L.hopper, L.stacker, L.moving.map((q) => q.k).join(','), run.orient.map((o) => orientIndex(o)).join(''), run.dirty, cutCol].join('|');
+  const keyOf = (L: ReturnType<typeof readerLayout>) => [truth, run.mode, L.hopper, L.stacker, L.moving.map((q) => q.k).join(','), run.orient.map((o) => orientIndex(o)).join(''), run.dirty, cutCol].join('|');
   function put(): void {
     const L = readerLayout(run, u), now = performance.now();
     if (stage.isFlat()) { if (keyOf(L) !== key || now - flatAt > 150) { key = keyOf(L); flatAt = now; stage.refresh(); } return; }
@@ -249,6 +250,14 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
     if (m === mode) b.classList.add('on');
     return b;
   });
+  // the chip: a strip of card as drawn beside one as thick as a real card
+  const truthBtn = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false', title: 'A strip of card as it is drawn here beside one as thick as a real card' }, 'True thickness') as HTMLButtonElement;
+  truthBtn.addEventListener('click', () => {
+    truth = !truth; truthBtn.classList.toggle('on', truth); truthBtn.setAttribute('aria-pressed', String(truth));
+    key = ''; put();
+    if (truth) frameOn(['truebox'], 0.15, 0.3); else homeView();
+  });
+  stage.chips.append(truthBtn);
   const closeBtn = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false' }, 'Close-up of the station') as HTMLButtonElement;
   closeBtn.addEventListener('click', () => {
     close = !close;

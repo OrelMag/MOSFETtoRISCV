@@ -36,6 +36,8 @@ export interface ReaderLook {
   L: ReaderLayout;
   next: 0 | 1;
   rgb: ReaderRgb;
+  /** The True thickness chip: two strips of card, one as drawn and one as real, on a block in front of the bed. */
+  truth?: boolean;
 }
 
 // ---------------------------------------------------------------- small helpers
@@ -210,8 +212,8 @@ export function cutColumn(run: ReaderRun, L: ReaderLayout): number {
   return CUT_COL_DEFAULT;
 }
 
-export const HOME: Record<ReaderMode, { yaw: number; pitch: number }> = { word: { yaw: 0.3, pitch: 0.5 }, column: { yaw: 0.55, pitch: 0.55 } };
-export const FRAME_GROUPS = ['homebox', 'hopperbox', 'stationbox', 'cutbox', 'checkbox'];
+export const HOME: Record<ReaderMode, { yaw: number; pitch: number }> = { word: { yaw: 0.3, pitch: 0.42 }, column: { yaw: 0.55, pitch: 0.45 } };
+export const FRAME_GROUPS = ['homebox', 'hopperbox', 'stationbox', 'cutbox', 'checkbox', 'truebox'];
 
 // ---------------------------------------------------------------- the model
 
@@ -291,21 +293,29 @@ export function readerModel(look: ReaderLook, cutCol = CUT_COL_DEFAULT): Model3 
   it(once(`panel${key}`, () => merge([boxAt(lampX(0, bits) - 5, lampX(bits + 5, bits) + 3, LAMP_Y - 6, LAMP_Y + 6, z - 2, z, 0.5), boxAt(-4, 4, BED - 4, LAMP_Y - 6, z - 2, z - 0.5, 0.3)], 'panel')), panelMat, 'the computer’s panel', 'panel', { info: { note: 'a lamp per data bit, then ready, empty, next and the two check lights' } });
   it(once(`cable${key}`, () => sweep(cablePath(mode), circleSec(0.8, 8))), M.make({ base: [0.12, 0.12, 0.13], metal: 0, rough: 0.7, label: 'cable to the computer' }), 'cable to the computer', 'panel');
 
+  // true thickness: a strip of card as it is drawn beside one as thick as a real card (0.007 in), on a block before the bed
+  if (look.truth) {
+    const [tx0, tx1] = TRUE_X, tz = c + 11;
+    it(once(`trueblock${key}`, () => boxAt(tx0 - 2, tx1 + 2, BED - 6, BED + 1, tz - 5, tz + 5, 0.4)), frameMat, 'block', 'true');
+    it(once('truedrawn', () => boxAt(tx0, tx1, BED + 1, BED + 1 + CARD_T, tz - 4, tz - 0.5)), cardMat, 'a card as drawn', 'true', { info: { dim: `${(CARD_T * 2.5).toFixed(2)} mm: drawn ${Math.round(CARD_T / CARD_T_REAL)} times too thick` } });
+    it(once('truereal', () => boxAt(tx0, tx1, BED + 1, BED + 1 + CARD_T_REAL, tz + 0.5, tz + 4)), cardMat, 'a real card', 'true', { info: { dim: '0.007 in = 0.18 mm', source: SRC.card } });
+  }
   // the flat drawing has no instances: the moving parts as parts
   if (!full) flatMovers(items, look, frameMat);
 
   // frames
   const fb = (g: string, ax: number, bx: number, ay: number, by: number, az: number, bz: number) => items.push({ geo: once(`f${g}${key}`, () => boxAt(ax, bx, ay, by, az, bz)), mat: ghost, group: g, cut: 'none', shadow: false });
-  fb('homebox', x0, x1, BED - 12, BED + 26, -c - 6, c + 6);
+  fb('homebox', m.hopper - a - 2, m.stacker + a + 3, BED - 3, BED + 12, -c - 2, c + 4);
   fb('hopperbox', m.hopper - a - 9, m.rolls[0] + 4, BED - 4, BED + 26, -c - 2, c + 2);
   fb('stationbox', STATION_X - 10, STATION2_X + 6, BED - 5, BED + (mode === 'word' ? 11 : 19), -4, c + 6);
   fb('cutbox', STATION_X - 7, STATION_X + 5, BED - 5, BED + (mode === 'word' ? 11 : 19), cutZ(mode, cutCol) - 10, cutZ(mode, cutCol) + 1);
   fb('checkbox', STATION_X - 6, STATION2_X + 6, BED - 4, LAMP_Y + 6, z - 2, c + 6);
+  fb('truebox', TRUE_X[0] - 3, TRUE_X[1] + 3, BED - 2, BED + 4, c + 5, c + 17);
 
   return {
     items,
     cuts: { planes: [{ n: [0, 0, 1], d: cutZ(mode, cutCol) }], open: [cutOpen(mode)] },
-    anchors: anchorsOf(run, L),
+    anchors: [...anchorsOf(run, L), ...(look.truth ? trueAnchors(c) : [])],
     beats: beatsOf(mode),
     floor: BED - 12,
     look: { exposure: 1.05 },
@@ -337,9 +347,22 @@ function flatMovers(items: Item[], look: ReaderLook, frameMat: Material): void {
   for (const l of panelLamps(run, look.next, rgb)) items.push({ geo: once('flamp', () => boxAt(-0.95, 0.95, -0.95, 0.95, 0, 0.6)), mat: l.emissive ? lit : off, at: l.pos, name: 'panel lamps', group: 'panel' });
 }
 
+/** Where the true-thickness strips stand (x), in front of the hopper's side of the first station. */
+export const TRUE_X: [number, number] = [STATION_X - 30, STATION_X - 16];
+function trueAnchors(c: number): StudioAnchor[] {
+  return [
+    { text: `as drawn, ${(CARD_T * 2.5).toFixed(2)} mm`, p: [TRUE_X[0], BED + 1 + CARD_T, c + 9], side: 'l', n: [0, 0.4, 1], on: 'true' },
+    { text: 'a real card, 0.18 mm', p: [TRUE_X[1], BED + 1, c + 13], side: 'r', n: [0, 0.4, 1], on: 'true' },
+  ];
+}
+/** Short names in the gutters (the hover card says the rest). */
+const SHORT: Record<string, string> = {
+  'data to the computer (32 bits)': 'data lamps', 'data to the computer (12 bits)': 'data lamps', 'first brushes, one a column': 'first brushes', 'second brushes (compare)': 'second brushes',
+  'lamp and 12 photocells': 'lamp + cells', 'second station (compare)': 'second station', 'ready · empty · next · checks': 'check lamps',
+};
 function anchorsOf(run: ReaderRun, L: ReaderLayout): StudioAnchor[] {
   const on: Record<string, string> = { hopper: 'hopper', 'picker knife': 'knife', 'feed rolls': 'rolls', stacker: 'stacker' };
-  return readerAnchors(run, L).map((a) => ({ ...a, on: on[a.text] ?? (a.text.startsWith('data') || a.text.startsWith('ready') ? 'panel' : a.text.includes('second') ? 'station2' : 'station') }));
+  return readerAnchors(run, L).map((a) => ({ ...a, text: SHORT[a.text] ?? a.text, on: on[a.text] ?? (a.text.startsWith('data') || a.text.startsWith('ready') ? 'panel' : a.text.includes('second') ? 'station2' : 'station') }));
 }
 
 function beatsOf(mode: ReaderMode): Beat[] {
