@@ -25,3 +25,26 @@ describe('levels laid out by layered.ts', () => {
     expect(symbolOverlaps(nl)).toEqual([]);
   });
 });
+
+describe('layered column overrides', () => {
+  it('moves a part earlier than its depth, the columns counted again from the first one used', async () => {
+    const { Builder } = await import('../src/lib/builder');
+    const { layered } = await import('../src/lib/layered');
+    const { AND, NOT } = await import('../src/lib/gates');
+    const ports = [{ name: 'a', width: 1, dir: 'in' as const }, { name: 'y', width: 1, dir: 'out' as const }];
+    const make = () => {
+      const b = new Builder();
+      b.pins('a');
+      const n0 = b.op1(NOT, ['a'], undefined, 'n0'), n1 = b.op1(NOT, [n0], undefined, 'n1');
+      b.wire(b.op1(AND, [n1, 'a'], undefined, 'g'), 'y');
+      return b;
+    };
+    const x = (nl: ReturnType<typeof layered>, n: string) => nl.instances.find((i) => i.name === n)!.at![0];
+    const plain = layered(ports, make()), moved = layered(ports, make(), { column: { g: -3 } });
+    expect(x(plain, 'n0')).toBeLessThan(x(plain, 'n1'));
+    expect(x(plain, 'n1')).toBeLessThan(x(plain, 'g'));
+    // g moved three columns back, past the first: it becomes the first column, n0 the next, nothing further left
+    expect(x(moved, 'g')).toBeLessThan(x(moved, 'n0'));
+    expect(Math.min(...moved.instances.map((i) => i.at![0]))).toBe(Math.min(...plain.instances.map((i) => i.at![0])));
+  });
+});

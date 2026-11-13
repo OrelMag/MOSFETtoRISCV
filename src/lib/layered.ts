@@ -17,7 +17,7 @@ export interface LayeredOptions {
   pinned?: string[];
   /** Nets (by driver end) forced to wires, or to pointers (false). */
   wires?: Record<string, boolean>;
-  /** Column per instance name, overriding the depth (relative, 0 = first). */
+  /** Columns to move a part by from its depth (negative: earlier); the columns are then counted from the first one used. */
   column?: Record<string, number>;
   /** Rows to move a part by after the layout settled (negative: up): out of the way of a wire that must pass it. */
   nudge?: Record<string, number>;
@@ -106,8 +106,10 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
       if (rs.length) layer.set(n, Math.min(...rs) - 1);
     }
   }
-  const minL = Math.min(...names.map((n) => layer.get(n)!));
-  for (const n of names) layer.set(n, layer.get(n)! - minL + (opts.column?.[n] ?? 0));
+  for (const n of names) layer.set(n, layer.get(n)! + (opts.column?.[n] ?? 0));
+  // an override may move a part before the first column: the columns start again at 0
+  const minC = Math.min(...names.map((n) => layer.get(n)!));
+  for (const n of names) layer.set(n, layer.get(n)! - minC);
   const L = Math.max(...names.map((n) => layer.get(n)!)) + 1;
   const cols: string[][] = Array.from({ length: L }, () => []);
   for (const n of names) cols[layer.get(n)!].push(n);
