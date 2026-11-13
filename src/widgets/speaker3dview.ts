@@ -45,8 +45,8 @@ export function speakerView(): Widget {
     const st = studioStage({
       aria: 'A moving-coil loudspeaker in 3D, cut in half: cone, rubber surround, spider, voice coil in the magnet gap, pole piece with its phase plug, ferrite ring, top plate and the cast six-spoke frame',
       home: SPEAKER_HOME,
-      // a round driver: fitted as a sphere (a box's corners would leave a third of the canvas empty)
-      homeRadius: 88,
+      // a round driver fitted as a sphere, close: the cut driver fills the width, the frame's far rim may touch the edge
+      homeRadius: 64,
       knobs: { cut: 1 },
       scaleBar: (len) => `${len} mm`,
       limits: { minDist: 60, maxDist: 1600 },

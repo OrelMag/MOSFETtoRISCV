@@ -132,7 +132,7 @@ export const MATS = {
   wind: (level: number): Material => {
     const q = quant(level), hit = glowMemo.get(q);
     if (hit) return hit;
-    const m = M.make({ base: [0.95, 0.6, 0.45], metal: 0.85, rough: 0.3, emit: [1.0, 0.55, 0.2], glow: 0.25 + 1.2 * q, label: 'copper wire (Dayton): glows with the current' });
+    const m = M.make({ base: [0.95, 0.6, 0.45], metal: 0.85, rough: 0.3, emit: [1.0, 0.55, 0.2], glow: 0.55 + 0.55 * q, bloom: 5 + 5 * q, label: 'copper wire (Dayton): glows with the current' });
     glowMemo.set(q, m);
     return m;
   },
