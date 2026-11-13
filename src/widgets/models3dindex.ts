@@ -64,7 +64,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'cell', title: 'A standard cell, layer by layer', category: 'devices', chapter: 'silicon', step: 0,
     summary: 'A CMOS cell from well to metal 1 with a section plane through a gate: n+, oxide, poly, n+.',
-    files: ['cell3d', 'cell3dview', 'cell3dparts'], factory: 'cell3d', codex: ['stdcell', 'cmos'],
+    files: ['cell3d', 'cell3dview', 'cell3dkit', 'cell3dparts'], factory: 'cell3d', codex: ['stdcell', 'cmos'],
     open: () => import('./cell3d').then((m) => m.cell3d()),
   },
   {
@@ -160,7 +160,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'dipole', title: 'The half-wave dipole', category: 'comms', chapter: 'radio', step: 0,
     summary: 'A 6.2 cm dipole at 2.4 GHz: the standing-wave current, field loops leaving at c, and the doughnut pattern.',
-    files: ['dipole3d', 'dipole3dview', 'dipole3dparts'], factory: 'dipole3d',
+    files: ['dipole3d', 'dipole3dview', 'dipole3dkit', 'dipole3dparts'], factory: 'dipole3d',
     open: () => import('./dipole3d').then((m) => m.dipole3d()),
   },
   {
@@ -190,7 +190,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'cable', title: 'Twisted pair and coax', category: 'comms', chapter: 'wire', step: 6,
     summary: 'Why a pair is twisted: each half twist flips a loop\'s EMF so the pickup cancels; or swap in a coax.',
-    files: ['cable3d', 'cable3dview', 'cable3dparts'], factory: 'cable3d',
+    files: ['cable3d', 'cable3dview', 'cable3dparts', 'cable3dkit'], factory: 'cable3d',
     open: () => import('./cable3d').then((m) => m.cable3d()),
   },
   {
@@ -220,7 +220,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'crt', title: 'The beam on a picture tube', category: 'machines', chapter: 'pixels', step: 6,
     summary: 'Gun, yoke and phosphor driven by the scan-out\'s own counter: the beam lights each pixel the circuit sends, then retraces.',
-    files: ['crt3d', 'crt3dview', 'crt3dparts'], factory: 'crt3d', codex: ['doublebuffer'],
+    files: ['crt3d', 'crt3dview', 'crt3dparts', 'crt3dkit'], factory: 'crt3d', codex: ['doublebuffer'],
     open: () => import('./crt3d').then((m) => m.crt3d()),
   },
   {
@@ -238,7 +238,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'babbage', title: 'Babbage\'s carry', category: 'machines', chapter: 'fastadd', step: 5,
     summary: 'A Difference Engine No. 2 column: a run of 9s carries one arm at a time, or all at once by the anticipating carriage.',
-    files: ['babbage3d', 'babbage3dview', 'babbage3dparts'], factory: 'babbage3d', codex: ['ripple', 'cla', 'prefix'],
+    files: ['babbage3d', 'babbage3dview', 'babbage3dkit', 'babbage3dparts'], factory: 'babbage3d', codex: ['ripple', 'cla', 'prefix'],
     open: () => import('./babbage3d').then((m) => m.babbage3d()),
   },
   {
@@ -268,7 +268,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'ccd', title: 'A three-phase CCD', category: 'devices', chapter: 'sensors', step: 1,
     summary: 'Charge packets march a gate per phase down the CCD42-40\'s columns to the output amplifier; a CTE slider shows the smear.',
-    files: ['ccd3d', 'ccd3dview', 'ccd3dparts'], factory: 'ccd3d', codex: ['ccd', 'cds', 'fullwell'],
+    files: ['ccd3d', 'ccd3dview', 'ccd3dkit', 'ccd3dparts'], factory: 'ccd3d', codex: ['ccd', 'cds', 'fullwell'],
     open: () => import('./ccd3d').then((m) => m.ccd3d()),
   },
   {

@@ -1,104 +1,152 @@
-// The standard cell of the layout step in 3D on the shared model stage (loaded on demand, modelhost.ts): the cell's
-// layers from the well to metal 1, inputs that switch the transistors and colour the nets, and a section plane through
-// a gate whose cut face shows the stack the next step builds: n+ | gate oxide | polysilicon | n+.
+// The standard cell of the layout step on the studio renderer (loaded on demand, modelhost.ts): the cell in true
+// geometry and true thickness above the silicon (cell3dkit.ts), its inputs switching the transistors and colouring
+// the nets, the charge that moves through the conducting channels when the output switches, a cut through a gate
+// (the stage's Cutaway), the films pulled apart (Explode), the oxide between them and the neighbours in its row as
+// layers, and a tour.
 
 import '../styles/masks3d.css';
+import { packInstances, type RGB } from '../gl/instances';
+import { sphere } from '../gl/kit/geo';
+import { fitView } from '../gl/kit/scene';
+import { M } from '../gl/kit/materials';
 import { h } from '../ui/dom';
+import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
-import { CELL_LAYER_NAME, CELL_LAYERS, cellAnchors, cellParts, defaultCut, LAMBDA_NM, ROW_UM, sectionText, type CellLayer, type CellPalette, type CellState } from './cell3dparts';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
+import { LAMBDA_NM, ROW_UM, sectionText, defaultCut, type CellPalette } from './cell3dparts';
+import { BEAT_LAYERS, DRAWN, FRAME_GROUPS, HOME, PDK, carriers, cellModel, heights, lanes, type CellLayer, type Lane } from './cell3dkit';
 import { CELLS } from './silicon';
+import { studioStage, type StudioStage } from './studiostage';
+
+const BEAD = sphere(0.8, 10, 6);
+const BURST_MS = 2200;
+const FALLBACK: CellPalette = {
+  psub: [0.55, 0.5, 0.6], nwell: [0.4, 0.55, 0.7], sti: [0.75, 0.82, 0.9], ndiff: [0.85, 0.35, 0.3], pdiff: [0.35, 0.6, 0.35], poly: [0.85, 0.3, 0.3],
+  gox: [0.8, 0.85, 0.95], licon: [0.5, 0.5, 0.5], li1: [0.6, 0.55, 0.7], mcon: [0.5, 0.5, 0.5], metal: [0.6, 0.65, 0.75], chanOn: [0.3, 0.9, 0.5],
+};
 
 export function cellView(): Widget {
   // The layout step opens on NAND2 (the cell with series NMOS to point at).
   let cell = CELLS[1];
-  const st: CellState = {
-    ins: Object.fromEntries(cell.inputs.map((n) => [n, 1])), spread: 0.3, cut: null,
-    show: Object.fromEntries(CELL_LAYERS.map((l) => [l, true])) as Record<CellLayer, boolean>,
+  let ins: Record<string, number> = Object.fromEntries(cell.inputs.map((n) => [n, 1]));
+  const mine = new Set<CellLayer>(['metal']);
+  let shown: ReadonlySet<CellLayer> = mine, stageRef: StudioStage | null = null;
+  const pal = (): CellPalette => {
+    const s = stageRef;
+    if (!s) return FALLBACK;
+    return {
+      psub: s.rgb('--mk-psub'), nwell: s.rgb('--mk-nwell'), sti: s.rgb('--mk-sti'), ndiff: s.rgb('--mk-ndiff'), pdiff: s.rgb('--mk-pdiff'),
+      poly: s.rgb('--mk-poly'), gox: s.rgb('--mk-gox'), licon: s.rgb('--mk-contact'), li1: s.rgb('--mk-li1'), mcon: s.rgb('--mk-contact'),
+      metal: s.rgb('--mk-metal'), chanOn: s.rgb('--mk-chan-on'),
+    };
   };
-  const panel = h('div', { class: 'panel' });
-  const iso = { target: [0, 3, 0] as [number, number, number], yaw: -0.7, pitch: 0.7, dist: 62 };
-  const stage = modelStage(panel, {
-    look: LOOKS.silicon,
-    aria: 'A standard cell in 3D, layer by layer, with a section plane through a transistor gate',
-    camera: iso,
-    limits: { minDist: 18, maxDist: 160 },
-    note: 'The footprint is to scale (1 λ = 62 nm); heights are exaggerated and the layers can be pulled apart. The oxide between licon1, li1 and met1 is not drawn.',
-    draw,
+  const z = heights();
+  const stage = studioStage({
+    aria: 'A standard cell in 3D, layer by layer: silicon with its well and trenches, diffusion, gate oxide and polysilicon, the contact stack up to metal 1; a cut through a transistor gate',
+    home: HOME,
+    homeFrame: ['cellbox'],
+    hidden: [...FRAME_GROUPS],
+    limits: { minDist: 10, maxDist: 400, maxPan: 120 },
+    onBeat: (i) => { shown = i >= 0 ? new Set(BEAT_LAYERS[i] ?? []) : mine; syncChips(); stage.refresh(); },
+    note: `The footprint is the layout step's cell at 1 λ = ${Math.round(LAMBDA_NM)} nm (the 44 λ row is sky130's ${ROW_UM} µm); the films above the silicon are the SkyWater PDK's thicknesses (poly ${PDK.poly} µm, li1 ${PDK.li1} µm, met1 ${PDK.met1} µm), the gate oxide ${DRAWN.goxScale}× thicker than its ${PDK.gox * 1000} nm so it shows, the trench depth and the gap under metal 1 illustrative. Net colours: bright is 1, dark is 0. The charge that moves when the output switches is drawn as beads, not to scale.`,
+    build: (detail) => cellModel(cell, { detail, ins, layers: shown, pal: pal() }),
   });
-  const palette = (): CellPalette => ({
-    psub: stage.rgb('--mk-psub'), nwell: stage.rgb('--mk-nwell'), sti: stage.rgb('--mk-sti'), ndiff: stage.rgb('--mk-ndiff'), pdiff: stage.rgb('--mk-pdiff'),
-    poly: stage.rgb('--mk-poly'), gox: stage.rgb('--mk-gox'), licon: stage.rgb('--mk-contact'), li1: stage.rgb('--mk-li1'), mcon: stage.rgb('--mk-contact'),
-    metal: stage.rgb('--mk-metal'), chanOn: stage.rgb('--mk-chan-on'),
-  });
-  function draw(): void { stage.paint(cellParts(cell, st, palette()), cellAnchors(cell, st)); }
+  stageRef = stage;
 
-  const info = h('p', { class: 'mk-read' });
-  const verdict = h('p', { class: 'mk-verdict', 'aria-live': 'polite' });
+  // ---------------------------------------------------------------- the charge that moves when the output switches
+
+  let burst: { lanes: Lane[]; t0: number } | null = null, raf = 0;
+  const NONE = new Float32Array(0), beadMat = M.beam([0, 0, 0], 1, 'carriers (drawn)');
+  const putCarriers = (k: number | null) => {
+    if (stage.isFlat()) return;
+    if (k === null || !burst) { stage.instances('carriers', BEAD, beadMat, NONE); return; }
+    const c = (t: string): RGB => stage.rgb(t);
+    stage.instances('carriers', BEAD, beadMat, packInstances(carriers(cell, burst.lanes, k, { e: c('--mk-ndiff'), h: c('--mk-pdiff') })));
+  };
+  const tick = (now: number) => {
+    raf = 0;
+    if (!burst) return;
+    const k = (now - burst.t0) / BURST_MS;
+    if (k >= 1) { burst = null; putCarriers(null); return; }
+    putCarriers(k);
+    raf = requestAnimationFrame(tick);
+  };
+
+  // ---------------------------------------------------------------- readouts and controls
+
+  const info = h('p', { class: 'mk-read' }), verdict = h('p', { class: 'mk-verdict', 'aria-live': 'polite' }), kv = h('div', { class: 'r3-kv' });
   const readout = () => {
-    const v = cell.eval(st.ins);
-    info.replaceChildren(h('strong', null, cell.name), `: ${cell.transistors} transistors, ${cell.w} λ × 44 λ = ${cell.w * 44} λ²; here 1 λ = ${Math.round(LAMBDA_NM)} nm, which makes the 44 λ row sky130_fd_sc_hd’s ${ROW_UM} µm and this cell ${(cell.w * LAMBDA_NM / 1000).toFixed(2)} µm wide (nand2_1: 1.38 µm × 2.72 µm = 3.75 µm²). y = ${v.y}.`);
-    verdict.textContent = st.cut === null ? 'Section plane off.' : sectionText(cell, st.cut);
+    const v = cell.eval(ins), um = (l: number) => ((l * LAMBDA_NM) / 1000).toFixed(2);
+    info.replaceChildren(h('strong', null, cell.name), `: ${cell.transistors} transistors; y = ${v.y}.`);
+    verdict.textContent = `With the cut open: ${sectionText(cell, defaultCut(cell))}`;
+    const rows: [string, string][] = [
+      ['Cell', `${cell.w} λ × 44 λ`], ['Size', `${um(cell.w)} × ${ROW_UM} µm`], ['1 λ', `${Math.round(LAMBDA_NM)} nm`],
+      ['Stack to metal 1', `${um(z.met1)} µm`], ['Poly', `${PDK.poly} µm`], ['Gate oxide', `${PDK.gox * 1000} nm (drawn ×${DRAWN.goxScale})`],
+      ['li1 / met1', `${PDK.li1} / ${PDK.met1} µm`], ['n-well', `${PDK.nwell} µm deep`], ['nand2_1 (sky130)', '1.38 µm × 2.72 µm'],
+    ];
+    kv.replaceChildren(...rows.flatMap(([k, x]) => [h('span', null, k), h('span', { class: 'v' }, x)]));
   };
-
-  const input = (label: string, min: number, max: number, step: number, val: number, text: (v: number) => string, on: (v: number) => void) => {
-    const el = h('input', { type: 'range', min, max, step, value: val, 'aria-label': label }) as HTMLInputElement;
-    const out = h('output', null, text(val));
-    el.addEventListener('input', () => { out.textContent = text(Number(el.value)); on(Number(el.value)); });
-    return { el, out, row: h('label', { class: 'r3-sl mk-wide' }, h('span', null, label), el, out) };
-  };
-  const spread = input('Pull apart', 0, 1, 0.05, st.spread, (v) => `${Math.round(v * 100)} %`, (v) => { st.spread = v; draw(); });
-  const plane = input('Section plane', 0, 44, 0.5, defaultCut(cell), (v) => `y = ${v} λ`, (v) => { if (planeOn.checked) { st.cut = v; refresh(); } });
-  const planeOn = h('input', { type: 'checkbox' }) as HTMLInputElement;
-  plane.el.disabled = true;
-  const setPlane = (on: boolean) => { planeOn.checked = on; st.cut = on ? Number(plane.el.value) : null; plane.el.disabled = !on; refresh(); };
-  planeOn.addEventListener('change', () => setPlane(planeOn.checked));
-  const refresh = () => { readout(); draw(); };
+  const refresh = () => { readout(); stage.refresh(); };
 
   const cellBtns = CELLS.map((c) => {
     const b = h('button', { type: 'button', class: `btn sm${c === cell ? ' primary' : ''}`, 'aria-pressed': String(c === cell) }, c.name) as HTMLButtonElement;
     b.addEventListener('click', () => {
       cell = c;
-      st.ins = Object.fromEntries(c.inputs.map((n) => [n, 1]));
-      st.cut = planeOn.checked ? defaultCut(c) : null;
-      plane.el.value = String(defaultCut(c)); plane.out.textContent = `y = ${defaultCut(c)} λ`;
+      ins = Object.fromEntries(c.inputs.map((n) => [n, 1]));
+      burst = null; putCarriers(null);
       cellBtns.forEach((x, i) => { x.classList.toggle('primary', CELLS[i] === c); x.setAttribute('aria-pressed', String(CELLS[i] === c)); });
-      inputBtns();
-      refresh();
+      inputBtns(); refresh();
     });
     return b;
   });
   const inputs = h('div', { class: 'r3-btns', role: 'group', 'aria-label': 'Inputs' });
   function inputBtns(): void {
     inputs.replaceChildren(...cell.inputs.map((n) => {
-      const b = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': String(st.ins[n] === 1) }, `${n} = ${st.ins[n]}`) as HTMLButtonElement;
-      b.addEventListener('click', () => { st.ins[n] ^= 1; inputBtns(); refresh(); });
+      const b = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': String(ins[n] === 1) }, `${n} = ${ins[n]}`) as HTMLButtonElement;
+      b.addEventListener('click', () => {
+        const before = cell.eval(ins).y;
+        ins = { ...ins, [n]: ins[n] ^ 1 };
+        // the output switched: its charge runs through the channels now on, for a moment (static CMOS draws none at rest)
+        if (cell.eval(ins).y !== before && !reducedMotion()) { burst = { lanes: lanes(cell, ins), t0: performance.now() }; if (!raf) raf = requestAnimationFrame(tick); }
+        inputBtns(); refresh();
+      });
       return b;
     }));
   }
-  const toggles = h('div', { class: 'r3-btns mk-layers', role: 'group', 'aria-label': 'Layers shown' }, ...CELL_LAYERS.map((l) => {
-    const box = h('input', { type: 'checkbox' }) as HTMLInputElement;
-    box.checked = true;
-    box.addEventListener('change', () => { st.show[l] = box.checked; refresh(); });
-    return h('label', { class: 'lay-chk' }, box, CELL_LAYER_NAME[l]);
-  }));
-  const views = [
-    { label: 'Iso', view: () => ({ ...iso, target: [...iso.target] as [number, number, number] }) },
-    { label: 'Section', title: 'Cut the cell through a gate and look at the cut face', pick: () => setPlane(true), view: () => ({ target: [0, 0, 0] as [number, number, number], yaw: 0.15, pitch: 0.28, dist: 40 }) },
-    { label: 'Top', title: 'Straight down: the layout step’s flat view', view: () => ({ target: [0, 0, 0] as [number, number, number], yaw: 0, pitch: Math.PI / 2 - 0.02, dist: 66 }) },
+  const toggle = (b: HTMLButtonElement, on: boolean) => { b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); };
+  const CHIPS: [CellLayer, string, string][] = [
+    ['metal', 'Metal 1', 'Metal 1 and its plugs (off: look down onto li1, poly and the transistors)'],
+    ['ild', 'Oxide between', 'The silicon dioxide that fills every gap between the films (translucent)'],
+    ['row', 'Neighbours', 'The cell with its neighbours in the row: the rails and the n-well run through'],
   ];
+  const chipBtns = CHIPS.map(([k, label, title]) => {
+    const b = h('button', { type: 'button', class: 'btn sm', title, 'aria-pressed': 'false' }, label) as HTMLButtonElement;
+    b.addEventListener('click', () => {
+      if (shown !== mine) { mine.clear(); for (const l of shown) mine.add(l); }
+      if (mine.has(k)) mine.delete(k); else mine.add(k);
+      shown = mine; syncChips(); stage.refresh();
+    });
+    return b;
+  });
+  // the layout as drawn: straight down onto the cell, VDD at the top
+  const topBtn = h('button', { type: 'button', class: 'btn sm', title: 'Look straight down: the flat layout' }, 'Top view') as HTMLButtonElement;
+  topBtn.addEventListener('click', () => {
+    const st = stage.studio(), cv = stage.el.querySelector('canvas');
+    if (!st || !cv) return;
+    const pitch = 1.5, f = fitView({ min: [-cell.w / 2, 0, -22], max: [cell.w / 2, z.met1, 22] }, 0, pitch, st.camera.fov, cv.clientWidth / Math.max(1, cv.clientHeight), 0.06);
+    const c = st.camera;
+    c.target = f.target; c.yaw = 0; c.pitch = pitch; c.dist = f.dist;
+    st.invalidate();
+  });
+  function syncChips(): void { chipBtns.forEach((b, i) => toggle(b, shown.has(CHIPS[i][0]))); }
 
-  panel.append(
-    h('h3', { class: 'm3-title' }, 'A standard cell, drawn in silicon'),
-    h('p', { class: 'm3-sub' }, 'From the bottom: the substrate and the n-well (where the PMOS live) with oxide-filled trenches between devices, n+ and p+ diffusion sunk into the surface, polysilicon (a transistor is where poly crosses diffusion) over a thin gate oxide, then licon1 plugs up to the local interconnect li1, mcon plugs to metal 1. Bright is 1, dark is 0, faded is floating; a green channel conducts. Inputs enter on poly contacts; the n+ and p+ taps tie the substrate to GND and the well to VDD. Move the section plane through a gate and read the stack off the cut face.'),
-    h('div', { class: 'r3' },
-      h('div', { class: 'r3-main' },
-        h('div', { class: 'r3-ctl' }, h('div', { class: 'r3-btns', role: 'group', 'aria-label': 'Cell' }, ...cellBtns), inputs, stage.viewBar(views)),
-        h('div', { class: 'r3-ctl' }, spread.row, h('label', { class: 'r3-sl mk-chk' }, planeOn, h('span', null, 'Cut the cell')), plane.row),
-        toggles, stage.el, stage.hint, verdict, info)));
-  inputBtns();
-  readout();
-  draw();
-  return { el: panel, destroy: () => stage.destroy() };
+  stage.slot.append(
+    h('div', { class: 'r3-ctl' }, h('div', { class: 'r3-btns', role: 'group', 'aria-label': 'Cell' }, ...cellBtns), inputs),
+    h('div', { class: 'r3-ctl' }, h('div', { class: 'r3-btns mk-layers', role: 'group', 'aria-label': 'Layers' }, ...chipBtns, topBtn)),
+    verdict, info);
+  const el = h('div', { class: 'r3 cell3d' },
+    h('div', { class: 'r3-main' }, stage.el),
+    h('div', { class: 'r3-side' }, h('h4', null, 'This cell ', h('span', { class: 'r3-badge' }, 'sky130 scale')), kv));
+  syncChips(); inputBtns(); readout();
+  const ready = setInterval(() => { if (stage.studio() || stage.isFlat()) { clearInterval(ready); stage.refresh(); } }, 100);
+  return { el, destroy() { clearInterval(ready); cancelAnimationFrame(raf); stage.destroy(); } };
 }

@@ -16,3 +16,9 @@
 .ccd3d .ccd-bar i { display: block; height: 8px; background: var(--m3-charge); border-radius: 2px; min-width: 2px; }
 .ccd3d .ccd-bar b { font: 10.5px var(--font-mono); font-weight: 400; }
 .ccd3d .btn.pending { box-shadow: 0 0 0 2px var(--ccd-hot); }
+/* the clocks over a pixel's six steps (ccd3dview.ts clocks()) */
+.ccd-clk { display: block; width: 100%; max-width: 360px; height: auto; margin: 4px 0; }
+.ccd-clk text { font: 11px var(--font-mono); fill: var(--muted); }
+.ccd-clk .c { fill: var(--surface-2); stroke: var(--border); stroke-width: 0.5; }
+.ccd-clk .c.hi { fill: var(--ccd-hot); }
+.ccd-clk .c.now { stroke: var(--text); stroke-width: 1.5; }

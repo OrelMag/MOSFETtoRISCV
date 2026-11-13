@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { chRadio } from '../src/chapters/ch-comm-radio';
 import { C_M_S, dipoleField, wavelengthM } from '../src/phys/radio';
 import { ANTENNA_GHZ } from '../src/widgets/radio';
-import { CUT, DEFICIT, DipoleRun, GAP, HALF_LEN, cutLength, cutHalf, feedDrive, feedResistance, gainDbi, halfPower, mismatch, powerAt, radiationResistance, surfaceAt, voltageAt, hRing, LAMBDA, LOOP_LIFE, PATTERN_R, currentAt, dipoleAnchors, dipoleParts, envelope, frontAt, loopBirth, loopsAt, loopOutline, patternAt, patternRing, type DipolePalette } from '../src/widgets/dipole3dparts';
+import { DEFICIT, DipoleRun, GAP, HALF_LEN, cutLength, cutHalf, feedDrive, feedResistance, gainDbi, halfPower, mismatch, powerAt, radiationResistance, surfaceAt, voltageAt, LAMBDA, LOOP_LIFE, PATTERN_R, currentAt, envelope, frontAt, loopBirth, loopsAt, loopOutline, patternAt } from '../src/widgets/dipole3dparts';
+import { LAYERS, dipoleModel, patternProfile, type DipoleLook } from '../src/widgets/dipole3dkit';
+import { boundsOfNamed } from '../src/gl/kit/scene';
 
-const c = (i: number): [number, number, number] => [i / 10, 0.5, 0.5];
-const P: DipolePalette = { rod: c(1), ins: c(2), pos: c(3), neg: c(4), e1: c(5), e2: c(6), pat: c(7), src: c(8), ghost: [0.5, 0.5, 0.5, 0.5], volt: c(9), hfield: c(0) };
+const look = (o: Partial<DipoleLook> = {}): DipoleLook => ({ detail: 'flat', mode: 'power', feed: 'balanced', layers: new Set(LAYERS), rgb: { cu: [0.8, 0.5, 0.3], pos: [1, 0, 0], neg: [0, 0, 1] }, ...o });
+/** The kit is in mm, the parts in cm. */
+const MM = 10;
 
 describe('length', () => {
   it('lambda / 2 is the length the chapter states, at the chapter frequency', () => {
@@ -18,8 +21,8 @@ describe('length', () => {
   });
   it('the drawn rods span the CUT length (end effect 0.95 of the electrical half wave)', () => {
     const run = new DipoleRun();
-    const ys = dipoleParts(run, false, P).filter((p) => p.kind === 'cyl' && p.scale![0] > 0.3).flatMap((p) => [p.pos![1] - p.scale![1] / 2, p.pos![1] + p.scale![1] / 2]);
-    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(cutLength(0.5), 6);
+    const b = boundsOfNamed(dipoleModel(run, look()), ['arms']);
+    expect(b.max[1] - b.min[1]).toBeCloseTo(cutLength(0.5) * MM, 3);
     expect(cutLength(0.5) / (2 * HALF_LEN)).toBeCloseTo(0.95, 9);
     expect(DEFICIT).toBeCloseTo(0.05 * 2 * HALF_LEN, 9);
     expect(cutLength(0.5)).toBeGreaterThan(5.8);
@@ -61,18 +64,15 @@ describe('pattern', () => {
     expect(patternAt(Math.PI)).toBe(0);
     expect(patternAt(Math.PI / 2)).toBeCloseTo(1, 12);
   });
-  it('the drawn rings lie at radius R f(theta) from the origin, polar angle from the y axis', () => {
-    for (const az of [CUT, 2, 3.5]) {
-      const pts = patternRing(az, PATTERN_R, 36);
-      pts.forEach((p, i) => {
-        const th = (Math.PI * i) / 36;
-        expect(Math.hypot(...p)).toBeCloseTo(PATTERN_R * patternAt(th), 9);
-        if (i === 0 || i === 36) expect(Math.hypot(...p)).toBeLessThan(1e-9);
-      });
-      const eq = pts[18];
-      expect(Math.abs(eq[1])).toBeLessThan(1e-9);
-      expect(Math.hypot(eq[0], eq[2])).toBeCloseTo(PATTERN_R, 9);
-    }
+  it('the drawn surface lies at radius R f(theta) from the origin, polar angle from the y axis', () => {
+    const pts = patternProfile(0.5, 'field', 36);
+    pts.forEach(([r, y], i) => {
+      const th = Math.PI * (1 - i / 36);
+      expect(Math.hypot(r, y)).toBeCloseTo(PATTERN_R * MM * patternAt(th), 4);
+      if (i === 0 || i === 36) expect(Math.hypot(r, y)).toBeLessThan(1e-9);
+    });
+    expect(Math.abs(pts[18][1])).toBeLessThan(1e-9);
+    expect(pts[18][0]).toBeCloseTo(PATTERN_R * MM, 9);
   });
 });
 
@@ -98,13 +98,17 @@ describe('near field', () => {
 });
 
 describe('the drawing', () => {
-  it('draws something in every phase, with and without the pattern, and labels stay few', () => {
+  it('draws something in every phase, with and without the pattern, and its labels keep their names (the gutters key on them)', () => {
     const run = new DipoleRun();
+    const names = (o: Partial<DipoleLook>) => (dipoleModel(run, look(o)).anchors ?? []).filter((a) => !a.minor).map((a) => a.text).join('|');
+    const first = names({});
     for (let k = 0; k < 8; k++) {
-      expect(dipoleParts(run, true, P).length).toBeGreaterThan(dipoleParts(run, false, P).length);
-      expect(dipoleAnchors(run, true).length).toBeGreaterThan(dipoleAnchors(run, false).length - 1);
+      expect(dipoleModel(run, look()).items.length).toBeGreaterThan(dipoleModel(run, look({ layers: new Set(['dim', 'curves'] as const) })).items.length);
+      for (const feed of ['balanced', 'coax', 'balun'] as const) expect(names({ feed })).toBe(first);
       run.step();
     }
+    run.lwl = 1.5;
+    expect(names({})).toBe(first);
   });
 });
 
@@ -121,9 +125,10 @@ describe('power against field', () => {
     expect(surfaceAt(hp.hi, 0.5, 'field')).toBeCloseTo(Math.SQRT1_2, 6);
   });
   it('the drawn power ring is thinner than the field ring 45 degrees off broadside', () => {
-    const pw = patternRing(2, PATTERN_R, 36, (t) => surfaceAt(t, 0.5, 'power')), fd = patternRing(2, PATTERN_R, 36, (t) => surfaceAt(t, 0.5, 'field'));
+    const pw = patternProfile(0.5, 'power', 36), fd = patternProfile(0.5, 'field', 36);
     expect(Math.hypot(...pw[9])).toBeLessThan(Math.hypot(...fd[9]));
-    expect(Math.hypot(...pw[18])).toBeCloseTo(PATTERN_R, 9);
+    expect(Math.hypot(...pw[18])).toBeCloseTo(PATTERN_R * MM, 9);
+    expect(surfaceAt(Math.PI / 4, 0.5, 'power')).toBeLessThan(surfaceAt(Math.PI / 4, 0.5, 'field'));
   });
 });
 
@@ -175,11 +180,12 @@ describe('the length slider (Balanis ch. 4, sinusoidal current)', () => {
       const r = new DipoleRun(); r.lwl = L; r.t = ph / (2 * Math.PI); expect(Math.abs(r.tip)).toBeLessThan(1e-9);
     }
     expect(Math.abs(voltageAt(cutHalf(0.5), Math.PI / 2))).toBeCloseTo(1, 9);
-    expect(hRing(1, 1.5)[0][1]).toBe(1);
     const base = new DipoleRun();
-    for (const feed of ['balanced', 'coax', 'balun'] as const) for (const mode of ['power', 'field'] as const) {
-      expect(dipoleParts(run, true, P, { feed, mode }).length).toBeLessThan(1100);
-      expect(dipoleParts(base, true, P, { feed, mode }).length).toBeLessThan(1100);
+    for (const feed of ['balanced', 'coax', 'balun'] as const) for (const mode of ['power', 'field'] as const) for (const r of [run, base]) {
+      const m = dipoleModel(r, look({ feed, mode }));
+      expect(m.items.length).toBeLessThan(60);
+      const b = boundsOfNamed(m, ['arms']);
+      expect(b.max[1]).toBeCloseTo(cutHalf(r.lwl) * MM, 3);
     }
   });
 });

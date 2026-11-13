@@ -184,7 +184,7 @@ export const chSilicon: Chapter = {
         Since holes are slower than electrons, series PMOS (the NOR) must be drawn wider to be as fast, which is one reason NAND is the preferred universal gate.</p>
         <p>The cell is a rectangle of fixed height so that cells abut in rows: the rails line up and the tools can place any cell next to any other. Width is what varies, set by
         how many polysilicon strips the cell needs. Area is therefore counted in tracks: a NAND2 is a few polysilicon pitches wide, a flip-flop a dozen or more. Widths come in whole placement sites, so a smaller cell can round up: the inverter drawn here is one pitch narrower than the NAND2, but in SkyWater's library the smallest inverter and NAND2 take the same 1.38 µm.</p>
-        <div class="try">Toggle A and B and watch which channels conduct. Press Section, drag the plane through a gate and read the stack off the cut face: n+, gate oxide, polysilicon, n+. Orbit the cell, hide layers, pull them apart; the Top view is the flat layout.</div>`,
+        <div class="try">Toggle A and B and watch which channels conduct, and the charge run through them as the output switches. Drag Cutaway through a gate and read the stack off the cut face: n+, gate oxide, polysilicon, n+. Orbit the cell, take metal 1 off, pull the layers apart with Explode; Top view is the flat layout.</div>`,
       widget: () => cell3d(),
       more: {
         derive: `<p>Why series transistors are drawn wider. A transistor's drive current is proportional to W / L; two in series have twice the resistance, so to match an inverter's pull-down a NAND2 draws
