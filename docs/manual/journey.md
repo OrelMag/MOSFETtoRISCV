@@ -26,9 +26,9 @@ Five minutes, from the home page to having taken a gate apart and answered its q
 
    ![The section Transistors to gates with its five chapters, 04 Gates from NAND among them](img/journey/02-home-chapter-list.png)
 
-3. Click the third dot under the chapter's title (its tooltip reads **Step 3: OR: De Morgan's trick (has a check)**). You can also
-   click **Next** at the bottom of the text twice. Read the text on the left: it says how an OR gate is made from three NAND
-   gates.
+3. Click the third dot under the chapter's title (its tooltip reads **Step 3: OR: De Morgan's trick (has a
+   check)**). You can also click **Next** at the bottom of the text twice. Read the text on the left: it says how an
+   OR gate is made from three NAND gates.
 
    ![Chapter 4, step 3: the text on the left, the OR circuit of three NAND gates in the middle, the inspector on the right](img/journey/04-step3.png)
 
@@ -92,16 +92,16 @@ That is the whole pattern of every chapter: read, try the circuit, open what you
 1. Click a step's dot under the chapter title, or **Back** / **Next** at the bottom of the text. At the last step,
    **Next** goes on to the next chapter.
 2. Keys: **]** next step, **[** previous step, **}** next chapter, **{** previous chapter.
-3. A step that opens with *Optional: a deep dive. Nothing later relies on it.* can be skipped: no later step,
-   question or level needs it.
+3. A step that opens with *Optional: a deep dive. Nothing later relies on it.* can be skipped.
 4. To jump anywhere, click the chapter title (or **Chapters** in the top bar): the menu lists every chapter with its
    number of steps and how far you got, and has a search box at its top.
+
+   ![The chapter menu: a search box, Print this chapter, then the chapters by section](img/journey/14-chapter-menu.png)
+
 5. A long chapter is cut into parts. Its bar of dots is grouped into segments, one per part, with a line such as
    *Part 1 of 6 · 0 / 23 checks · core path 24 steps* under it ("core path": the steps that are not deep dives). Click
    **⌄** at the line's end to list the parts (for example **Shift and add**, **Dividing**, **In the CPU**) with their
    steps; click a step to go there.
-
-![The chapter menu: a search box, Print this chapter, then the chapters by section](img/journey/14-chapter-menu.png)
 
 ### Set inputs and watch the signals
 
@@ -228,14 +228,15 @@ Some steps have a model in 3D (a transistor, a relay, a valve, a chip, a picture
 
 ![The MOSFET in 3D: labelled parts, sliders for gate and drain, Cutaway and Explode, Tour and Reset view, and four buttons at the corner](img/journey/16-3d-model.png)
 
-1. Drag to turn it, right-drag to move it. Click the model once, then scroll to zoom (Ctrl + scroll and pinch work too).
+1. Drag to turn it, right-drag to move it. Click the model once, then scroll to zoom (**Ctrl** + scroll and pinch
+   work too).
 2. Point at a part for its name, size and source; click to keep that card open.
 3. **Cutaway** cuts the model open; **Explode** pulls its parts apart. **Tour ›** goes through the model view by view;
    **Reset view** goes back to the start.
 4. The four buttons at the model's corner: **Hide names** (key **N**), **Turn by itself**, **Save image** (a PNG with
    its labels) and **Full screen**.
-5. Under the model, its sliders and buttons drive it from the same model the chapter computes (here the gate and drain
-   voltages). The note under it says what is drawn to scale and what is exaggerated.
+5. Under the model, its own sliders and buttons change what it shows (here the gate and drain voltages). The note
+   under it says what is drawn to scale and what is exaggerated.
 
 ### Change, reuse or share the circuit
 
