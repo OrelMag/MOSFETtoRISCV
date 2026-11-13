@@ -30,7 +30,7 @@ export const MATS: Record<Role, Material> = {
   iron: mk({ base: '--lm-iron', metal: 0.7, rough: 0.5, label: 'iron: hooks and the griffe' }),
   steel: mk({ ...M.steel, label: 'steel: the needles' }),
   spring: mk({ base: '--lm-spring', metal: 0.85, rough: 0.3, label: 'spring wire: holds each needle forward' }),
-  card: mk({ ...M.card, base: '--lm-card', label: 'pasteboard cards (drawn ten times too thick, square holes for round)' }),
+  card: mk({ ...M.card, base: '--lm-card', label: 'pasteboard cards (drawn ten times too thick)' }),
   hole: mk({ base: '--lm-hole', metal: 0, rough: 0.9, label: 'a hole’s pit in the prism' }),
   warp: mk({ base: '--lm-warp', metal: 0, rough: 0.8, label: 'warp threads' }),
   weft: mk({ base: '--lm-weft', metal: 0, rough: 0.8, label: 'weft thread' }),
@@ -121,7 +121,7 @@ export function redrawn(p: Part): boolean {
   if (r === 'iron' && p.kind === 'box' && Math.abs(s[0] - 1.2) < 1e-6) return true; // hook bars and crooks
   if (r === 'steel' && p.kind === 'box' && Math.abs(s[1] - 1) < 1e-6 && Math.abs(s[2] - 1.2) < 1e-6) return true; // eye links
   if ((r === 'card' || r === 'hole' || r === 'wood') && p.rot) return true; // on the cylinder
-  if (r === 'hole') return true; // the chain's square holes
+  if (r === 'hole') return true; // the chain's holes (loomParts draws them square)
   return false;
 }
 
