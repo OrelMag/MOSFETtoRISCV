@@ -237,7 +237,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
       const p3 = anchorAt(model, r.a, k, curMoves), p = st.project(p3);
       const ok = !quiet && !hiddenPart && !isCut(cutNow, p3) && (r.a.whenCut === undefined || r.a.whenCut === isOpen) && !!p && !!r.a.under === under && p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H;
       r.el.style.display = 'none'; r.badge.style.display = 'none';
-      r.li.hidden = !!r.a.under !== under || (r.a.whenCut !== undefined && r.a.whenCut !== isOpen); r.li.classList.toggle('off', !ok);
+      r.li.hidden = !!r.a.under !== under || (r.a.whenCut !== undefined && r.a.whenCut !== isOpen) || hiddenPart; r.li.classList.toggle('off', !ok);
       if (!ok) continue;
       seen.push({ r, x: p![0], y: p![1], away: dot3(r.a.n, sub3(eye, p3)) < 0 });
     }
