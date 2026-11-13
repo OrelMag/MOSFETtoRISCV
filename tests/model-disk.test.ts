@@ -4,16 +4,16 @@ import { describe, expect, it } from 'vitest';
 import { groupNum } from '../src/sim/numfmt';
 import { FLASH_REAL_US, FLASH_TIMES } from '../src/flash/model';
 import { CLOCK_NS } from '../src/dram/timing';
-import type { RGB, RGBA } from '../src/gl/instances';
+import type { Geo } from '../src/gl/kit/geo';
+import type { Mat4, Vec3 } from '../src/gl/math';
+import { BOTTOM_Y, COVER_T, DRIVE_H, DRIVE_L, DRIVE_W, WALL_TOP, diskModel, diskMoves, flexPath, sliderAt } from '../src/widgets/disk3dkit';
 import {
   AVG_LATENCY_MS, BAND_IN, BAND_OUT, CYLINDERS, FULL_STROKE_MS, PITCH_NM, PIVOT_D, ARM_L, PLATTER_R, RPM, SCALE_VS_CPU, SECTORS, SEEK_AVG_MS, SEEK_FULL_DATASHEET_MS,
-  SEEK_T2T_MS, TRACKS, TURN_MS, ZERO_SKEW_R, trackBytes, cpuCycles, cylinderOf, fmtMs, diskAnchors, diskParts, distance, driveRows, headAt, mediaRate, modelCycles,
-  phaseAt, planRead, radiusAt, readoutRows, sectorUnder, seekMs, trackRadius, type DiskPalette,
-  blockMs, CAPACITY_BYTES, CAPACITY_NAMED_BYTES, DATASHEET_MEDIA_MBIT, OUTER_SECTORS, PICO_MM, QUEUE, RAMP_R, RAMP_C, SLIDER_DRAWN, guessLine, queueLine, queueRun, queueSorted, rewriteLine, PLATTER_Y,
+  SEEK_T2T_MS, TRACKS, TURN_MS, ZERO_SKEW_R, trackBytes, cpuCycles, cylinderOf, fmtMs, distance, driveRows, headAt, mediaRate, modelCycles,
+  phaseAt, planRead, radiusAt, readoutRows, sectorUnder, seekMs, trackRadius,
+  blockMs, CAPACITY_BYTES, CAPACITY_NAMED_BYTES, DATASHEET_MEDIA_MBIT, OUTER_SECTORS, PICO_MM, QUEUE, RAMP_R, SLIDER_DRAWN, guessLine, queueLine, queueRun, queueSorted, rewriteLine, PLATTER_Y, PLATTER_T,
 } from '../src/widgets/disk3dparts';
 
-const col = (i: number): RGB => [i / 20, 0.5, 0.5], al = (i: number): RGBA => [i / 20, 0.5, 0.5, 0.4];
-const P: DiskPalette = { base: col(1), platter: col(2), ring: col(3), mark: col(4), hub: col(5), steel: col(6), slider: col(7), copper: col(8), magnet: col(9), yoke: al(10), magnetTop: al(11), target: col(12), live: col(13) };
 const thin = (n: number) => groupNum(n);
 
 describe('the fitted seek curve', () => {
@@ -161,31 +161,79 @@ describe('what is printed', () => {
   });
 });
 
-describe('the drawing follows the model', () => {
-  const lit = (t: number, track: number, sector: number) =>
-    diskParts({ phi: t / TURN_MS, r: trackRadius(track), sel: { track, sector }, phase: 'transfer' }, P).filter((q) => q.color === P.live && q.kind === 'box' && q.scale![1] < 0.2);
-  it('the highlighted wedge is under the head while the sector transfers, and away from it just before', () => {
-    for (const [track, sector] of [[0, 3], [5, 11], [TRACKS - 1, 0]]) {
-      const p = planRead(0, 3, track, sector), h = headAt(trackRadius(track));
-      const dist = (t: number) => Math.min(...lit(t, track, sector).map((q) => Math.hypot(q.pos[0] - h.x, q.pos[2] - h.z)));
-      // the block is at the wedge's leading edge, so the head is over the first of its three chords
-      const r = trackRadius(track), half = r * Math.sin(Math.PI / SECTORS / 3);
-      expect(dist((p.t2 + p.t3) / 2)).toBeLessThan(half + 0.2);
-      if (p.wait > 1) expect(dist(p.t2 - 0.5)).toBeGreaterThan(1.5);
+describe('the 3D drawing follows the model', () => {
+  const apply = (m: Mat4, p: Vec3): Vec3 => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
+  const at = (g: Geo): Vec3 => [(g.min[0] + g.max[0]) / 2, (g.min[1] + g.max[1]) / 2, (g.min[2] + g.max[2]) / 2];
+  it('the head stack puts the active slider on every drawn track, and on the ramp when parked', () => {
+    for (let k = 0; k < TRACKS; k++) {
+      const r = trackRadius(k), s = sliderAt(r), h = headAt(r);
+      // to 0.1 µm: the moves are float32 matrices
+      expect(Math.hypot(s[0], s[2])).toBeCloseTo(r, 4);
+      expect(s[0]).toBeCloseTo(h.x, 4);
+      expect(s[2]).toBeCloseTo(h.z, 4);
+    }
+    expect(Math.hypot(sliderAt(RAMP_R)[0], sliderAt(RAMP_R)[2])).toBeCloseTo(RAMP_R, 4);
+    // the moves turn the drawn slider (the active head's geometry) to the same place
+    const m = diskModel({ sel: null, phase: 'seek' }), slider = m.items.find((i) => i.name === 'head (slider)')!;
+    for (const r of [BAND_IN, 33, BAND_OUT, RAMP_R]) {
+      const p = apply(diskMoves({ phi: 0, r }).get('hsa')!, at(slider.geo));
+      expect(Math.hypot(p[0], p[2])).toBeCloseTo(r, 4);
+      expect(p[1]).toBeCloseTo(PLATTER_Y[1] + PLATTER_T / 2 + 0.25 + SLIDER_DRAWN[1] / 2, 6);
     }
   });
-  it('sector boundaries are radial lines that turn with the platter, a sixteenth apart', () => {
-    const rods = (phi: number) => diskParts({ phi, r: 30, sel: null, phase: 'idle' }, P).filter((q) => q.color === P.mark && q.kind === 'cyl' && q.scale![1] > 20);
-    expect(rods(0.1)).toHaveLength(SECTORS);
-    const a = rods(0).map((q) => Math.atan2(q.pos[2], q.pos[0])), b = rods(1 / SECTORS).map((q) => Math.atan2(q.pos[2], q.pos[0]));
-    const norm = (x: number) => Math.atan2(Math.sin(x), Math.cos(x));
-    for (const k of a.keys()) expect(Math.abs(norm(b[k] - a[k] - (2 * Math.PI) / SECTORS))).toBeLessThan(1e-6);
+  it('the platters turn by the drive clock: t / TURN_MS turns, and the requested wedge is under the head while it transfers', () => {
+    const turn = (phi: number) => diskMoves({ phi, r: 30 }).get('platters')!;
+    const one = apply(turn(0.25), [10, 5, 0]);
+    expect(one[0]).toBeCloseTo(0, 6); expect(one[2]).toBeCloseTo(10, 6); // a quarter turn: +x to +z, the parts' sense of angle
+    for (const [track, sector] of [[0, 3], [5, 11], [TRACKS - 1, 0]]) {
+      const p = planRead(0, 3, track, sector), r = trackRadius(track), h = headAt(r);
+      const wedge = diskModel({ sel: { track, sector }, phase: 'transfer' }).items.find((i) => i.name === 'requested wedge')!;
+      // the wedge's leading edge, at the platter's angle when the transfer starts
+      const lead = (-2 * Math.PI * sector) / SECTORS, edge = apply(turn(p.t2 / TURN_MS), [r * Math.cos(lead), 0, r * Math.sin(lead)]);
+      expect(Math.hypot(edge[0] - h.x, edge[2] - h.z)).toBeLessThan(1e-4);
+      expect(wedge.mat.emit).toBe('--m3-charge');
+      expect(wedge.group).toBe('platters');
+    }
   });
-  it('the head slider is where the arm puts it, and labels name the main parts', () => {
-    const parts = diskParts({ phi: 0, r: 40, sel: null, phase: 'seek' }, P), h = headAt(40);
-    expect(parts.some((q) => q.color === P.target && Math.hypot(q.pos[0] - h.x, q.pos[2] - h.z) < 0.01)).toBe(true);
-    const names = diskAnchors({ phi: 0, r: 40, sel: null, phase: 'seek' }).map((a) => a.text).join('|');
-    for (const w of ['spindle hub', 'platters', 'head', 'actuator arm', 'pivot', 'voice coil', 'magnet']) expect(names).toContain(w);
+  it('the flex cable bends with the arm without changing its vertex count, and leaves the E-block at its side', () => {
+    const m = diskModel({ sel: null, phase: 'idle' }), flex = m.items.find((i) => i.name === 'flex cable')!.geo, n = flex.positions.length;
+    for (const r of [BAND_IN, BAND_OUT, RAMP_R]) {
+      diskMoves({ phi: 0, r });
+      expect(flex.positions.length).toBe(n);
+      const p = flexPath(r);
+      expect(Math.hypot(p[0][0] - PIVOT_D, p[0][2])).toBeLessThan(10);
+    }
+  });
+  it('the case is the data sheet’s: 147 × 101.6 mm and 26.1 mm high with its cover', () => {
+    expect([DRIVE_L, DRIVE_W, DRIVE_H]).toEqual([147, 101.6, 26.1]);
+    expect(WALL_TOP + COVER_T - BOTTOM_Y).toBeCloseTo(DRIVE_H, 9);
+    const m = diskModel({ sel: null, phase: 'idle' });
+    for (const it of m.items) {
+      expect(it.geo.min[1]).toBeGreaterThanOrEqual(BOTTOM_Y - 1e-6);
+      expect(it.geo.max[1]).toBeLessThanOrEqual(WALL_TOP + 1e-6);
+    }
+    const base = m.items.find((i) => i.name === 'base casting')!.geo;
+    expect(base.max[0] - base.min[0]).toBeCloseTo(DRIVE_L, 4);
+    expect(base.max[2] - base.min[2]).toBeCloseTo(DRIVE_W, 4);
+  });
+  it('the slider is drawn at twice a pico slider, the ramp past the platters’ edge, and the parts are named', () => {
+    expect(PICO_MM).toEqual([1.25, 1.0, 0.3]);
+    expect(SLIDER_DRAWN[0]).toBe(2.5);
+    expect(SLIDER_DRAWN[2]).toBe(2.0);
+    const m = diskModel({ sel: null, phase: 'idle' }), ramp = m.items.find((i) => i.name === 'ramp')!.geo;
+    // its tongues reach just over the platters' edge, the body stands clear of it
+    let rMin = Infinity;
+    for (let k = 0; k < ramp.positions.length; k += 3) rMin = Math.min(rMin, Math.hypot(ramp.positions[k], ramp.positions[k + 2]));
+    expect(rMin).toBeGreaterThan(PLATTER_R - 2);
+    expect(rMin).toBeLessThan(PLATTER_R);
+    const names = new Set(m.items.map((i) => i.name));
+    for (const w of ['platter', 'clamp', 'spindle hub', 'E-block', 'arm', 'suspension', 'head (slider)', 'voice coil', 'magnet', 'yoke', 'ramp', 'flex cable', 'circuit board', 'controller', 'DRAM cache']) expect(names.has(w), w).toBe(true);
+    const major = (m.anchors ?? []).filter((a) => !a.minor).map((a) => a.text);
+    expect(major).toContain('head');
+    expect(major).toContain('platters, 95 mm');
+    // every beat frames something that exists
+    const groups = new Set(m.items.flatMap((i) => [i.name, i.group]));
+    for (const b of m.beats ?? []) for (const f of b.frame ?? []) expect(groups.has(f), `${b.title}: ${f}`).toBe(true);
   });
 });
 
@@ -244,20 +292,6 @@ describe('the ramp and the added parts', () => {
     expect(radiusAt(p, null, p.t1)).toBe(trackRadius(7));
     expect(Math.hypot(headAt(RAMP_R).x, headAt(RAMP_R).z)).toBeCloseTo(RAMP_R, 6);
     expect(Object.fromEntries(readoutRows(null, null, { track: 2, sector: 0 }))['Head']).toContain('ramp');
-  });
-  it('the slider is drawn at twice the pico slider, the ramp stands beyond the platter edge, and the new parts are labelled', () => {
-    expect(PICO_MM).toEqual([1.25, 1.0, 0.3]);
-    expect(SLIDER_DRAWN[0]).toBe(2.5);
-    expect(SLIDER_DRAWN[2]).toBe(2.0);
-    const parts = diskParts({ phi: 0, r: RAMP_R, sel: null, phase: 'idle' }, P), rp = headAt(RAMP_C);
-    expect(RAMP_C - 1.5).toBeGreaterThan(PLATTER_R);
-    expect(parts.some((q) => q.color === P.hub && q.kind === 'box' && Math.hypot(q.pos[0] - rp.x, q.pos[2] - rp.z) < 0.01 && q.scale![1] > PLATTER_Y[1] - PLATTER_Y[0])).toBe(true);
-    const names = diskAnchors({ phi: 0, r: RAMP_R, sel: null, phase: 'idle' }).map((a) => a.text).join('|');
-    for (const w of ['ramp', 'preamp', 'flex cable', 'spindle motor']) expect(names).toContain(w);
-  });
-  it('only the head and the platters stay named when the stage is narrow', () => {
-    const major = diskAnchors({ phi: 0, r: 30, sel: null, phase: 'idle' }).filter((a) => !a.minor).map((a) => a.text);
-    expect(major).toEqual(['platters, 95 mm', 'head']);
   });
 });
 

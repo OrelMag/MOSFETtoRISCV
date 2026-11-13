@@ -13,9 +13,6 @@
 //   so the rotational latency is wherever the sector happens to be when the arm arrives; transfer is the sector's arc.
 // What is drawn bigger than it is: the tracks (12 rings stand for 260 000), the flying height, the platter spacing.
 
-import type { RGB, RGBA } from '../gl/instances';
-import { quatAxisAngle, type Vec3 } from '../gl/math';
-import { box, cyl, rod, type Anchor, type Part } from '../gl/parts';
 import { FLASH_REAL_US, FLASH_TIMES } from '../flash/model';
 import { CLOCK_NS } from '../dram/timing';
 import { groupNum } from '../sim/numfmt';
@@ -218,134 +215,12 @@ export function driveRows(): [string, string][] {
   ];
 }
 
-// ---------------------------------------------------------------- the drawing
+// ---------------------------------------------------------------- the drawing's dimensions (disk3dkit.ts draws it)
 
-export interface DiskPose {
-  /** Platter angle, turns. */
-  phi: number;
-  /** The head's distance from the spindle, mm. */
-  r: number;
-  /** The requested wedge, or none. */
-  sel: { track: number; sector: number } | null;
-  phase: Phase;
-}
-
-export interface DiskPalette {
-  base: RGB; platter: RGB; ring: RGB; mark: RGB; hub: RGB; steel: RGB; slider: RGB; copper: RGB; magnet: RGB; yoke: RGBA; magnetTop: RGBA; target: RGB; live: RGB;
-}
-
-const glow = (c: RGB, k = 0.6): RGB => [c[0] * k, c[1] * k, c[2] * k];
+/** The two platters' mid-planes, mm above the casting's floor. */
 export const PLATTER_Y = [8, 13] as const;
-const BLADE_Y = [PLATTER_Y[0] - PLATTER_T / 2 - 1.6, (PLATTER_Y[0] + PLATTER_Y[1]) / 2, PLATTER_Y[1] + PLATTER_T / 2 + 1.6] as const;
 export const SURFACE_TOP = PLATTER_Y[1] + PLATTER_T / 2;
-const GAP = 0.25, SLIDER_T = 0.35;
+const SLIDER_T = 0.35;
 /** A pico slider is 1.25 × 1.0 × 0.3 mm (the 30 % size class; Berkeley CML head-disk-interface reports, US 2005/0275971). Drawn at twice that length and width so the head can be seen. */
 export const PICO_MM = [1.25, 1.0, 0.3] as const;
 export const SLIDER_DRAWN = [PICO_MM[0] * 2, SLIDER_T, PICO_MM[1] * 2] as const;
-/** The load / unload ramp's centre radius and the spindle motor's stator radius (drawn approximately). */
-export const RAMP_C = 52.5, MOTOR_R = 19;
-
-/** A box of size (len along the direction, t, w across) centred at c, turned to point at world angle θ about y. */
-function slab(c: RGB | RGBA, cx: number, cy: number, cz: number, len: number, t: number, w: number, yaw: number, spec = 0): Part {
-  const p = box(c, -len / 2, len / 2, -t / 2, t / 2, -w / 2, w / 2, spec);
-  return { ...p, pos: [cx, cy, cz], rot: quatAxisAngle([0, 1, 0], yaw) };
-}
-/** The yaw that points a slab's x axis along the xz direction (dx, dz). */
-const yawOf = (dx: number, dz: number): number => -Math.atan2(dz, dx);
-
-export function diskParts(p: DiskPose, P: DiskPalette): Part[] {
-  const out: Part[] = [];
-  const top = SURFACE_TOP, h = headAt(p.r);
-  const lit = p.phase === 'transfer';
-  // Base casting, and the platter stack: hub, platters, spacers, clamp.
-  out.push(box(P.base, -52, 95, -4, 0, -51, 51, 0.2));
-  out.push(cyl(P.hub, 0, 0, 0, PLATTER_Y[0] - PLATTER_T / 2, 16, 0.5));
-  out.push(cyl(P.hub, 0, 0, PLATTER_Y[0] + PLATTER_T / 2, PLATTER_Y[1] - PLATTER_T / 2, 15, 0.5));
-  for (const y of PLATTER_Y) out.push(cyl(P.platter, 0, 0, y - PLATTER_T / 2, y + PLATTER_T / 2, PLATTER_R, 0.9));
-  out.push(cyl(P.hub, 0, 0, top, top + 2.4, 13.5, 0.6), cyl(P.steel, 0, 0, top + 2.4, top + 3.1, 5, 0.8));
-  // The lower platter's top and the recording band on the top platter: concentric track rings, alternating tint.
-  const ringY = top + 0.02;
-  for (let k = 0; k < TRACKS; k++) {
-    const r = trackRadius(k) + TRACK_PITCH_MM / 2;
-    out.push(cyl(k % 2 ? P.ring : P.platter, 0, 0, top, ringY + 0.012 * k, r, 0.9));
-  }
-  // Sector boundaries: 16 radial lines turning with the platter; boundary s is the leading edge of wedge s.
-  for (let s = 0; s < SECTORS; s++) {
-    const w = 2 * Math.PI * (p.phi - s / SECTORS), y = ringY + 0.012 * TRACKS + 0.03;
-    const a: Vec3 = [(BAND_IN - 1.5) * Math.cos(w), y, (BAND_IN - 1.5) * Math.sin(w)], b: Vec3 = [(BAND_OUT + 1.5) * Math.cos(w), y, (BAND_OUT + 1.5) * Math.sin(w)];
-    out.push(rod(P.mark, a, b, s === 0 ? 0.22 : 0.1));
-  }
-  // The requested wedge on its track, in three chords of the arc.
-  if (p.sel) {
-    const r = trackRadius(p.sel.track), lead = 2 * Math.PI * (p.phi - p.sel.sector / SECTORS), y = ringY + 0.012 * TRACKS + 0.06;
-    const n = 3, step = (2 * Math.PI) / SECTORS / n;
-    for (let i = 0; i < n; i++) {
-      const w = lead - step * (i + 0.5);
-      const c = slab(lit ? P.live : P.target, r * Math.cos(w), y, r * Math.sin(w), 2 * r * Math.sin(step / 2) + 0.05, 0.1, TRACK_PITCH_MM * 0.8, -(w + Math.PI / 2), 0.3);
-      if (lit) c.emissive = glow(P.live);
-      out.push(c);
-    }
-  }
-  // The actuator: pivot body, the comb of three blades, the tail with its coil.
-  const px = PIVOT_D, dirX = -Math.cos(h.alpha), dirZ = Math.sin(h.alpha); // pivot → head
-  const yaw = yawOf(dirX, dirZ), tailYaw = yawOf(-dirX, -dirZ);
-  out.push(cyl(P.steel, px, 0, 3, BLADE_Y[2] + 1.2, 6, 0.8), cyl(P.hub, px, 0, BLADE_Y[2] + 1.2, BLADE_Y[2] + 2, 3.4, 0.6));
-  const bladeLen = ARM_L - 16;
-  BLADE_Y.forEach((by) => {
-    for (const [from, to, w] of [[0, 0.5, 10], [0.5, 1, 5]] as const) {
-      const m = ((from + to) / 2) * bladeLen;
-      out.push(slab(P.steel, px + dirX * m, by, dirZ * m, (to - from) * bladeLen + 0.02, 0.6, w, yaw, 0.8));
-    }
-  });
-  // Four heads: slider on the surface side of each blade, a spring beam from the blade to it.
-  const heads: { by: number; ys: number; below: boolean; active: boolean }[] = [
-    { by: BLADE_Y[0], ys: PLATTER_Y[0] - PLATTER_T / 2, below: true, active: false },
-    { by: BLADE_Y[1], ys: PLATTER_Y[0] + PLATTER_T / 2, below: false, active: false },
-    { by: BLADE_Y[1], ys: PLATTER_Y[1] - PLATTER_T / 2, below: true, active: false },
-    { by: BLADE_Y[2], ys: top, below: false, active: true },
-  ];
-  for (const hd of heads) {
-    const sy = hd.below ? hd.ys - GAP - SLIDER_T / 2 : hd.ys + GAP + SLIDER_T / 2;
-    const s = slab(hd.active && p.phase !== 'idle' ? (lit ? P.live : P.target) : P.slider, h.x, sy, h.z, SLIDER_DRAWN[0], SLIDER_T, SLIDER_DRAWN[2], yaw, 0.6);
-    if (hd.active && lit) s.emissive = glow(P.live);
-    out.push(s);
-    const root: Vec3 = [px + dirX * bladeLen, hd.by, dirZ * bladeLen];
-    out.push(rod(P.steel, root, [h.x - dirX * SLIDER_DRAWN[0] / 2, sy + (hd.below ? -SLIDER_T / 2 : SLIDER_T / 2), h.z - dirZ * 1.2], 0.35, 0.7));
-  }
-  // The tail: a frame out to the coil, the coil itself (copper), swinging between the magnets.
-  const tx = -dirX, tz = -dirZ, coilAt = 27;
-  out.push(slab(P.steel, px + tx * 10, 10.5, tz * 10, 12, 0.7, 9, tailYaw, 0.8));
-  out.push(slab(P.copper, px + tx * coilAt, 10.5, tz * coilAt, 22, 2.4, 15, tailYaw, 0.5));
-  // The preamplifier on the top blade (a chip riding the arm), and the flex cable from the pivot to the connector on the base: a
-  // fixed strip here, where the real one loops round the pivot as the arm swings.
-  out.push(slab(P.slider, px + dirX * 9, BLADE_Y[2] + 0.6, dirZ * 9, 4, 0.6, 3, yaw, 0.4));
-  out.push(rod(P.copper, [px, BLADE_Y[2] + 0.2, 0], [px + 22, 2, 26], 0.7, 0.2), box(P.hub, px + 14, px + 30, -1, 2, 22, 30, 0.3));
-  // The load / unload ramp at the platters' edge, the arm's park position: a block at the head's radius when parked.
-  const rp = headAt(RAMP_C);
-  out.push(slab(P.hub, rp.x, (PLATTER_Y[0] + PLATTER_Y[1]) / 2, rp.z, 3, PLATTER_Y[1] - PLATTER_Y[0] + 6, 6, yaw, 0.4));
-  // The spindle motor: stator ring and windings below the lowest platter, round the hub.
-  out.push(cyl(P.copper, 0, 0, 0.3, 2.2, MOTOR_R, 0.4), cyl(P.steel, 0, 0, 2.2, PLATTER_Y[0] - PLATTER_T / 2, 14.5, 0.7));
-  // The voice-coil magnets (neodymium) and their steel return plates, fixed; the top ones see-through.
-  out.push(box(P.yoke, 62, 94, 4.2, 5.6, -36, 0, 0.7), box(P.magnet, 63, 93, 5.6, 8.4, -35, -1, 0.3));
-  out.push(box(P.magnetTop, 63, 93, 12.6, 15.4, -35, -1, 0.3), box(P.yoke, 62, 94, 15.4, 16.8, -36, 0, 0.7));
-  return out;
-}
-
-export function diskAnchors(p: DiskPose): Anchor[] {
-  const front: Vec3 = [0, 0.5, 1], up: Vec3 = [0, 1, 0], h = headAt(p.r), top = SURFACE_TOP;
-  const dirX = -Math.cos(h.alpha), dirZ = Math.sin(h.alpha), tail = 27;
-  const out: Anchor[] = [
-    { text: 'spindle hub', p: [0, top + 3.1, 0], side: 'l', n: up, minor: true },
-    { text: 'platters, 95 mm', p: [-34, PLATTER_Y[1], 32], side: 'r', n: front },
-    { text: 'head', p: [h.x, top + 0.6, h.z], side: 'b', n: up },
-    { text: 'actuator arm', p: [PIVOT_D + dirX * 24, BLADE_Y[2] + 0.4, dirZ * 24], side: 't', n: up, minor: true },
-    { text: 'pivot', p: [PIVOT_D, BLADE_Y[2] + 2, 0], side: 't', n: up, minor: true },
-    { text: 'voice coil', p: [PIVOT_D - dirX * tail, 10.5, -dirZ * tail], side: 'b', n: up, minor: true },
-    { text: 'magnet', p: [78, 16.8, -34], side: 't', n: up, minor: true },
-    { text: 'ramp (park)', p: [headAt(RAMP_C).x, PLATTER_Y[1] + 3.5, headAt(RAMP_C).z], side: 'r', n: up, minor: true },
-    { text: 'preamp', p: [PIVOT_D + dirX * 9, BLADE_Y[2] + 1, dirZ * 9], side: 'r', n: up, minor: true },
-    { text: 'flex cable', p: [PIVOT_D + 18, 4, 20], side: 'b', n: up, minor: true },
-    { text: 'spindle motor', p: [-MOTOR_R, 1.2, 0], side: 'l', n: up, minor: true },
-  ];
-  return out;
-}

@@ -1,4 +1,4 @@
-// A 3.5" 7200 rpm hard disk in 3D (loaded on demand, modelhost.ts). The timing is disk3dparts.ts's model: the platter turns
+// A 3.5" 7200 rpm hard disk in 3D on the studio renderer, in true geometry (disk3dkit.ts; loaded on demand, modelhost.ts). The timing is disk3dparts.ts's model: the platter turns
 // exactly once in 8.33 ms of drive time, the seek follows the fitted a + b·√d curve, and the wait for the sector is wherever
 // the sector is when the arm arrives. The time is slowed by SLOW so the eye can follow; the rest is a drawing (see the note). The heads start parked on the ramp at the platters' edge.
 
@@ -8,16 +8,19 @@ import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
+import { studioStage } from './studiostage';
+import { DISK_HIDDEN, DISK_HOME, DISK_HOME_FRAME, diskModel, diskMoves } from './disk3dkit';
 import {
-  SECTORS, TRACKS, TURN_MS, diskAnchors, diskParts, driveRows, fmtMs, guessLine, phaseAt, planRead, queueLine, radiusAt, readoutRows, rewriteLine, trackRadius,
-  type DiskPalette, type Kind, type Plan,
+  SECTORS, TRACKS, TURN_MS, driveRows, fmtMs, guessLine, phaseAt, planRead, queueLine, radiusAt, readoutRows, rewriteLine, trackRadius,
+  type Kind, type Plan,
 } from './disk3dparts';
 
 /** Playback: one second of screen time is 1000 / SLOW ms of drive time, so a turn takes 8.33 ms × SLOW = 2.5 s. */
 export const SLOW = 300;
 const MS_PER_S = 1000 / SLOW;
+
+/** What the drawing exaggerates, simplifies and leaves out (the stage adds the controls' help). */
+const NOTE = 'Drawn to scale in millimetres for a 3.5″ 7200 rpm drive of the Hitachi Deskstar 7K1000.B 500 GB class: its data sheet gives the 101.6 × 147 × 26.1 mm case, 7200 rpm, ramp load / unload and a maximum media rate of 1406 Mbit/s; a retro-hardware listing gives 0.8 ms track-to-track and 8.5 ms average seek; the sectors per track and the 219 nm track pitch are fitted so that the outer track passes that rate and the capacity is 500 GB (the data sheet gives no tracks per inch). 95 mm platters on a 25 mm hole, two of them, four heads, the recording band from r = 20 to 46 mm, the arm pivoting 56 mm from the spindle with the head 46 mm from the pivot. Where the clamp, spacer, E-block, suspensions, voice coil, magnets, yokes, flex cable and board sit follows a teardown’s labelled photos; their sizes are this model’s own, as are the platters’ 1.27 mm thickness and the 1 mm cover the case’s height allows for. Exaggerated: the 12 track rings stand for 118 700 tracks 219 nm apart (drawn about 10 800 times too wide) and are drawn on the platter, where nothing is printed; the heads fly 0.25 mm up instead of a few nanometres; the slider is twice a pico slider’s 1.25 × 1.0 mm; the platters sit 5 mm apart (about 2 mm real) so the arms fit. Simplified: the 16 wedges are only places round the track (at r = 27 mm the arc of a wedge holds about 53 KiB of real 512-byte sectors), and a read transfers one 4 KiB block there, so the transfer is a few hundredths of a millisecond; no zones or servo wedges; the seek is the fitted curve eased out and in, not the actuator’s current profile; a load from the ramp is timed as a seek from the outer track. Left out: the cover, the spindle motor under the hub, the breather and recirculation filters, the actuator latch, the screws. Drive time is slowed 300× for the eye.';
 
 export function diskView(): Widget {
   // The drive's own clock (ms), the track the head is parked on, the request and its plan.
@@ -26,22 +29,27 @@ export function diskView(): Widget {
   // The learner's guess (ms) taken when the read starts, for the comparison afterwards.
   let guess: number | null = null;
 
-  const panel = h('div', { class: 'panel' });
-  const stage = modelStage(panel, {
-    look: LOOKS.machine,
-    aria: 'A 3.5 inch hard disk in 3D: two spinning platters on a spindle, an actuator arm with heads on a pivot, and the voice-coil motor between two magnets',
-    camera: { target: [24, 8, 2], yaw: 0.45, pitch: 1.0, dist: 190 },
-    limits: { minDist: 70, maxDist: 520 },
-    note: 'Drawn to scale, for a 3.5″ 7200 rpm drive of the Hitachi Deskstar 7K1000.B 500 GB class: its data sheet gives 7200 rpm and a maximum media rate of 1406 Mbit/s, a retro-hardware listing gives 0.8 ms track-to-track and 8.5 ms average seek; the sectors per track and the 219 nm track pitch are fitted here so that the outer track passes that rate and the capacity is 500 GB (the data sheet gives no tracks per inch). 95 mm platters (mirror-polished nickel-plated aluminium; some drives use glass) on a 25 mm hole, two of them, four heads, the recording band from r = 20 to 46 mm, the rotary voice-coil actuator pivoting 56 mm from the spindle with a 46 mm arm (stainless steel), neodymium magnets. Exaggerated: the 12 track rings stand for 118 700 tracks 219 nm apart (drawn about 10 800 times too wide), the heads fly 0.25 mm up instead of about 10 nm, the slider is drawn at twice a pico slider’s 1.25 × 1.0 mm, and the platters sit further apart (5 mm; about 2 mm real) so the arms fit. Simplified: the 16 wedges are only places round the track (at r = 27 mm the arc of a wedge holds about 53 KiB of real 512-byte sectors), and a read transfers one 4 KiB block there, so the transfer is a few hundredths of a millisecond and its arc is a sliver of the wedge; no zone boundaries or servo wedges; the ramp, spindle motor and preamplifier are blocks, and the flex cable is a fixed strip where the real one loops round the pivot; the cover, breather and recirculation filter, the latch and the circuit board are left out, and the top magnet plate is see-through; a load from the ramp is timed as a seek from the outer track; the seek is the fitted curve eased out and in, not the actuator’s real current profile; and drive time is slowed 300× for the eye.',
-    draw: () => paint(),
+  const panel = h('div', { class: 'panel dk3' });
+  let shownKey = '';
+  const look = () => ({ sel, phase: phaseAt(plan, t), r: radiusAt(plan, parked, t) });
+  const pose = () => ({ phi: t / TURN_MS, r: radiusAt(plan, parked, t) });
+  const stage = studioStage({
+    aria: 'A 3.5 inch hard disk in 3D: two mirror platters on a spindle, a stack of arms with four heads turning on a pivot, the voice coil between two magnets, the parking ramp and the flex cable; a board underneath',
+    home: DISK_HOME, homeFrame: DISK_HOME_FRAME, hidden: DISK_HIDDEN,
+    scaleBar: (len) => `${len} mm`,
+    // a beat about the head stack looks where the arm is now: rebuild before it frames
+    onBeat: () => { shownKey = ''; paint(); },
+    limits: { minDist: 6, maxDist: 600 },
+    note: NOTE,
+    build: (detail) => diskModel(look(), detail),
   });
-  const palette = (): DiskPalette => ({
-    base: stage.rgb('--dk-base'), platter: stage.rgb('--dk-platter'), ring: stage.rgb('--dk-ring'), mark: stage.rgb('--dk-mark'), hub: stage.rgb('--dk-hub'),
-    steel: stage.rgb('--dk-steel'), slider: stage.rgb('--dk-slider'), copper: stage.rgb('--dk-copper'), magnet: stage.rgb('--dk-magnet'),
-    yoke: stage.rgba('--dk-yoke', 0.35), magnetTop: stage.rgba('--dk-magnet', 0.4), target: stage.rgb('--dk-target'), live: stage.rgb('--m3-charge'),
-  });
-  const pose = () => ({ phi: t / TURN_MS, r: radiusAt(plan, parked, t), sel, phase: phaseAt(plan, t) });
-  function paint(): void { const p = pose(); stage.paint(diskParts(p, palette()), diskAnchors(p)); }
+  /** Rebuild only when what the model shows changed (the wedge, the head lit); the platters and the arm move every frame. */
+  function paint(): void {
+    const l = look(), key = JSON.stringify([l.sel, l.phase === 'transfer', l.phase !== 'idle' && l.phase !== 'done']), p = pose();
+    if (stage.isFlat()) diskMoves(p, 'flat');
+    stage.move(diskMoves(p));
+    if (key !== shownKey) { shownKey = key; stage.refresh(); }
+  }
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), drive = h('div', { class: 'r3-kv' });
   const live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
@@ -155,12 +163,11 @@ export function diskView(): Widget {
     h('h3', { class: 'm3-title' }, 'The disk itself'),
     h('p', { class: 'm3-sub' }, `A 3.5″ 7200 rpm drive: two platters, four heads on one comb that swings on a pivot, driven by a coil between two magnets. Pick a track and a sector: the requested wedge is orange, and turns green while the head reads it. A read is three waits in a row. The arm seeks to the track, a time that grows with the square root of the distance. The platter keeps turning the whole while, so when the arm arrives the sector is wherever it happens to be, and the head waits for it to come round: rotational latency, 0 to 8.33 ms, 4.17 ms on average. Then the sector passes under the head and its bits are read. Drive time runs ${SLOW}× slower than real here, so a turn takes ${(TURN_MS * SLOW / 1000).toFixed(1)} s. Guess the time before you press Read sector, then see what it was made of. Rewrite this sector puts the data back where it was: no table, no fresh page, which flash cannot do. A flash page read, in the NOR and NAND steps earlier in this chapter, is ${FLASH_REAL_US.read} µs.`),
     h('div', { class: 'r3' },
-      h('div', { class: 'r3-main' },
-        h('div', { class: 'r3-ctl' },
-          h('div', { class: 'dk-sel' }, h('label', null, 'Track', trackSel), h('label', null, 'Sector', sectorSel), h('label', null, 'Guess (ms)', guessIn)),
-          h('div', { class: 'r3-btns' }, readBtn, rewriteBtn, stepBtn, spinBtn, restart, stage.resetBtn)),
-        stage.el, stage.hint, line, key, verdict, live, h('div', { class: 'r3-btns' }, queueBtn), queue),
-      h('div', { class: 'r3-side' }, h('h4', null, 'This read ', h('span', { class: 'r3-badge' }, 'model')), kv, h('h4', null, 'This drive'), drive)));
+      h('div', { class: 'r3-main' }, stage.el, line, key, verdict, live, h('div', { class: 'r3-btns' }, queueBtn), queue),
+      h('div', { class: 'r3-side' }, h('div', null, h('h4', null, 'This read ', h('span', { class: 'r3-badge' }, 'model')), kv), h('div', null, h('h4', null, 'This drive'), drive))));
+  stage.slot.append(h('div', { class: 'r3-ctl' },
+    h('div', { class: 'dk-sel' }, h('label', null, 'Track', trackSel), h('label', null, 'Sector', sectorSel), h('label', null, 'Guess (ms)', guessIn)),
+    h('div', { class: 'r3-btns' }, readBtn, rewriteBtn, stepBtn, spinBtn, restart)));
   readout(true);
   paint();
   loop.kick();

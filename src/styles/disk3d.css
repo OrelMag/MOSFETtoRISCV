@@ -1,15 +1,5 @@
 /* ---------- The hard disk (widgets/disk3dview.ts): materials and the timeline ---------- */
-.m3d {
-  --dk-base: light-dark(#b4bac8, #58607a);
-  --dk-platter: light-dark(#d9dde6, #aeb4c4);
-  --dk-ring: light-dark(#c3c8d4, #9aa1b3);
-  --dk-mark: light-dark(#3b4254, #2a2f3d);
-  --dk-hub: light-dark(#8e96a8, #7d869a);
-  --dk-steel: light-dark(#b9bfca, #c6ccd8);
-  --dk-slider: light-dark(#4a4f5c, #20232b);
-  --dk-copper: light-dark(#c2703a, #d98547);
-  --dk-magnet: light-dark(#4b4f66, #343850);
-  --dk-yoke: light-dark(#9aa1b2, #8a93a8);
+.m3d, .dk3 {
   --dk-target: light-dark(#e07a1f, #ff9a3c);
 }
 .dk-sel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
@@ -37,3 +27,6 @@
 @media (pointer: coarse) { .dk-sel input { min-height: 40px; } }
 /* A phone: the readout key over its value, so values do not wrap a word a line (the same rule as mercury3d.css). */
 @media (max-width: 600px) { .m3d .r3-kv { grid-template-columns: minmax(0, 1fr); gap: 0; } .m3d .r3-kv > span:nth-child(odd) { font-size: 11px; color: var(--muted); margin-top: 5px; } .m3d .r3-kv .v { font-size: 12.5px; } }
+/* the canvas takes the whole column; the readouts sit under it, side by side where there is room */
+.dk3 .r3 { grid-template-columns: minmax(0, 1fr); }
+.dk3 .r3-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 24px; align-items: start; }

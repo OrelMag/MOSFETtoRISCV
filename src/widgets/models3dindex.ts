@@ -178,7 +178,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'disk', title: 'A hard disk', category: 'memory', chapter: 'flash', step: 4,
     summary: 'Platters at 7200 rpm and a swinging arm: a sector read as seek, rotational latency and transfer, against a flash page read.',
-    files: ['disk3d', 'disk3dview', 'disk3dparts'], factory: 'disk3d', codex: ['ftl', 'wearlevel'],
+    files: ['disk3d', 'disk3dview', 'disk3dkit', 'disk3dparts'], factory: 'disk3d', codex: ['ftl', 'wearlevel'],
     open: () => import('./disk3d').then((m) => m.disk3d()),
   },
   {
