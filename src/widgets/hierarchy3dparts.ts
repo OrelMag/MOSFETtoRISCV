@@ -75,7 +75,7 @@ export function elapsedNs(ns: number, phase: Phase, x: number): number {
 /** The camera while following the courier at x. */
 export const followView = (x: number) => ({ target: [x, 5, -4] as Vec3, yaw: 0.45, pitch: 0.32, dist: 78 });
 /** The whole road. */
-export const overview = (narrow: boolean) => ({ target: [62, 3, -10] as Vec3, yaw: 0.22, pitch: 0.4, dist: narrow ? 235 : 168 });
+export const overview = (narrow: boolean) => ({ target: [62, 6, -12] as Vec3, yaw: 0.22, pitch: 0.4, dist: narrow ? 235 : 128 });
 
 /** Seconds the courier takes one way to a distance: a drawing's time, longer for the far levels, not the level's latency. */
 export const flightSeconds = (x: number): number => 0.9 + 0.032 * x;

@@ -145,14 +145,15 @@ export function hierarchyView(): Widget {
   panel.append(
     h('h3', { class: 'm3-title' }, 'The same ladder as distances'),
     h('p', { class: 'm3-sub' }, 'The registers are in the core itself. What you use now is on the desk (L1), this week’s work on a shelf (L2), the department’s in the library (L3), and everything else in a warehouse across town (DRAM); the SSD is another city. Each place sits as far from the core as its latency, on a log scale with the table’s own figures. Pick the level where the data is and a courier goes out to it and comes back with the time on the clock; the camera follows.'),
+    // the road across the panel's width (the SSD is far off), the rates and the readout below
+    h('div', { class: 'r3-ctl' }, h('div', { class: 'hy-btns', role: 'group', 'aria-label': 'Where the data is' }, h('span', { class: 'hy-lbl' }, 'Hit in'), ...btns, back)),
+    stage.el,
+    live,
     h('div', { class: 'r3' },
       h('div', { class: 'r3-main' },
-        h('div', { class: 'r3-ctl' }, h('div', { class: 'hy-btns', role: 'group', 'aria-label': 'Where the data is' }, h('span', { class: 'hy-lbl' }, 'Hit in'), ...btns, back)),
-        stage.el,
         h('div', { class: 'r3-ctl hy-rates' }, h('span', { class: 'hy-lbl' }, 'Hit rate (of the requests that reach it)'), rate('L1', 'l1'), rate('L2', 'l2'), rate('L3', 'l3')),
-        live),
-      h('div', { class: 'r3-side' }, h('h4', null, 'This access ', h('span', { class: 'r3-badge' }, 'model')), kv,
-        h('h4', null, 'Average over many loads'), amatKv, amatLive)));
+        h('h4', null, 'Average over many loads'), amatKv, amatLive),
+      h('div', { class: 'r3-side' }, h('h4', null, 'This access ', h('span', { class: 'r3-badge' }, 'model')), kv)));
   amatOut();
   readout();
   paint();
