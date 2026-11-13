@@ -74,6 +74,8 @@ export interface StudioStage {
   isFlat(): boolean;
   rgb(token: string): RGB;
   knobs(): { cut: number; explode: number };
+  /** Set the cutaway and explode sliders (a control that needs the cut open, say). */
+  setKnobs(k: { cut?: number; explode?: number }): void;
   destroy(): void;
 }
 
@@ -331,13 +333,14 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     const beats = model.beats ?? [];
     if (!beats.length) return;
     beat = Math.max(0, Math.min(beats.length - 1, i));
-    const b = beats[beat];
+    // first, so a beat that changes the model's state (and rebuilds it) gets its caption from the rebuilt model
+    o.onBeat?.(beat);
+    const b = (model.beats ?? beats)[beat] ?? beats[beat];
     cap.replaceChildren(h('b', null, `${beat + 1} / ${beats.length} · ${b.title}. `), b.text);
     prev.disabled = beat === 0;
     next.textContent = beat === beats.length - 1 ? 'Done' : 'Next ›';
     st?.setFocus(b.show ? new Set(b.show) : null);
     hiddenNow = b.hide ? new Set(b.hide) : defHidden;
-    o.onBeat?.(beat);
     st?.setHidden(hiddenNow);
     const to = { explode: b.explode ?? knobs().explode, cut: b.cut ?? knobs().cut };
     // the beat's subject framed from its direction, at the knobs it ends on
@@ -498,6 +501,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     isFlat: () => mode === 'flat',
     rgb: (t) => colors.rgb(t),
     knobs: () => knobs(),
+    setKnobs(k) { if (k.cut !== undefined) cutIn.value = String(k.cut); if (k.explode !== undefined) exIn.value = String(k.explode); applyKnobs(); },
     destroy() { dead = true; cancelAnimationFrame(tween); cancelAnimationFrame(hoverRaf); ro.disconnect(); frame.destroy(); unwatch(); st?.destroy(); st = null; colors.destroy(); },
   };
 }

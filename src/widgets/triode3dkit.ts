@@ -6,22 +6,23 @@
 // section cuts the near section and the front of the bulb; the electrode stack explodes along its axis; every named
 // part has a dimension and where it comes from.
 
-import { bentSheet, extrude, helix, lathe, roundedBox, sphere, tube, type Geo } from '../gl/kit/geo';
-import { M, heatColour, heatGlow, type Material } from '../gl/kit/materials';
+import { bentSheet, extrude, helix, lathe, plane, roundedBox, sphere, tube, type Geo } from '../gl/kit/geo';
+import { M, heatColour, heatGlow, type DataTex, type Material } from '../gl/kit/materials';
 import { onCylinder, strokeGeo } from '../gl/kit/text';
 import type { Beat, Item, Model3, StudioAnchor } from '../gl/kit/scene';
-import type { Vec3 } from '../gl/math';
-import { B_PLUS, R_PLATE } from '../phys/triode';
+import type { Quat, Vec3 } from '../gl/math';
+import { B_PLUS, R_PLATE, plateCurrent, plateVoltage } from '../phys/triode';
+import { levelOf, triodeField, wireRadiusFor, type TriodeGeometry } from '../phys/triodefield';
 import { pinPos, PIN_ROLES, returned, stream, type TubeState } from './triode3dview';
 
 // ---------------------------------------------------------------- dimensions (mm), as triode3dview.ts
 // Outline from the 6SN7GT data (T-9 bulb, 28.6 mm; octal base, pins on a 17.45 mm circle, 2.36 mm pins, the 7.9 mm
 // key post); the electrode sizes inside are illustrative, drawn from photographs (no maker's drawing of the mount).
 export const XA = -6.6, XB = 6.6;
-const Y0 = 30, Y1 = 52;
-const CX = 1.1, CZ = 0.65;
-const GX = 2.2, GZ = 1.35, PITCH = 0.6, WIRE_D = 0.14;
-const PX = 5, PZ = 3, PT = 0.25, EAR = 1.3;
+export const Y0 = 30, Y1 = 52;
+export const CX = 1.1, CZ = 0.65;
+export const GX = 2.2, GZ = 1.35, PITCH = 0.6, WIRE_D = 0.14;
+export const PX = 5, PZ = 3, PT = 0.25, EAR = 1.3;
 const MICA_LO = 29.6, MICA_HI = 52.4;
 const GLASS_R = 14.3, GLASS_T = 0.9, GLASS_Y0 = 12, GLASS_Y1 = 62, DOME_H = 8;
 const BASE_R = 14.8, BASE_H = 13;
@@ -45,7 +46,7 @@ interface Geos {
   base: Geo; cement: Geo; key: Geo; keyRib: Geo; pin: Geo; glass: Geo; getterFlash: Geo; flare: Geo; press: Geo;
   leads: Geo[]; mica: Geo; plateBack: (xs: number) => Geo; plateFront: (xs: number) => Geo; rib: Geo;
   rod: (y0: number, y1: number, r: number) => Geo; grid: (xs: number) => Geo; sleeve: Geo; heater: (xs: number) => Geo;
-  getterCup: Geo; electron: Geo; cloud: Geo; print: Geo;
+  getterCup: Geo; electron: Geo; cloud: Geo; print: Geo; field: Geo;
 }
 
 const memo = new Map<Detail, Geos>();
@@ -118,15 +119,64 @@ function geos(d: Detail): Geos {
     getterCup: lathe([[0, 58], [2.2, 58], [2.8, 58.6], [2.9, 59.4], [2.6, 59.4], [2.4, 58.5], [0, 58.4]], { seg: small * 2 }),
     // the type number printed on the glass (silk-screened white), facing the home view
     print: strokeGeo('6SN7GT', onCylinder(GLASS_R, -0.5), 0, 20.5, 2.2, 0.14, 0.03, { flat: true }),
+    field: plane(PX - CX, Y1 - Y0),
     electron: sphere(0.15, 8, 5), cloud: lathe([[0, 30.6], [0.85, 30.6], [0.95, 31.4], [0.95, 44], [0.85, 44.6], [0, 44.6]], { seg: full ? 32 : 8 }),
   };
   memo.set(d, g);
   return g;
 }
 
+// ---------------------------------------------------------------- the field on the cut face
+// The near section's cut face (z = 0) carries the potential the electrodes set up (phys/triodefield.ts: a planar triode,
+// Laplace, no space charge) on the two strips between the cathode and the plate, as equipotential lines. The grid wire
+// crosses z = 0 on the right at Y0 + 0.3 + k·PITCH and on the left half a pitch higher (the helix's phase).
+
+/** The section across the cut face: cathode surface to grid, to plate, the wire pitch (mm). */
+export const FIELD_GEO: TriodeGeometry = { d1: GX - CX, d2: PX - CX, a: PITCH };
+/** The wire radius that gives these spacings phys/triode.ts's µ: the real wire is far finer than the one drawn. */
+export const FIELD_WIRE_R = wireRadiusFor(FIELD_GEO);
+const FIELD_PX = 20; // texels per mm
+export const FIELD_W = Math.round((PX - CX) * FIELD_PX), FIELD_H = Math.round((Y1 - Y0) * FIELD_PX);
+export interface FieldTex { left: DataTex; right: DataTex }
+const fieldTex = (): DataTex => ({ w: FIELD_W, h: FIELD_H, pixels: new Uint8Array(FIELD_W * FIELD_H * 4), rev: 0, mode: 'emit', smooth: true });
+export const newFieldTex = (): FieldTex => ({ left: fieldTex(), right: fieldTex() });
+const NEG: Vec3 = [0.16, 0.42, 1], POS: Vec3 = [1, 0.58, 0.2];
+/** Where texel (i, j) of a strip is: u out from the cathode (mm), y along the section from a wire (row 0 at the top, Y1). */
+export const texelAt = (right: boolean, i: number, j: number): [number, number] => [
+  // the right strip runs cathode → plate along +x, the left plate → cathode
+  right ? (i + 0.5) / FIELD_PX : (FIELD_W - i - 0.5) / FIELD_PX,
+  Y1 - (j + 0.5) / FIELD_PX - (Y0 + 0.3) - (right ? 0 : PITCH / 2),
+];
+/** Paint both strips at grid vg, plate vp: blue where the potential is below the cathode's (it turns electrons back), amber
+ *  above, a line on each equipotential (equal steps in √|V|), the cathode's own 0 V line brightest. */
+export function paintField(t: FieldTex, vg: number, vp: number): void {
+  const f = triodeField(FIELD_GEO, vg, vp, FIELD_WIRE_R), lv = new Float32Array(FIELD_W * FIELD_H), v = new Float32Array(FIELD_W * FIELD_H);
+  for (const right of [false, true]) {
+    const d = right ? t.right : t.left;
+    for (let j = 0; j < FIELD_H; j++) for (let i = 0; i < FIELD_W; i++) { const [u, y] = texelAt(right, i, j), p = f.at(u, y); v[j * FIELD_W + i] = p; lv[j * FIELD_W + i] = levelOf(p); }
+    for (let j = 0; j < FIELD_H; j++) for (let i = 0; i < FIELD_W; i++) {
+      const k = j * FIELD_W + i, l = lv[k], p = v[k];
+      const gx = (lv[j * FIELD_W + Math.min(FIELD_W - 1, i + 1)] - lv[j * FIELD_W + Math.max(0, i - 1)]) / 2;
+      const gy = (lv[Math.min(FIELD_H - 1, j + 1) * FIELD_W + i] - lv[Math.max(0, j - 1) * FIELD_W + i]) / 2;
+      const n = Math.round(l), dist = Math.abs(l - n) / Math.max(1e-6, Math.hypot(gx, gy)); // texels to the nearest line
+      const line = Math.min(1, Math.max(0, (n === 0 ? 2.2 : 1.6) - dist));
+      const c = p < 0 ? NEG : POS, a = p < 0 ? 0.1 + 0.3 * Math.min(1, -p / 15) : 0.02 + 0.07 * Math.sqrt(Math.min(1, p / B_PLUS));
+      const lw = n === 0 ? 0.5 : 0.42, o = k * 4;
+      for (let q = 0; q < 3; q++) d.pixels[o + q] = Math.round(255 * Math.min(1, c[q] * a + line * lw * (0.55 + 0.45 * c[q])));
+      d.pixels[o + 3] = 255;
+    }
+    d.rev++;
+  }
+}
+/** The mean field on the cathode (V/mm) with the grid at vg and the plate where the circuit puts it: positive pulls. */
+export const cathodeFieldAt = (vg: number): number => triodeField(FIELD_GEO, vg, plateVoltage(vg), FIELD_WIRE_R).cathodeField;
+const FACE_FRONT: Quat = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+
 // ---------------------------------------------------------------- the model at a state
 
-export interface TubeLook { charge: boolean; detail: Detail; electron: Material }
+export interface TubeLook { charge: boolean; detail: Detail; electron: Material;
+  /** The near section's field on the cut face (full detail only). */
+  field?: FieldTex }
 
 const T = (x: number) => x.toFixed(x < 10 ? 2 : 1).replace(/\.?0+$/, '');
 
@@ -139,7 +189,8 @@ export function tubeModel(st: TubeState, look: TubeLook): Model3 {
   const hot = (T0: number, m: Material): Material => {
     const g = heatGlow(T0), k = 1 / (1 + 1.2 * g), b = m.base as [number, number, number];
     const s = Math.min(g, SURFACE_GLOW);
-    return { ...M.glow(m, heatColour(T0), s), bloom: s > 0 ? g / s : 1, base: [b[0] * k, b[1] * k, b[2] * k] };
+    // the field on the cut face: a halo held small so it reads
+    return { ...M.glow(m, heatColour(T0), s), bloom: s > 0 ? (look.field ? Math.min(1.5, g / s) : g / s) : 1, base: [b[0] * k, b[1] * k, b[2] * k] };
   };
   const brass = M.tint(M.nickel, [0.78, 0.72, 0.6], 'nickel-plated brass');
   const moly = M.make({ base: [0.8, 0.8, 0.82], metal: 1, rough: 0.28, label: 'molybdenum wire' });
@@ -187,10 +238,20 @@ export function tubeModel(st: TubeState, look: TubeLook): Model3 {
     items.push({ geo: G.heater(xs), mat: hot(Th, M.ceramic), name: 'heater', group: 'heater',
       info: { dim: 'coiled hairpin, 6.3 V, 0.3 A per section', source: SRC.sheet, note: `about ${Math.round(Th)} K, a little hotter than its sleeve (drawn, not computed)` } });
     items.push({ geo: G.rod(22, 27.6, 0.15), mat: M.nickel, at: [xs + 0.8, 0, 0.5], name: 'cathode tab', group: 'cathode' });
+    if (near && look.field && look.detail === 'full') {
+      const fm = (t: DataTex) => M.make({ base: [0.015, 0.015, 0.02], metal: 0, rough: 1, data: t, label: 'potential: blue below the cathode, amber above; lines at 0.3, 0.8, 1.6, 2.8 … 224 V' });
+      const ek = triodeField(FIELD_GEO, st.vg, st.vp, FIELD_WIRE_R).cathodeField;
+      const fi = { dim: `${T(PX - CX)} mm from cathode to plate, grid wires ${T(PITCH)} mm apart`, source: 'planar triode, Laplace (Spangenberg, Vacuum Tubes, ch. 7), no space charge; spacings illustrative',
+        note: `grid ${st.vg.toFixed(1)} V, plate ${st.vp.toFixed(0)} V: ${ek >= 0 ? 'pulls' : 'pushes back'} ${Math.abs(ek).toFixed(2)} V/mm at the cathode. For µ = 20 these spacings need a wire ${Math.round(2e3 * FIELD_WIRE_R)} µm across (drawn ${Math.round(WIRE_D * 1e3)} µm)` };
+      for (const right of [false, true]) {
+        const x = right ? xs + (CX + PX) / 2 : xs - (CX + PX) / 2;
+        items.push({ geo: G.field, mat: fm(right ? look.field.right : look.field.left), at: [x, (Y0 + Y1) / 2, 0], rot: FACE_FRONT, name: 'field', group: 'field', explode: [0, 26, 0], cut: 'none', shadow: false, info: fi });
+      }
+    }
     if (near && look.charge && e > 0.01) {
       const sheath = e * returned(st);
       items.push({ geo: G.cloud, mat: { ...M.make({ base: '--tb-electron', metal: 0, rough: 0.5, transmit: 0.82 }), emit: '--tb-electron', glow: 0.25 * sheath },
-        at: [xs, 0, 0], scale: [2 * CX + 0.2, 1, 2 * CZ + 0.4], group: 'cathode', explode: [0, 26, 0], cut: 'none', shadow: false });
+        at: [xs, 0, 0], scale: [2 * CX + 0.2, 1, 2 * CZ + 0.4], group: 'cathode', explode: [0, 26, 0], cut: look.field ? 'open' : 'none', shadow: false }); // cut with the face when the field is on it
     }
   }
   // Getter: the cup on its wire above the top mica, and the barium mirror it flashed onto the dome.
@@ -199,7 +260,7 @@ export function tubeModel(st: TubeState, look: TubeLook): Model3 {
   items.push({ geo: G.print, mat: M.make({ base: [0.9, 0.9, 0.86], metal: 0, rough: 1, transmit: 0.5, label: 'silk-screened print (thin translucent ink)' }), name: 'type number', group: 'glass', explode: [0, 90, 0], shadow: false, info: { note: 'the tube type, printed on the glass' } });
   items.push({ geo: G.getterFlash, mat: { ...M.getterFlash, base: [0.8, 0.79, 0.76], rough: 0.06, transmit: 0.32, tint: [0.45, 0.43, 0.4], label: 'barium getter film (a mirror)' }, name: 'getter mirror', group: 'glass', explode: [0, 90, 0], cut: 'open', shadow: false, info: { source: SRC.photo, note: 'the silvery film inside the dome: still silver means the vacuum is good; white means air got in' } });
   items.push({ geo: G.glass, mat: M.glass, name: 'glass bulb', group: 'glass', explode: [0, 90, 0], info: { dim: `${T(2 * GLASS_R)} mm (T-9), wall ${GLASS_T} mm`, source: SRC.sheet } });
-  return { items, cuts: CUT, anchors: ANCHORS, beats: beats(st), floor: -KEY_L, lights };
+  return { items, cuts: CUT, anchors: ANCHORS, beats: beats(st, look.detail), floor: -KEY_L, lights };
 }
 
 function amps(a: number): string {
@@ -233,12 +294,15 @@ const ANCHORS: StudioAnchor[] = [
 
 export const HOME = { target: [-1.5, 28, 0] as Vec3, yaw: -0.5, pitch: 0.26, dist: 150 };
 
-function beats(st: TubeState): Beat[] {
+function beats(st: TubeState, detail: Detail): Beat[] {
+  const face = detail === 'flat' ? 'The 3D view (it needs WebGL2) draws on the cut face the potential' : 'The cut face shows the potential';
+  const trickle = plateCurrent(-12, plateVoltage(-12)) * 1e3;
   return [
     { title: 'Life size', text: `A 6SN7GT twin triode: a T-9 bulb ${T(2 * GLASS_R)} mm across on an octal base, two triodes in one envelope. ENIAC used more of these than of any other tube.`, view: HOME, frame: [], cut: 0, explode: 0 },
     { title: 'Cut away', text: 'A quarter of the bulb and the front of the near section are cut away. Inside: a cathode sleeve, a grid of fine wire wound round it, and the plate round both: three electrodes, one inside the next.', view: { target: [-4, 40, 0], yaw: -0.45, pitch: 0.18, dist: 72 }, frame: ['plate', 'mica-hi', 'getter'], cut: 1, explode: 0 },
     { title: 'Heater and cathode', text: `The heater (6.3 V, 0.3 A) keeps the oxide-coated sleeve at ${Math.round(st.Tc)} K. Hot oxide gives off electrons; most fall straight back: ${(100 * returned(st)).toFixed(1)} % here. They wait as a cloud around the sleeve.`, view: { target: [XA, 42, 0], yaw: -0.25, pitch: 0.1, dist: 34 }, show: ['cathode', 'heater'], cut: 1, explode: 0 },
     { title: 'The grid', text: `A helix of wire ${PITCH} mm a turn, a millimetre from the cathode. Being so close, a few volts on it decide whether electrons cross: at ${st.vg.toFixed(1)} V the plate sits at ${st.vp.toFixed(0)} V.`, view: { target: [XA, 42, 0], yaw: -0.6, pitch: 0.2, dist: 30 }, show: ['grid'], cut: 1, explode: 0 },
+    { title: 'A field, not a current', text: `${face} the electrodes alone set up (the cloud left out): amber above the cathode's, blue below it, lines at 0.3, 0.8, 1.6, 2.8 V and on up to the plate. The cloud always gives back as much as this field draws; the field decides how much gets past it. With the grid at 0 V the plate's lines reach between the wires to the cathode: ${cathodeFieldAt(0).toFixed(1)} V/mm. At −12 V (the tour sets it) they stop at the wires and the gap goes dark: ${cathodeFieldAt(-12).toFixed(2)} V/mm is left, ${trickle.toFixed(2)} mA trickles through and the cloud sits. Past −${(B_PLUS / 20).toFixed(1)} V the field at the cathode turns round. The grid takes no current: it is all field.`, view: { target: [XA + CX + 1.1, 40.5, 0], yaw: 0, pitch: 0, dist: 7 }, show: ['field', 'grid', 'cathode'], cut: 1, explode: 0 },
     { title: 'The plate', text: `Two blackened nickel sheets crimped at their flanges. At ${B_PLUS} V through ${R_PLATE / 1e3} kΩ it collects the electrons the grid lets through; ${(st.vp * st.ip).toFixed(2)} W heats it now.`, view: { target: [XA, 41, -1], yaw: -0.7, pitch: 0.25, dist: 48 }, show: ['plate'], cut: 1, explode: 0 },
     { title: 'How it is built', text: 'The mount pulled apart: bulb, getter, top mica, cathodes, grids, plate halves. Micas top and bottom hold every electrode at its spacing; the stem leads carry them out through the glass press to the pins.', view: { target: [0, 74, 0], yaw: -0.55, pitch: 0.18, dist: 310 }, frame: [], cut: 0, explode: 1 },
     { title: 'Underneath', text: 'Eight pins round a keyed post: the key fits one way, so pin 1 is always in the same place. Pins 4-6 are section 1, pins 1-3 section 2, 7 and 8 the heater.', view: { target: [0, 2, 0], yaw: 0, pitch: -1.05, dist: 70 }, frame: ['base', 'pins'], cut: 0, explode: 0 },
