@@ -197,14 +197,16 @@ Steps with a processor have a CPU panel on the right of the circuit.
 
 ![A single-cycle RISC-V CPU with its panel: program, Run to halt, Slow, Step back, Step, Reset, the listing and the instruction's fields](img/journey/15-cpu-panel.png)
 
-1. **Run to halt** runs the program to the end as fast as your browser allows. **Slow** runs it at the speed set by
+1. Where the panel offers several programs, pick one in its list (for example **Fibonacci**), or click **Edit** to
+   write your own.
+2. **Run to halt** runs the program to the end as fast as your browser allows. **Slow** runs it at the speed set by
    the slider (instructions a second). **Step** does one step: choose **gate** (one gate delay) or **instr / cycle**
    (one instruction). **Step back** undoes one; **Reset** starts the program again.
-2. The panel says after every cycle whether the hardware **matches golden model**, an independent simulator of the
+3. The panel says after every cycle whether the hardware **matches golden model**, an independent simulator of the
    instruction set.
-3. Click a line of the program to light the hardware that instruction uses. Click just left of an address (its
+4. Click a line of the program to light the hardware that instruction uses. Click just left of an address (its
    **Breakpoint** button) to stop a run when that instruction is reached.
-4. Under the circuit, the clock bar has **Pulse** (one clock cycle), **Run** (runs the clock), **Step back**, **Step**
+5. Under the circuit, the clock bar has **Pulse** (one clock cycle), **Run** (runs the clock), **Step back**, **Step**
    and **Reset**.
 
 ### Look at a 3D model
