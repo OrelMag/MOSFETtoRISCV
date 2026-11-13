@@ -1,0 +1,18 @@
+/* The lidded flip-chip package (widgets/flipchip3dview.ts): materials, scoped under .m3d (model3d.css holds the shared ones). */
+.m3d, .fc3 {
+  --fc-beol: light-dark(#b07a3e, #c98f4e);
+  --fc-underfill: light-dark(#3b3a36, #4a4842);
+  --fc-core: light-dark(#c9b27a, #a8935f);
+  --fc-build: light-dark(#4f7a5c, #3f6a4c);
+  --fc-tim: light-dark(#d8d8d2, #b9b9b2);
+  --fc-lid: light-dark(#c9ccd2, #a9adb6);
+  --fc-glue: light-dark(#6b6b66, #55554f);
+  --fc-cap: light-dark(#c8a77a, #a88a60);
+  --fc-board: light-dark(#2f6e4a, #24563a);
+  --fc-heat: light-dark(#e0542c, #ff7a4a);
+}
+/* the canvas takes the whole column; the readout sits under it */
+.fc3 .r3 { grid-template-columns: minmax(0, 1fr); }
+.fc3 .r3-side .r3-kv { max-width: 640px; }
+/* on a phone the readout stacks: each value under its name */
+@media (max-width: 520px) { .fc3 .r3-kv { grid-template-columns: minmax(0, 1fr); } .fc3 .r3-kv .v { margin-bottom: 6px; } }

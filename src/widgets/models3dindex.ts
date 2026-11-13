@@ -80,6 +80,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./package3d').then((m) => m.package3d()),
   },
   {
+    id: 'flipchip', title: 'A flip-chip package, cut open', category: 'devices', chapter: 'wire', step: 8,
+    summary: 'A lidded BGA to scale: the die face down on solder bumps in underfill, the substrate fanning out to 1 560 balls, a lid on the thermal paste.',
+    files: ['flipchip3d', 'flipchip3dview', 'flipchip3dkit'], factory: 'flipchip3d',
+    open: () => import('./flipchip3d').then((m) => m.flipchip3d()),
+  },
+  {
     id: 'dram', title: 'The DRAM array', category: 'memory', chapter: 'dram', step: 4,
     summary: 'The chapter\'s 4 × 4 array on the switch-level simulator: every cell\'s charge as a height, step by step through the protocol.',
     files: ['dram3d', 'dram3dview', 'dram3dkit', 'dram3dparts', 'dram3dbench'], factory: 'dram3d', codex: ['senseamp', 'dramtiming'],
