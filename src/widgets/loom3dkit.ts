@@ -78,7 +78,7 @@ export function bake(parts: readonly Part[], name: string): Geo {
 /** The frame's front plane (loom3dparts.ts: zf). */
 export const FRONT_Z = 30;
 export const VIEWS: Record<'head' | 'whole', OrbitView> = {
-  head: { target: [0, 42, -10], yaw: 0.3, pitch: 0.24, dist: 64 },
+  head: { target: [-6, 40, -12], yaw: 0.34, pitch: 0.26, dist: 84 },
   whole: { target: [0, 24, 10], yaw: 0.55, pitch: 0.36, dist: 175 },
 };
 /** Where in a pick each beat stops (T): the card pressed, the griffe up, the shuttle in the shed, the row beaten up. */
