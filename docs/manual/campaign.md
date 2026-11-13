@@ -13,7 +13,9 @@ circuit yourself, with grades for how cheap and how fast it is. The workbench is
 sandbox is a free editor with no task. You can use the campaign without reading the chapters: every level has its
 own explanation, tips and an answer.
 
-## Quick start: your first level
+## Quick start
+
+Your first level, from the home page to a passed Check.
 
 You will read the first lesson and then build a CMOS inverter from two transistors. Expect Check to fail first:
 that is how you see what the level wants.
@@ -254,10 +256,9 @@ Help comes in steps, so you can take as little as you need. All of it is in the 
 
 The challenge strip has the same help as buttons:
 - **Walk me through it** starts the walkthrough.
-- **Show answer** opens the walkthrough at its last step. **Use this answer** takes the reference circuit as your
-  chip; **Build it myself** returns to your own circuit.
-- **Do it for me** asks you to confirm, then replaces your chip's circuit with the reference answer. This is one undo
-  step, so **Undo** (Ctrl+Z) brings your circuit back.
+- **Show answer** opens the walkthrough at its last step, with **Use this answer** and **Build it myself** at the bottom.
+- **Do it for me** asks *Replace your circuit with the answer?* Click **Replace** to put the reference answer in your
+  chip, or **Cancel**. **Undo** (Ctrl+Z) brings your own circuit back.
 
 ### Follow the walkthrough or build along
 
@@ -287,8 +288,7 @@ instruction encodings and more. You play them in the side panel of the map.
 
 1. Click a **DRILL** box on the map.
 2. Read the question under **PRACTICE**, type your answer in the box and click **Check**.
-3. A wrong answer says why. For an expression, it gives an input where yours differs from the right answer. A new
-   question comes after a right one.
+3. A wrong answer says why. For an expression, it gives an input where yours differs from the right answer.
 4. **Show answer** shows the answer, and counts as a mistake.
 5. The counter under the question (for example **0/6 correct · 1 mistake**) shows how far you are.
 
@@ -307,12 +307,8 @@ task, a few test cases and an editor.
    **Core III: control flow** in act 5: your programs then run on the processor you built.
 4. Click **Run the tests**. A table lists each test with the number of instructions it took. Your grade compares
    the program's size, and its instructions per test, with par.
-5. The other buttons:
-   - **Step through a test** runs one test an instruction at a time.
-   - **Reset** puts the starting program back.
-   - **Show solution** shows a reference program.
-   - **Save as deck** saves the program as punched cards, and **Load deck…** loads a deck back, as in the prologue's
-     card chapter.
+5. **Reset**, **Show solution**, **Save as deck** and **Load deck…** sit beside **Run the tests**; under the results,
+   **Step through a test** opens a test to follow.
 
 ![A program level solved: All tests pass with three stars, each test with the instructions it took](img/campaign/19-program.png)
 
@@ -346,8 +342,6 @@ list under **Unlocked parts**.
 
 5. Go back to the level (its tab at the top of the sandbox, for example **Core I: arithmetic**), fix the core, and
    Check again.
-6. Once your core passes all its programs, the list offers **Play Pong on your core**: a computer with a screen and
-   switches, built around your processor.
 
 ### Hunt a bug
 
@@ -383,8 +377,8 @@ level it breaks; point at the small circle on its box's left edge to see which. 
    **Timing** panel to see which bit never moves.
 3. Press **B**, or click **Accuse** beside Check. The banner says: *click the wire you think is stuck, then say at
    what* (**B** or **Esc** to stop).
-4. Click the wire, then choose **It is stuck at 0 here** or **… at 1**. A right accusation solves the level. Each
-   wrong one costs a star, so par is 0 wrong.
+4. Click the wire, then choose **It is stuck at 0 here** or **… at 1**. Each wrong accusation costs a star, so par is
+   0 wrong.
 
 ![A FIND IT level with the fault brush on: the Accuse banner over the canvas and the failing rows in the test player](img/campaign/30-fault-brush.png)
 
@@ -460,13 +454,13 @@ On an open model:
 
 Your progress and your level chips are kept in this browser.
 
-1. On the campaign page, click **Export campaign**. A file named `campaign-<date>.json` downloads, holding your
-   progress and your level chips.
+1. On the campaign page, click **Export campaign**. A `.json` file downloads, holding your progress and your level
+   chips.
 2. On the other computer (or browser), open the campaign page, click **Import campaign** and pick the file.
 3. The file is merged into the progress already there. Your chips there are never overwritten.
 
-To save everything on the site at once (chapters, notes and sandbox projects as well as the campaign), use the
-backup in the settings; see [What works everywhere](everywhere.md).
+To save everything on the site at once (chapters, notes and sandbox projects as well as the campaign), see [What works
+everywhere](everywhere.md).
 
 ## Keys and gestures
 
@@ -497,8 +491,7 @@ With the mouse:
 - a drag from one pin to another draws a wire;
 - a right-click opens the menu of what is under the pointer.
 
-On a touch screen, tap a part in the list and then tap the canvas to place it, and drag from a pin to wire. The
-[sandbox page](sandbox.md) lists every gesture.
+The [sandbox page](sandbox.md) lists every mouse and touch gesture.
 
 ## If something looks wrong
 
@@ -510,7 +503,7 @@ On a touch screen, tap a part in the list and then tap the canvas to place it, a
 - **You clicked a part, but nothing was placed.** A part lands where you next click on the canvas. While the test
   player is open the canvas is smaller, so close the player with its **✕** first, or click higher up.
 - **Your circuit vanished after Show answer.** It is still there: Show answer opens the walkthrough on a separate
-  copy. Click **Build it myself** or **Leave the walkthrough** to get back to it. After **Do it for me**, press
+  copy. Click **Leave the walkthrough** to get back to it. After **Do it for me**, press
   **Ctrl Z** (Undo) instead.
 - **A level you skipped is not counted as solved.** Skipped levels unlock what comes after them, but they do not
   count as solved. Click the level, click **Un-skip**, and play it.
