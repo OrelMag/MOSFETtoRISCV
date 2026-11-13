@@ -40,7 +40,7 @@ export function enigmaAnchors(p: EnigmaPose): Anchor[] {
   }
   if (p.lid > 0.5) {
     a.push({ text: 'Lamps', p: [-130, 94, 5], side: 'l', n: up }, { text: 'Keyboard', p: [131, 62, 80], side: 'r', n: up });
-    if (p.flap > 0.5) a.push({ text: 'Plugboard: sockets by number', p: [132, 30, FACE_Z], side: 'r', n: [0, 0, 1] });
+    if (p.flap > 0.5) a.push({ text: 'Plugboard sockets', p: [132, 30, FACE_Z], side: 'r', n: [0, 0, 1] });
   }
   if (p.cover > 0.5) {
     const y = AX_Y + lift + RIM_R, back = AX_Z - 44;
@@ -51,7 +51,7 @@ export function enigmaAnchors(p: EnigmaPose): Anchor[] {
     if (p.out < 0.1) a.push({ text: 'Pawls', p: [36, AX_Y + 3, AX_Z - 52], side: 'r', n: up, minor: true });
     a.push({ text: 'Battery', p: [97, 93, -105], side: 'r', n: up, minor: true });
   } else if (p.lid > 0.5) {
-    a.push({ text: 'Windows: the four wheels', p: [RIM_X[1], PANEL_Y + 2, AX_Z - 25], side: 't', n: up });
+    a.push({ text: 'Wheel windows', p: [RIM_X[1], PANEL_Y + 2, AX_Z - 25], side: 't', n: up });
   }
   return a;
 }

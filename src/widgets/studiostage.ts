@@ -28,6 +28,21 @@ export interface StudioStageOptions {
   /** The home direction (yaw, pitch); its target and distance are fitted to the model unless `fit` is false. */
   home: OrbitView;
   fit?: boolean;
+  /** Fit home to these groups or names, not the whole model (the subject first: a device under its wiring). */
+  homeFrame?: string[];
+  /** Fit home to a sphere of this radius round the framed box's centre instead of the box's corners (a round model: a
+   *  radiation pattern, a ring), which would otherwise leave it small. */
+  homeRadius?: number;
+  /** Groups or names hidden outside the tour and in beats that do not say (a beat's `hide: []` shows them). */
+  hidden?: string[];
+  /** A scale bar under the canvas following the zoom: the label for a length in model units (1-2-5 steps). */
+  scaleBar?: (len: number) => string;
+  /** Called when the tour goes to beat i (-1: the tour ended). */
+  onBeat?: (i: number) => void;
+  /** The cut and explode the stage opens at (a cutaway as the first view). */
+  knobs?: { cut?: number; explode?: number };
+  /** The cut or explode moved (a slider or the tour): parts the host draws itself (particles) can follow. */
+  onKnobs?: (k: { cut: number; explode: number }) => void;
   limits?: Partial<OrbitLimits>;
   note?: string;
   /** The model now, at a detail: 'flat' for the SVG fallback (fewer facets). */
@@ -42,12 +57,16 @@ export interface StudioStage {
   hint: HTMLElement;
   /** Rebuild the model (a state changed). */
   refresh(): void;
-  instances(key: string, geo: Geo, mat: Material, data: Float32Array): void;
+  /** Ease the camera to a view and make it home (a host's own view buttons; with fit: false). */
+  goTo(view: OrbitView): void;
+  /** `casts`: the set casts shadows (the shadow's fit then takes it in). */
+  instances(key: string, geo: Geo, mat: Material, data: Float32Array, casts?: boolean): void;
   /** Parts moved by the physics this frame. */
   move(moves: Moves): void;
   studio(): Studio | null;
   isFlat(): boolean;
   rgb(token: string): RGB;
+  knobs(): { cut: number; explode: number };
   destroy(): void;
 }
 
@@ -69,13 +88,17 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   card.style.display = 'none';
   const chips = h('div', { class: 'r3-chips' });
   const stats = h('div', { class: 'st-stats' });
+  const scaleLbl = h('span'), scaleBar = h('div', { class: 'st-scale', 'aria-hidden': 'true' }, h('i'), scaleLbl);
+  if (!o.scaleBar) scaleBar.style.display = 'none';
   stats.style.display = /stats/.test(location.hash + location.search) ? '' : 'none';
-  const view = h('div', { class: 'st-view r3-stage' }, canvas, flat, leaders, badges, card, chips, stats);
-  const stage = h('div', { class: 'st-stage' }, gutL, view, gutR);
+  // the gutters lie over the canvas's side bands: the canvas takes the column's width and the model is fitted between them
+  const view = h('div', { class: 'st-view r3-stage' }, canvas, flat, gutL, gutR, leaders, badges, card, chips, stats, scaleBar);
+  const stage = h('div', { class: 'st-stage' }, view);
   const list = h('ol', { class: 'st-list' });
 
   const exIn = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: 0, 'aria-label': 'Exploded view' }) as HTMLInputElement;
-  const cutIn = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: 0, 'aria-label': 'Cutaway' }) as HTMLInputElement;
+  const cutIn = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: o.knobs?.cut ?? 0, 'aria-label': 'Cutaway' }) as HTMLInputElement;
+  exIn.value = String(o.knobs?.explode ?? 0);
   const prev = h('button', { type: 'button', class: 'btn sm' }, '‹ Back') as HTMLButtonElement;
   const next = h('button', { type: 'button', class: 'btn sm primary' }, 'Tour ›') as HTMLButtonElement;
   const resetBtn = h('button', { type: 'button', class: 'btn sm' }, 'Reset view') as HTMLButtonElement;
@@ -96,32 +119,52 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   /** The parts the physics moved last (kept here so the flat drawing, the labels and a rebuilt renderer follow). */
   let curMoves: Moves = new Map();
   let beat = -1, tween = 0, pinned: Item | null = null, hoverRaf = 0, hiddenNow: ReadonlySet<string> | null = null;
+  const defHidden: ReadonlySet<string> | null = o.hidden?.length ? new Set(o.hidden) : null;
+  hiddenNow = defHidden;
+  const homeBox = () => (o.homeFrame ? boundsOfNamed(model, o.homeFrame) : boundsOf(model));
   const frame = modelFrame({ stage: view, name: o.aria, renderer: () => (mode === 'gl' ? (st as unknown as Renderer) : null), root: () => el.closest<HTMLElement>('.m3d, .widget') ?? el });
 
   // ---------------------------------------------------------------- framing
 
-  /** The canvas's aspect from the model as seen from home; the home view fitted to the model at that aspect. */
-  let aspect = 4 / 3;
+  /** The model's aspect as seen from home. The canvas is sized from it in one rule for both label forms: the content (the
+   *  part the model is fitted to) is the column less two gutters (none with badges), as tall as the model's aspect asks but
+   *  at least MIN_CANVAS_H and at most most of the screen's height (a tall model then narrows, centred); the canvas is
+   *  that content plus the gutters, which lie over its side bands. A long, low model so fills the column; a tall one
+   *  keeps its portrait. */
+  let aspect = 4 / 3, gutNow = 0, shownSize = '';
   const shape = () => {
-    const box = boundsOf(model);
+    const box = homeBox();
     aspect = Math.max(ASPECT_MIN, Math.min(ASPECT_MAX, aspectOf(box, o.home.yaw, o.home.pitch) * 1.15));
-    fitAspect(el.clientWidth);
+    layout();
   };
-  /** The canvas's aspect for the width it has: the model's, but never so wide that the canvas falls under
-   *  MIN_CANVAS_H tall (a long, low model on a phone gets room above and below instead of a strip). */
-  let shownAspect = '';
-  const fitAspect = (avail: number) => {
-    const key = (avail > 0 ? Math.max(ASPECT_MIN, Math.min(aspect, avail / MIN_CANVAS_H)) : aspect).toFixed(3);
-    if (key === shownAspect) return;
-    shownAspect = key;
-    view.style.aspectRatio = key;
-    // a tall model's canvas is held to most of the screen's height: its width follows, centred
-    view.style.maxWidth = `calc(min(78vh, 760px) * ${key})`;
+  const isNarrow = () => el.clientWidth - 2 * gutterW < MIN_CANVAS || rows.length === 0;
+  const layout = () => {
+    const C = el.clientWidth;
+    if (!C) return;
+    const narrow = isNarrow(), g = narrow ? 0 : gutterW, maxH = Math.max(MIN_CANVAS_H, Math.min(window.innerHeight * 0.78, 760));
+    let wc = C - 2 * g, hh = Math.max(MIN_CANVAS_H, wc / aspect);
+    if (hh > maxH) { hh = maxH; wc = Math.min(wc, hh * aspect); }
+    const W = Math.round(wc + 2 * g), H = Math.round(hh), key = `${W}x${H}x${g}`;
+    gutNow = g;
+    if (el.classList.contains('narrow') !== narrow) el.classList.toggle('narrow', narrow);
+    if (key === shownSize) return;
+    shownSize = key;
+    view.style.setProperty('--st-gw', `${g}px`);
+    view.style.aspectRatio = (W / H).toFixed(4);
+    view.style.maxWidth = `${W}px`;
+    st?.invalidate();
   };
+  /** The width over height of the part of the canvas the model is fitted to (between the gutters). */
+  const contentAspect = () => Math.max(0.2, ((canvas.clientWidth || 4) - 2 * gutNow) / (canvas.clientHeight || 3));
   const homeView = (): OrbitView => {
     if (o.fit === false || !st) return o.home;
-    const w = canvas.clientWidth || 4, hh = canvas.clientHeight || 3;
-    const f = fitView(boundsOf(model), o.home.yaw, o.home.pitch, st.camera.fov, w / hh, 0.06);
+    const box = homeBox();
+    if (o.homeRadius) {
+      const c: Vec3 = [(box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2];
+      const half = Math.atan(Math.tan(st.camera.fov / 2) * Math.min(1, contentAspect())) * 0.94;
+      return { yaw: o.home.yaw, pitch: o.home.pitch, target: c, dist: o.homeRadius / Math.sin(half) };
+    }
+    const f = fitView(box, o.home.yaw, o.home.pitch, st.camera.fov, contentAspect(), 0.06);
     return { yaw: o.home.yaw, pitch: o.home.pitch, target: f.target, dist: f.dist };
   };
   let fitFor = '';
@@ -153,6 +196,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     const key = anchors.map((a) => a.text).join('|');
     if (key === lblKey) return;
     lblKey = key;
+    gutL.replaceChildren(); gutR.replaceChildren(); // the old names, or they stay where they were last placed
     rows = anchors.map((a, i) => ({ a, el: h('span', { class: 'st-lbl' }, a.text), badge: h('span', { class: 'st-badge' }, String(i + 1)), li: h('li', null, h('b', null, String(i + 1)), ' ', a.text) }));
     badges.replaceChildren(...rows.map((r) => r.badge));
     list.replaceChildren(...rows.map((r) => r.li));
@@ -169,27 +213,27 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     if (mode !== 'gl' || !st) return;
     makeLabels();
     refit();
-    const W = canvas.clientWidth, H = canvas.clientHeight, cam = st.camera, eye = cam.eye(), under = cam.pitch < -0.25, cw = el.clientWidth - 2 * gutterW, narrow = cw < MIN_CANVAS || rows.length === 0;
-    if (el.classList.contains('narrow') !== narrow) { el.classList.toggle('narrow', narrow); requestAnimationFrame(() => st?.invalidate()); }
-    stage.style.gridTemplateColumns = narrow ? '' : `${gutterW}px minmax(0, 1fr) ${gutterW}px`;
-    fitAspect(narrow ? el.clientWidth : cw);
+    layout();
+    const W = canvas.clientWidth, H = canvas.clientHeight, cam = st.camera, eye = cam.eye(), under = cam.pitch < -0.25, narrow = gutNow === 0, g = gutNow;
     const k = st.knobs().explode;
     const seen: { r: typeof rows[number]; x: number; y: number; away: boolean }[] = [];
+    const quiet = beat >= 0 && model.beats?.[beat]?.labels === false;
     for (const r of rows) {
       const hiddenPart = !!hiddenNow && !!r.a.on && hiddenNow.has(r.a.on);
       const p3 = anchorAt(model, r.a, k, curMoves), p = st.project(p3);
-      const ok = !hiddenPart && !!p && !!r.a.under === under && p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H;
+      const ok = !quiet && !hiddenPart && !!p && !!r.a.under === under && p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H;
       r.el.style.display = 'none'; r.badge.style.display = 'none';
       r.li.hidden = !!r.a.under !== under; r.li.classList.toggle('off', !ok);
       if (!ok) continue;
       seen.push({ r, x: p![0], y: p![1], away: dot3(r.a.n, sub3(eye, p3)) < 0 });
     }
     // Each label on the side its anchor is nearer, stacked in the order of their heights. Wide: the names in the gutters
-    // outside the canvas; narrow: numbered badges just inside its edges (the names are in the list below).
+    // over the canvas's side bands; narrow: numbered badges just inside its edges (the names are in the list below).
     const lines: SVGElement[] = [];
     for (const side of ['l', 'r'] as const) {
       const col = seen.filter((q) => (q.x < W / 2) === (side === 'l')).sort((a, b) => a.y - b.y);
-      const ys = spread(col.map((q) => q.y), narrow ? 24 : 22, 12, H - 12);
+      // the right column stops above the corner buttons, the left above the scale bar
+      const ys = spread(col.map((q) => q.y), narrow ? 24 : 22, 12, side === 'r' ? H - 56 : o.scaleBar ? H - 40 : H - 12);
       col.forEach((q, i) => {
         const y = ys[i];
         let gx: number, elbow: number;
@@ -206,8 +250,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
           q.r.el.style.display = '';
           q.r.el.style.transform = `translateY(${(y - 9).toFixed(1)}px)`;
           q.r.el.classList.toggle('away', q.away);
-          gx = side === 'l' ? -6 : W + 6;
-          elbow = side === 'l' ? 10 : W - 10;
+          gx = side === 'l' ? g - 2 : W - g + 2;
+          elbow = side === 'l' ? g + 8 : W - g - 8;
         }
         lines.push(s('polyline', { points: `${gx},${y} ${elbow},${y} ${q.x},${q.y}`, class: q.away ? 'away' : '' }));
         lines.push(s('circle', { cx: q.x, cy: q.y, r: 2.6, class: q.away ? 'away' : '' }));
@@ -215,6 +259,15 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     }
     leaders.setAttribute('width', String(W)); leaders.setAttribute('height', String(H));
     leaders.replaceChildren(...lines);
+  };
+
+  /** The scale bar: the 1-2-5 length nearest 90 px at the camera's target. */
+  const placeScale = () => {
+    if (!st || !o.scaleBar) return;
+    const u = st.camera.unitsPerPx(canvas.clientHeight || 1), want = 90 * u, p = 10 ** Math.floor(Math.log10(want));
+    const len = [1, 2, 5, 10].map((m) => m * p).reduce((a, b) => (Math.abs(Math.log(b / want)) < Math.abs(Math.log(a / want)) ? b : a));
+    (scaleBar.firstChild as HTMLElement).style.width = `${(len / u).toFixed(1)}px`;
+    scaleLbl.textContent = o.scaleBar(len);
   };
 
   // ---------------------------------------------------------------- the card
@@ -263,7 +316,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   // ---------------------------------------------------------------- knobs and the tour
 
   const knobs = () => ({ explode: Number(exIn.value), cut: Number(cutIn.value) });
-  const applyKnobs = () => { st?.setKnobs(knobs()); if (mode === 'flat') drawFlat(); };
+  const applyKnobs = () => { const k = knobs(); st?.setKnobs(k); o.onKnobs?.(k); if (mode === 'flat') drawFlat(); };
   exIn.addEventListener('input', applyKnobs);
   cutIn.addEventListener('input', applyKnobs);
 
@@ -276,13 +329,14 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     prev.disabled = beat === 0;
     next.textContent = beat === beats.length - 1 ? 'Done' : 'Next ›';
     st?.setFocus(b.show ? new Set(b.show) : null);
-    hiddenNow = b.hide ? new Set(b.hide) : null;
+    hiddenNow = b.hide ? new Set(b.hide) : defHidden;
+    o.onBeat?.(beat);
     st?.setHidden(hiddenNow);
     const to = { explode: b.explode ?? knobs().explode, cut: b.cut ?? knobs().cut };
     // the beat's subject framed from its direction, at the knobs it ends on
     let dest: OrbitView = b.view;
     if (b.frame && st) {
-      const f = fitView(boundsOfNamed(model, b.frame, to.explode), b.view.yaw, b.view.pitch, st.camera.fov, (canvas.clientWidth || 4) / (canvas.clientHeight || 3), 0.12);
+      const f = fitView(boundsOfNamed(model, b.frame, to.explode), b.view.yaw, b.view.pitch, st.camera.fov, contentAspect(), 0.12);
       dest = { yaw: b.view.yaw, pitch: b.view.pitch, target: f.target, dist: f.dist };
     }
     const from = { ...knobs(), cam: st ? { target: [...st.camera.target] as Vec3, yaw: st.camera.yaw, pitch: st.camera.pitch, dist: st.camera.dist } : null };
@@ -306,7 +360,25 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     };
     tween = requestAnimationFrame(step);
   };
-  const endTour = () => { beat = -1; cap.replaceChildren(); next.textContent = 'Tour ›'; prev.disabled = true; st?.setFocus(null); hiddenNow = null; st?.setHidden(null); };
+  const goTo = (dest: OrbitView) => {
+    if (!st) { o.home = dest; return; }
+    const c = st.camera, from = { target: [...c.target] as Vec3, yaw: c.yaw, pitch: c.pitch, dist: c.dist };
+    cancelAnimationFrame(tween);
+    const dur = reducedMotion() ? 0 : 800, t0 = performance.now();
+    const dy = ((((dest.yaw - from.yaw) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+    const lim = c.limits;
+    lim.maxDist = Math.max(lim.maxDist, dest.dist * 1.5); lim.minDist = Math.min(lim.minDist, dest.dist * 0.5); lim.minPitch = Math.min(lim.minPitch, dest.pitch);
+    const step = (now: number) => {
+      const f = dur ? ease(Math.min(1, (now - t0) / dur)) : 1;
+      c.target = from.target.map((v, j) => v + (dest.target[j] - v) * f) as Vec3;
+      c.yaw = from.yaw + dy * f; c.pitch = from.pitch + (dest.pitch - from.pitch) * f; c.dist = from.dist * Math.pow(dest.dist / from.dist, f);
+      st?.invalidate();
+      if (f < 1) tween = requestAnimationFrame(step);
+      else { tween = 0; o.home = dest; st?.camera.rehome(dest); }
+    };
+    tween = requestAnimationFrame(step);
+  };
+  const endTour = () => { beat = -1; cap.replaceChildren(); next.textContent = 'Tour ›'; prev.disabled = true; st?.setFocus(null); hiddenNow = defHidden; st?.setHidden(defHidden); o.onBeat?.(-1); if (mode === 'flat') drawFlat(); };
   next.addEventListener('click', () => { if (beat === (model.beats ?? []).length - 1) endTour(); else goBeat(beat + 1); });
   prev.addEventListener('click', () => goBeat(beat - 1));
   prev.disabled = true;
@@ -320,6 +392,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const it of m.items) {
       if (it.mat.beam) continue;
+      // a hidden group or name (a beat's hide, the frame boxes a model fits by) is not drawn, as on the GPU and in pick
+      if (hiddenNow && ((it.group && hiddenNow.has(it.group)) || (it.name && hiddenNow.has(it.name)))) continue;
       itemMatrix(it, k.explode, M, curMoves);
       const P = it.geo.positions, I = it.geo.indices, glass = (it.mat.transmit ?? 0) > 0.3, cut = (it.cut ?? 'section') !== 'none' && cuts.length > 0;
       const base = resolve(it.mat.base), em = it.mat.emit ? resolve(it.mat.emit).map((v) => v * Math.min(1, it.mat.glow ?? 0)) : [0, 0, 0];
@@ -371,6 +445,9 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     st?.setKnobs(knobs());
   };
   const unwatch = watchTheme(() => { colors.invalidate(); lights(); refresh(); });
+  // a column that changes width (a window resize, a drawer) re-lays the canvas out; the render that follows refits home
+  const ro = new ResizeObserver(() => { layout(); st?.invalidate(); });
+  ro.observe(el);
 
   const forceFlat = /flat3d/.test(location.hash + location.search);
   shape();
@@ -382,6 +459,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
       st = createStudio(canvas, cam, {
         onRender: () => {
           placeLabels();
+          if (o.scaleBar) placeScale();
           const f = st!.last();
           stats.textContent = `${f.cpuMs.toFixed(1)} ms cpu${f.gpuMs !== null ? ` · ${f.gpuMs.toFixed(1)} ms gpu` : ''} · ${f.draws} draws · ${(f.tris / 1000).toFixed(0)}k tris · ${(f.px / 1e6).toFixed(2)} Mpx · ${f.tier}${f.shadowRedrawn ? ' · shadow' : ''}`;
         },
@@ -391,17 +469,19 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     if (!st) { setMode('flat'); return; }
     (window as unknown as { __studio?: Studio }).__studio = st;
     if (curMoves.size) st.move(curMoves);
+    st.setHidden(defHidden);
     lights();
     setMode('gl');
   }).catch(() => { if (!dead) setMode('flat'); });
 
   return {
-    el, slot, chips, hint, refresh,
-    instances(key, geo, mat, data) { st?.setInstances(key, geo, mat, data); },
+    el, slot, chips, hint, refresh, goTo,
+    instances(key, geo, mat, data, casts) { st?.setInstances(key, geo, mat, data, undefined, casts); },
     move(m) { curMoves = m; if (mode === 'flat') drawFlat(); else st?.move(m); },
     studio: () => st,
     isFlat: () => mode === 'flat',
     rgb: (t) => colors.rgb(t),
-    destroy() { dead = true; cancelAnimationFrame(tween); cancelAnimationFrame(hoverRaf); frame.destroy(); unwatch(); st?.destroy(); st = null; colors.destroy(); },
+    knobs: () => knobs(),
+    destroy() { dead = true; cancelAnimationFrame(tween); cancelAnimationFrame(hoverRaf); ro.disconnect(); frame.destroy(); unwatch(); st?.destroy(); st = null; colors.destroy(); },
   };
 }

@@ -46,7 +46,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'mosfet', title: 'The MOSFET in 3D', category: 'devices', chapter: 'mosfet', step: 0,
     summary: 'Width, length and gate area as solid geometry: the inversion sheet and the carriers that cross it.',
-    files: ['modelhost', 'mosfet3dview', 'mosfet3dparts'], factory: 'mosfet3d', codex: ['mosfet', 'cmos'],
+    files: ['modelhost', 'mosfet3dview', 'mosfet3dkit'], factory: 'mosfet3d', codex: ['mosfet', 'cmos'],
     open: () => import('./modelhost').then((m) => m.mosfet3d()),
   },
   {
@@ -124,7 +124,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'enigma', title: 'The Enigma M4', category: 'machines', chapter: 'secret', step: 0,
     summary: 'The naval Enigma opened as an operator would: wheels, pawls, plugs and lamps are the cipher\'s state. Type on it.',
-    files: ['enigma3d', 'enigma3dview', 'enigma3dparts', 'enigma3dmachine', 'enigma3dextras'], factory: 'enigma3d', codex: ['enigma'],
+    files: ['enigma3d', 'enigma3dview', 'enigma3dstudio', 'enigma3dparts', 'enigma3dmachine', 'enigma3dextras'], factory: 'enigma3d', codex: ['enigma'],
     open: () => import('./enigma3d').then((m) => m.enigma3d()),
   },
   {
@@ -166,7 +166,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'cores', title: 'A core memory plane', category: 'memory', chapter: 'memory', step: 10,
     summary: 'Sixteen ferrite cores on X, Y, sense and inhibit wires: only the core where two half currents cross flips; reads restore.',
-    files: ['core3d', 'core3dview', 'core3dparts'], factory: 'core3d', codex: ['coremem', 'ram', 'senseamp'],
+    files: ['core3d', 'core3dview', 'core3dkit', 'core3dparts'], factory: 'core3d', codex: ['coremem', 'ram', 'senseamp'],
     open: () => import('./core3d').then((m) => m.core3d()),
   },
   {
