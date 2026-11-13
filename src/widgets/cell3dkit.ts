@@ -137,9 +137,9 @@ export function cellModel(c: Cell, look: CellLook): Model3 {
     items.push({ geo: boxGeo(c.w, z.li0, 44), mat: oxide, at: [0, z.li0 / 2, 0], name: 'pre-li1 dielectric', group: 'ild', order: 1, shadow: false, info: { dim: `${PDK.preLi} µm`, source: SRC.pdk, note: 'the plugs (licon1) go through it' } });
     if (metalOn) items.push({ geo: boxGeo(c.w, top - z.li0, 44), mat: oxide, at: [0, (z.li0 + top) / 2, 0], name: 'dielectric under metal 1', group: 'ild', order: 2, shadow: false, info: { dim: `${DRAWN.liMet + PDK.li1} µm (illustrative)`, source: SRC.illus } });
   }
-  // the frame home and the beats fit to (never drawn): the whole block. Left out of the flat build, whose drawing would paint them
-  if (look.detail === 'full') items.push({ geo: boxGeo(c.w, z.met1 + z.sub, 44), mat: M.paint([0, 0, 0]), at: [0, (z.met1 - z.sub) / 2, 0], group: 'cellbox', cut: 'none', shadow: false });
-  if (look.detail === 'full') items.push({ geo: boxGeo(3 * c.w, z.met1 + z.sub, 44), mat: M.paint([0, 0, 0]), at: [0, (z.met1 - z.sub) / 2, 0], group: 'rowbox', cut: 'none', shadow: false });
+  // the frame home and the beats fit to (never drawn): the whole block. (the stage hides them)
+  items.push({ geo: boxGeo(c.w, z.met1 + z.sub, 44), mat: M.paint([0, 0, 0]), at: [0, (z.met1 - z.sub) / 2, 0], group: 'cellbox', cut: 'none', shadow: false });
+  items.push({ geo: boxGeo(3 * c.w, z.met1 + z.sub, 44), mat: M.paint([0, 0, 0]), at: [0, (z.met1 - z.sub) / 2, 0], group: 'rowbox', cut: 'none', shadow: false });
   const cutZ = defaultCut(c) - 22;
   return {
     items, cuts: { planes: [{ n: [0, 0, 1], d: cutZ }], open: [23] },

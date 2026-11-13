@@ -260,8 +260,8 @@ export function babbageModel(look: BabbageLook): Model3 {
     const person = once('person', () => transform(extrude(personOutline().map(([x, y]) => [x, -y]), 60), new Float32Array([1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1])));
     items.push({ geo: person, mat: M.make({ base: [0.42, 0.45, 0.52], metal: 0, rough: 0.8, label: 'a person' }), at: [x0 - 420, y0, z0 + d / 2], name: 'a person, 1.75 m', group: 'engine', info: { dim: `${PERSON_MM} mm`, source: 'for scale' } });
   }
-  // the frames the views fit to (never drawn; left out of the flat build, whose drawing would paint them)
-  if (full) {
+  // the frames the views fit to (never drawn: the stage hides them)
+  {
     const ghostBox = M.make({ base: [0, 0, 0], metal: 0, rough: 1, label: 'frame' });
     const box = (g: string, w: number, h: number, d: number, at: Vec3) => items.push({ geo: roundedBox(w, h, d, 0, 1), mat: ghostBox, at, group: g, cut: 'none', shadow: false });
     // home: the lower wheels, where a run of 9s carries, with the levers and arms in front of them

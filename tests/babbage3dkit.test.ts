@@ -51,10 +51,10 @@ describe('the column', () => {
     expect(BEAT_LAYERS.length).toBe(m.beats!.length);
     BEAT_LAYERS.forEach((ls, i) => expect(ls.includes('engine')).toBe(m.beats![i].title === 'The whole engine'));
   });
-  it('the frames are in the 3D build only (the flat drawing would paint them)', () => {
+  it('the frames the views fit to are in both builds (the stage hides them), round what they frame', () => {
     for (const g of FRAME_GROUPS) {
       expect(babbageModel(look()).items.some((it) => it.group === g)).toBe(true);
-      expect(babbageModel(look({ detail: 'flat' })).items.some((it) => it.group === g)).toBe(false);
+      expect(babbageModel(look({ detail: 'flat' })).items.some((it) => it.group === g)).toBe(true);
     }
     const col = boundsOfNamed(babbageModel(look()), ['colbox']), wheels = boundsOfNamed(babbageModel(look()), ['wheels']);
     for (let a = 0; a < 3; a++) { expect(col.min[a]).toBeLessThanOrEqual(wheels.min[a]); expect(col.max[a]).toBeGreaterThanOrEqual(wheels.max[a]); }

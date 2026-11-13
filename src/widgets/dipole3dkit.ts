@@ -140,8 +140,8 @@ export function dipoleModel(run: DipoleRun, look: DipoleLook): Model3 {
   items.push({ geo: once('ins', () => roundedBox(9, GAP * MM + 10, 9, 1.5, full ? 3 : 1)), mat: M.make({ base: '--dp-ins', metal: 0, rough: 0.55, label: 'PTFE' }), name: 'feed gap', group: 'feed', cut: 'none',
     info: { dim: `${GAP * MM} mm gap`, source: SRC.illus, note: half ? 'the current is largest here: 73 Ω of radiation resistance (a cut half wave, its reactance trimmed out)' : 'the feed: where the line meets the arms' } });
   feedItems(items, run, look);
-  // the frames (never drawn; left out of the flat build, whose drawing would paint them)
-  if (full) {
+  // the frames (never drawn: the stage hides them)
+  {
   const ghostBox = M.make({ base: [0, 0, 0], metal: 0, rough: 1, label: 'frame' });
   items.push({ geo: once('homebox', () => roundedBox(HOME_BOX.x1 - HOME_BOX.x0, 2 * HOME_BOX.y, 4, 0, 1)), at: [(HOME_BOX.x0 + HOME_BOX.x1) / 2, 0, 0], mat: ghostBox, group: 'homebox', cut: 'none', shadow: false });
   items.push({ geo: once('reach', () => roundedBox(2 * lam + 10, 2 * hc + 20, 4, 0, 1)), mat: ghostBox, group: 'reach', cut: 'none', shadow: false });

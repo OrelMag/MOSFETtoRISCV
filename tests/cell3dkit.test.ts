@@ -80,7 +80,7 @@ describe('the subject first, one layer at a time', () => {
     });
     for (const g of FRAME_GROUPS) {
       expect(cellModel(NAND2, { ...look(), detail: 'full' }).items.some((it) => it.group === g)).toBe(true);
-      expect(m.items.some((it) => it.group === g)).toBe(false);
+      expect(m.items.some((it) => it.group === g)).toBe(true);
     }
   });
   it('the cut runs through the NMOS gate', () => {
