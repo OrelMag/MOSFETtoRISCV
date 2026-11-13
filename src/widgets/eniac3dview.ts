@@ -9,6 +9,7 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
 import { studioStage } from './studiostage';
+import { keepWidth } from './studiowidth';
 import { ENIAC_HOME, eniacModel } from './eniac3dkit';
 import { ACCUMULATORS, DIGITS, RING_TRIODES, STAGES, TUBES_PER_DIGIT, pulse, zero, type Decades } from './eniac3dgeom';
 import { ENIAC } from '../phys/triode';
@@ -28,6 +29,7 @@ export function eniacView(): Widget {
     note: `ENIAC's decade ring counter after the U.S. Army Ordnance history (1961): ten flip-flops a decade, two triodes each with one conducting, a neon on the front panel for each, a pulse advancing the ring one stage, a pulse to the next ring when it passes nine. The 6SN7 is to its datasheet's outline (Rock's tube, at its low detail); the unit's length, about 114.5 cm, is the Smithsonian's ENIAC Decade Ring Counter; its depth, the sockets' spacing, the neons and their place on the front edge, the grey paint and the plug are drawn (the lit neon's glow far wider than the lamp, so it reads at this scale). The heaters glow as Rock's tube model computes them at full warmth; the glow between the plates of each tube's conducting half is a cue (a 6SN7's current makes no light): the left half conducts in nine stages, the right half in the one holding the digit. The dim back row stands for the digit's other ${TUBES_PER_DIGIT - STAGES} tubes (pulse standardizer, carry, output transmitters), drawn plain and unlit so the ring leads. The tens decade stands behind and above the units (drawn: in ENIAC the decades sat side by side in an accumulator's panels). Two decades are drawn; an accumulator had ten and a sign. The counting rate is slowed: ENIAC counted at 100 000 pulses a second.`,
     build: (detail) => eniacModel({ d, pulsing: lit > 0 }, detail),
   });
+  const width = keepWidth(stage, 2.0, () => ENIAC_HOME); // the canvas's width / height at 1440 px, gutters included
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
   stage.chips.append(chip);
   function readout(): void {
@@ -69,5 +71,5 @@ export function eniacView(): Widget {
       h('div', { class: 'r3-main' }, stage.el),
       h('div', { class: 'r3-side' }, h('h4', null, 'This accumulator ', h('span', { class: 'r3-badge' }, 'model')), kv)));
   readout();
-  return { el: panel, destroy() { loop.stop(); stage.destroy(); } };
+  return { el: panel, destroy() { width.stop(); loop.stop(); stage.destroy(); } };
 }
