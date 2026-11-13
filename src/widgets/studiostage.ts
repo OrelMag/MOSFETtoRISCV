@@ -22,6 +22,7 @@ import type { Studio } from '../gl/studio';
 import { h, icon, s } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { framing, namesShown } from '../gl/kit/names';
+import { WHEEL_HINT } from '../gl/kit/wheel';
 import { reducedMotion } from '../ui/motion';
 import { modelFrame } from './modelframe';
 
@@ -91,6 +92,8 @@ const MIN_CANVAS = 260, MIN_CANVAS_H = 240, GUTTER_MIN = 56, GUTTER_MAX = 150;
 /** The canvas's aspect (w / h) is the model's, held within these. */
 const ASPECT_MIN = 0.62, ASPECT_MAX = 1.9;
 const ease = (t: number) => t * t * (3 - 2 * t);
+/** The wheel hint shows once a page load, over whichever model was scrolled past first. */
+let wheelHinted = false;
 
 export function studioStage(o: StudioStageOptions): StudioStage {
   const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': `${o.aria}: drag to turn, wheel or pinch to zoom; point at a part for its name` }) as HTMLCanvasElement;
@@ -109,6 +112,15 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   // the gutters lie over the canvas's side bands: the canvas takes the column's width and the model is fitted between them
   const view = h('div', { class: 'st-view r3-stage' }, canvas, flat, gutL, gutR, leaders, badges, card, chips, stats, scaleBar);
   const stage = h('div', { class: 'st-stage' }, view);
+  // the wheel over a canvas not yet clicked scrolls the page (gl/orbit.ts, kit/wheel.ts): say once how to zoom
+  const whint = h('div', { class: 'st-whint', 'aria-hidden': 'true' }, WHEEL_HINT);
+  view.append(whint);
+  canvas.addEventListener('orbit:wheelpass', () => {
+    if (wheelHinted) return;
+    wheelHinted = true;
+    whint.classList.add('on');
+    setTimeout(() => whint.classList.remove('on'), 3200);
+  });
   const list = h('ol', { class: 'st-list' });
 
   const exIn = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: 0, 'aria-label': 'Exploded view' }) as HTMLInputElement;

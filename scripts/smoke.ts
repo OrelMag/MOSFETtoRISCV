@@ -656,6 +656,44 @@ const NAMES_OFF_DRIVE = `(async () => {
   return bad;
 })()`;
 
+/** A 3D model's wheel rule (gl/kit/wheel.ts): over a canvas nobody clicked the wheel is the page's (not cancelled, the
+ *  camera still, the hint shown once); focused, it zooms; Esc lets go; Ctrl + wheel always zooms; touch-action follows.
+ *  Synthetic wheel events have no default action, so "the page's" is read as "not cancelled": the browser then scrolls. */
+const WHEEL_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let st = null;
+  for (let i = 0; i < 40 && !(st = window.__studio); i++) await wait(250);
+  if (!st) return ['no studio renderer (window.__studio)'];
+  const canvas = document.querySelector('.st-view canvas.r3-canvas');
+  if (!canvas) return ['no 3D canvas'];
+  await wait(600);
+  const bad = [];
+  const r = canvas.getBoundingClientRect();
+  const turn = (o = {}) => {
+    const e = new WheelEvent('wheel', { deltaY: 120, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true, ...o });
+    const d0 = st.camera.dist;
+    canvas.dispatchEvent(e);
+    return { prevented: e.defaultPrevented, moved: Math.abs(st.camera.dist - d0) > 1e-9 };
+  };
+  canvas.blur();
+  if (canvas.style.touchAction !== 'pan-y') bad.push('touch-action over an unfocused canvas is ' + canvas.style.touchAction + ', not pan-y');
+  let t = turn();
+  if (t.prevented || t.moved) bad.push('the wheel over an unfocused canvas zoomed instead of scrolling the page');
+  await wait(100);
+  if (!document.querySelector('.st-whint.on')) bad.push('no hint after a wheel the page took');
+  canvas.focus();
+  if (canvas.style.touchAction !== 'none') bad.push('touch-action over a focused canvas is ' + canvas.style.touchAction + ', not none');
+  t = turn();
+  if (!t.prevented || !t.moved) bad.push('the wheel over a focused canvas did not zoom');
+  canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  if (document.activeElement === canvas) bad.push('Esc did not let go of the canvas');
+  t = turn();
+  if (t.prevented || t.moved) bad.push('the wheel zoomed after Esc');
+  t = turn({ ctrlKey: true });
+  if (!t.prevented || !t.moved) bad.push('Ctrl + wheel over an unfocused canvas did not zoom');
+  return bad;
+})()`;
+
 const GALLERY_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
@@ -1463,6 +1501,8 @@ function routes(): Route[] {
   const m0 = MODELS_3D[0];
   add(`#/c/${m0.chapter}/${m0.step}`, namesOff, ` (3D model, names off, ${phoneVp.name})`, phoneVp, NAMES_OFF_DRIVE);
   add(`#/c/${m0.chapter}/${m0.step}`, namesOff, ' (3D model, names off)', undefined, NAMES_OFF_DRIVE);
+  // the wheel belongs to the page until the canvas is clicked (gl/kit/wheel.ts)
+  add(`#/c/${m0.chapter}/${m0.step}`, light, ' (3D model, wheel)', undefined, WHEEL_DRIVE);
   for (const n of NODES) {
     add(`#/campaign/play/${n.id}`, unlocked);
     // Lessons, drills and programs open on the map instead (pages/level.ts levelRoute).
