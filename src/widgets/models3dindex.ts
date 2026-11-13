@@ -244,7 +244,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'pixel4t', title: 'A CMOS pixel, cut open', category: 'devices', chapter: 'sensors', step: 2,
     summary: 'A 2.4 µm back-illuminated 4T pixel: each colour stops at its own depth, electrons fill the photodiode, a CDS read runs.',
-    files: ['pixel4t3d', 'pixel4t3dview', 'pixel4t3dparts'], factory: 'pixel4t3d', codex: ['aps', 'cds', 'qe', 'fullwell'],
+    files: ['pixel4t3d', 'pixel4t3dview', 'pixel4t3dkit', 'pixel4t3dgeom'], factory: 'pixel4t3d', codex: ['aps', 'cds', 'qe', 'fullwell'],
     open: () => import('./pixel4t3d').then((m) => m.pixel4t3d()),
   },
   {

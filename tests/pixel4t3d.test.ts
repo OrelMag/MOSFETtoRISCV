@@ -1,20 +1,15 @@
 // The 4T pixel model, held to phys/imagesensor.ts: photons absorbed deeper for longer wavelengths, electrons per photon
 // equal to qe() on average, the CDS phases in order with the FD drop = charge × CG, and the drawing following the state.
 import { describe, expect, it } from 'vitest';
-import type { RGB, RGBA } from '../src/gl/instances';
+import type { Item } from '../src/gl/kit/scene';
+import { CUT_Z, cutAt, lensHeight, LENS_H, pixModel } from '../src/widgets/pixel4t3dkit';
 import { absorptionDepth, CG_4T, IMX183, qe } from '../src/phys/imagesensor';
 import {
   absorbed, AR_T, BACK, CF, dots, DRAWN, FUNNEL, ILD_T, L, P_BACK, STI_D, WAFER_T,
-  electronsOf, FILTER_NM, FULL_WELL, IDLE, nextPhase, PHOTONS_PER_FLASH, photonsAt, phaseOf, pixAnchors, pixParts, PITCH, SI_T, sequenceOf, U,
-  type PixPalette, type PixState,
-} from '../src/widgets/pixel4t3dparts';
+  electronsOf, FILTER_NM, FULL_WELL, IDLE, nextPhase, PHOTONS_PER_FLASH, photonsAt, phaseOf, PITCH, SI_T, sequenceOf, DOT, dotAt, PD_BOX, FD_BOX,
+  type PixState,
+} from '../src/widgets/pixel4t3dgeom';
 
-const c = (v: number): RGB => [v, v, v], a = (v: number): RGBA => [v, v, v, 0.4];
-const P: PixPalette = {
-  si: a(0.6), p: c(0.5), n: c(0.7), nplus: c(0.65), poly: [0.8, 0.2, 0.2], metal: c(0.6), oxide: a(0.9), lens: a(0.8),
-  filter: { b: [0, 0, 1, 0.5], g: [0, 1, 0, 0.5], r: [1, 0, 0, 0.5] }, charge: [0, 1, 0.5], hot: [1, 0.6, 0], light: { b: [0, 0, 1], g: [0, 1, 0], r: [1, 0, 0] },
-  sti: [0.3, 0.3, 0.9, 0.8], dti: [0.2, 0.2, 0.7, 0.7], ar: [[0.5, 0.2, 0.8, 0.9], [0.8, 0.3, 0.6, 0.9], [0.6, 0.8, 0.9, 0.7]], pback: [0.4, 0.5, 0.8, 0.8], grid: c(0.55), ild: a(0.2), wafer: c(0.45),
-};
 
 describe('light into charge', () => {
   it('the IMX183\'s pitch, its BSI collecting depth and full well', () => {
@@ -58,96 +53,91 @@ describe('the read', () => {
   });
 });
 
-describe('the drawing', () => {
-  const pose = (s: PixState, o: Partial<{ cut: boolean }> = {}) => ({ s, filter: 'g' as const, photons: [], cut: true, ...o });
-  it('draws a dot per DOT electrons in the photodiode, then on FD after TX', () => {
-    const charge = (s: PixState) => pixParts(pose(s), P).filter((p) => p.color === P.charge);
-    expect(charge({ ...IDLE, pd: 7400 })).toHaveLength(dots(7400));
-    let s: PixState = { ...IDLE, pd: 7400 };
-    for (let i = 0; i < 3; i++) s = nextPhase(s);
-    const after = charge(s);
-    expect(after).toHaveLength(dots(7400));
-    for (const p of after) expect(p.pos[0]).toBeGreaterThan(1.8 * U); // all at the floating diffusion's x
-  });
-  it('lights the transfer gate during TX only, the reset gate during RST only', () => {
-    const lit = (s: PixState) => pixParts(pose(s), P).filter((p) => p.color === P.poly && p.emissive).length;
-    let s: PixState = { ...IDLE, pd: 1000 };
-    const counts: number[] = [];
-    for (let i = 0; i < 4; i++) { s = nextPhase(s); counts.push(lit(s)); }
-    expect(counts).toEqual([2, 1, 2, 1]); // RST + RS, RS, TX + RS, RS
-    expect(lit(IDLE)).toBe(0);
-  });
-  it('keeps every part inside the pixel across, and labels the instances PIXEL_4T names', () => {
-    for (const p of pixParts(pose({ ...IDLE, pd: FULL_WELL }, { cut: false }), P)) {
-      expect(p.pos[0]).toBeGreaterThanOrEqual(-1e-9);
-      expect(p.pos[0]).toBeLessThanOrEqual(PITCH * U + 1e-9);
+describe('the studio model', () => {
+  const m = (s: PixState, filter: 'b' | 'g' | 'r' = 'g') => pixModel({ s, filter });
+  const named = (s: PixState, name: string) => m(s).items.filter((i) => i.name === name);
+  const yRange = (i: Item) => [(i.at?.[1] ?? 0) + i.geo.min[1], (i.at?.[1] ?? 0) + i.geo.max[1]];
+  const after = (n: number, pd = 9000) => { let t: PixState = { ...IDLE, pd }; for (let i = 0; i < n; i++) t = nextPhase(t); return t; };
+  it('charge dots: one per DOT electrons, in the photodiode, then on the floating diffusion after TX', () => {
+    expect(dots(7400)).toBe(Math.round(7400 / DOT));
+    for (let k = 0; k < dots(FULL_WELL); k++) {
+      const p = dotAt(k, PD_BOX.x, PD_BOX.y, PD_BOX.z);
+      expect(p[0]).toBeGreaterThanOrEqual(L.pd.x[0]); expect(p[0]).toBeLessThanOrEqual(L.pd.x[1]);
+      expect(p[1]).toBeGreaterThanOrEqual(L.pd.y[0]); expect(p[1]).toBeLessThanOrEqual(L.pd.y[1]);
+      expect(dotAt(k, FD_BOX.x, FD_BOX.y, FD_BOX.z)[0]).toBeGreaterThan(1.8);
     }
-    const t = pixAnchors(pose(IDLE)).map((a) => a.text).join(' ');
-    for (const n of ['pd', 'xfer', 'fd', 'reset', 'sf', 'rs']) expect(t).toMatch(new RegExp(`\\b${n}\\b`));
   });
-});
-
-describe('the detail the audit asked for', () => {
-  const pose = (cut: boolean) => ({ s: IDLE, filter: 'g' as const, photons: [], cut });
-  type Bx = { pos: readonly number[]; scale?: readonly number[] };
-  const top = (p: Bx) => (p.pos[1] + p.scale![1] / 2) / U, bot = (p: Bx) => (p.pos[1] - p.scale![1] / 2) / U;
-  it('draws deep trench isolation to the full silicon depth, inside the pitch, and shallow trench at the front', () => {
-    const parts = pixParts(pose(false), P);
-    const dti = parts.filter((p) => p.color === P.dti), sti = parts.filter((p) => p.color === P.sti);
+  it('lights the transfer gate during TX only, the reset gate during RST only, the select while the row is read', () => {
+    const lit = (s: PixState) => m(s).items.filter((i) => i.group === 'gates' && i.mat.emit).map((i) => i.name).sort();
+    expect(lit(after(1))).toEqual(['reset', 'rs: row select']);
+    expect(lit(after(2))).toEqual(['rs: row select']);
+    expect(lit(after(3))).toEqual(['rs: row select', 'xfer: transfer gate']);
+    expect(lit(after(4))).toEqual(['rs: row select']);
+    expect(lit(IDLE)).toEqual([]);
+  });
+  it('lights the FD to follower wire while the row is selected, and the FD glows once its voltage has dropped', () => {
+    const wire = (s: PixState) => named(s, 'FD to the follower\'s gate (metal 1)').filter((i) => i.mat.emit).length;
+    expect(wire(IDLE)).toBe(0);
+    expect(wire(after(1))).toBeGreaterThan(4);
+    const fd = (s: PixState) => (named(s, 'fd: floating diffusion')[0].mat.glow ?? 0);
+    expect(fd(after(2))).toBe(0);
+    expect(fd(after(3))).toBeGreaterThan(0);
+  });
+  it('deep trenches run the full silicon depth, four walls; the shallow trench is at the front', () => {
+    const dti = named(IDLE, 'DTI: deep trench');
     expect(dti).toHaveLength(4);
-    for (const w of dti) { expect(bot(w)).toBeCloseTo(0, 6); expect(top(w)).toBeCloseTo(SI_T, 6); }
-    expect(sti).toHaveLength(1);
-    expect(top(sti[0])).toBeCloseTo(STI_D, 6);
-    expect(bot(sti[0])).toBeCloseTo(0, 6);
+    for (const w of dti) { const [a, b] = yRange(w); expect(a).toBeCloseTo(0, 6); expect(b).toBeCloseTo(SI_T, 6); }
+    const [sti] = named(IDLE, 'STI: shallow trench'), [a, b] = yRange(sti);
+    expect(a).toBeCloseTo(0, 6); expect(b).toBeCloseTo(STI_D, 6);
   });
-  it('stacks the films on the back surface in order, then the filter on top of them, the p+ layer inside the silicon', () => {
-    const parts = pixParts(pose(true), P);
+  it('stacks the films on the back surface, the filter on them, the lens on the filter; p+ inside the silicon', () => {
+    const films = named(IDLE, 'anti-reflection films').map(yRange).sort((p, q) => p[0] - q[0]);
     let y = SI_T;
-    for (const c of P.ar) {
-      const f = parts.find((p) => p.color === c)!;
-      expect(bot(f)).toBeCloseTo(y, 6);
-      y = top(f);
-    }
-    expect(y).toBeCloseTo(BACK, 6);
-    expect(AR_T).toBeCloseTo(0.19, 9);
-    expect(CF[0]).toBe(BACK);
-    const pb = parts.find((p) => p.color === P.pback)!;
-    expect(top(pb)).toBeCloseTo(SI_T, 6);
-    expect(top(pb) - bot(pb)).toBeCloseTo(P_BACK, 6);
+    for (const [a, b] of films) { expect(a).toBeCloseTo(y, 6); y = b; }
+    expect(y).toBeCloseTo(BACK, 6); expect(AR_T).toBeCloseTo(0.19, 9);
+    expect(yRange(named(IDLE, 'colour filter')[0])[0]).toBeCloseTo(CF[0], 6);
+    expect(yRange(named(IDLE, 'microlens')[0])[0]).toBeCloseTo(CF[1], 6);
+    const [pa, pb] = yRange(named(IDLE, 'p+ back layer')[0]);
+    expect(pb).toBeCloseTo(SI_T, 6); expect(pb - pa).toBeCloseTo(P_BACK, 6);
   });
-  it('bonds a carrier wafer under the oxide below the metal, and keeps every part inside the 2.4 µm pitch in both directions', () => {
-    const parts = pixParts(pose(false), P);
-    const wafer = parts.find((p) => p.color === P.wafer)!;
-    expect(top(wafer)).toBeCloseTo(-ILD_T, 6);
-    expect(top(wafer) - bot(wafer)).toBeCloseTo(WAFER_T, 6);
-    for (const p of parts) for (const k of [0, 2]) {
-      expect(p.pos[k] - p.scale![k] / 2).toBeGreaterThanOrEqual(-1e-6);
-      expect(p.pos[k] + p.scale![k] / 2).toBeLessThanOrEqual(PITCH * U + 1e-6);
+  it('the carrier wafer under the oxide, and every part inside the 2.4 µm pitch both ways', () => {
+    const [a, b] = yRange(named(IDLE, 'carrier wafer')[0]);
+    expect(b).toBeCloseTo(-ILD_T, 6); expect(b - a).toBeCloseTo(WAFER_T, 6);
+    for (const i of m({ ...IDLE, pd: FULL_WELL }).items) for (const k of [0, 2]) {
+      expect((i.at?.[k] ?? 0) + i.geo.min[k]).toBeGreaterThanOrEqual(-1e-6);
+      expect((i.at?.[k] ?? 0) + i.geo.max[k]).toBeLessThanOrEqual(PITCH + 1e-6);
     }
   });
-  it('grades the potential: layers narrow onto the photodiode and strengthen toward it', () => {
-    const f = pixParts(pose(false), P).filter((p) => p.color.length === 4 && p.color[0] === P.n[0] && p.color[1] === P.n[1] && p.color[2] === P.n[2] && p.scale![1] / U < 0.4);
-    expect(f.length).toBeGreaterThanOrEqual(FUNNEL);
-    const g = f.filter((p) => p.pos[1] / U > L.pd.y[1] && p.scale![1] / U < 0.4).sort((a, b) => b.pos[1] - a.pos[1]);
-    expect(g).toHaveLength(FUNNEL);
-    for (let i = 1; i < g.length; i++) {
-      expect(g[i].scale![0]).toBeLessThan(g[i - 1].scale![0]);
-      expect(g[i].color[3]!).toBeGreaterThan(g[i - 1].color[3]!);
+  it('the funnel: layers narrow onto the photodiode and grow stronger toward it', () => {
+    const f = named(IDLE, 'potential funnel').sort((p, q) => (q.at![1]) - (p.at![1]));
+    expect(f).toHaveLength(FUNNEL);
+    for (let i = 1; i < f.length; i++) {
+      expect(f[i].geo.max[0] - f[i].geo.min[0]).toBeLessThan(f[i - 1].geo.max[0] - f[i - 1].geo.min[0]);
+      expect(f[i].mat.transmit!).toBeLessThan(f[i - 1].mat.transmit!);
     }
   });
-  it('lights the FD to follower wire while the row is selected, and tints FD by its drop', () => {
-    const lit = (s: PixState) => pixParts({ s, filter: 'g' as const, photons: [], cut: false }, P).filter((p) => p.color === P.metal && p.emissive).length;
-    let s: PixState = { ...IDLE, pd: 9000 };
-    expect(lit(s)).toBe(0);
-    s = nextPhase(s);
-    expect(lit(s)).toBeGreaterThan(5);
-    const fdGlow = (s: PixState) => pixParts({ s, filter: 'g' as const, photons: [], cut: false }, P).find((p) => p.color === P.nplus && p.pos[0] > 1.8 * U && p.pos[2] < 1.2 * U)?.emissive?.[0] ?? 0;
-    const after = (n: number) => { let t = { ...IDLE, pd: 9000 } as PixState; for (let i = 0; i < n; i++) t = nextPhase(t); return t; };
-    expect(fdGlow(after(2))).toBe(0); // SHR: FD at the reset level
-    expect(fdGlow(after(3))).toBeGreaterThan(fdGlow(after(2))); // TX: it has dropped
+  it('the microlens is a spherical cap on the square cell: its corners meet the filter, its centre is the sag, and it is closed', () => {
+    expect(lensHeight(0, 0)).toBeCloseTo(LENS_H, 9);
+    expect(lensHeight(PITCH / 2, PITCH / 2)).toBeCloseTo(0, 6);
+    expect(lensHeight(PITCH / 2, 0)).toBeGreaterThan(0.2);
+    const g = named(IDLE, 'microlens')[0].geo, edges = new Map<string, number>(), I = g.indices, P = g.positions;
+    const key = (i: number) => `${P[3 * i].toFixed(5)},${P[3 * i + 1].toFixed(5)},${P[3 * i + 2].toFixed(5)}`;
+    for (let t = 0; t < I.length; t += 3) for (let e = 0; e < 3; e++) {
+      const a = key(I[t + e]), b = key(I[t + (e + 1) % 3]), c = key(I[t + (e + 2) % 3]);
+      if (a === b || b === c || a === c) continue; // a sliver where a wall comes down to the corner: zero area
+      const k = a < b ? `${a}|${b}` : `${b}|${a}`;
+      edges.set(k, (edges.get(k) ?? 0) + 1);
+    }
+    expect([...edges.values()].filter((n) => n % 2 !== 0)).toHaveLength(0);
   });
-  it('keeps the instance count sane', () => {
-    expect(pixParts(pose(true), P).length).toBeLessThan(120);
-    expect(pixParts(pose(false), P).length).toBeLessThan(130);
+  it('the cut is through the photodiode\'s middle; particles in front of it are left out', () => {
+    expect(CUT_Z).toBeCloseTo((L.pd.z[0] + L.pd.z[1]) / 2, 9);
+    expect(cutAt(1)).toBeCloseTo(CUT_Z, 9);
+    expect(cutAt(0)).toBe(-Infinity);
+  });
+  it('labels the instances PIXEL_4T names, and has a tour', () => {
+    const t = (m(IDLE).anchors ?? []).map((a) => a.text).join(' ');
+    for (const n of ['pd', 'xfer', 'fd', 'reset', 'sf', 'rs']) expect(t).toMatch(new RegExp(`\\b${n}\\b`));
+    expect(m(IDLE).beats!.length).toBeGreaterThanOrEqual(5);
   });
 });
