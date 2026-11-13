@@ -18,6 +18,8 @@ export function nandView(): Widget {
     home: NAND_HOME,
     aspect: 1.5,
     knobs: { cut: 1 },
+    // the word-line contacts, 38 rods side by side, are a grey haze at home: shown in the staircase beat only
+    hidden: ['stair'],
     scaleBar: (len) => (len >= 100 ? `${len / 100} µm` : `${len * 10} nm`),
     limits: { minDist: 12, maxDist: 2000 },
     note: `Samsung's second-generation V-NAND (32 word lines, 38 levels), to scale from TechInsights' cross-sections: a ${HOLE_NM} nm hole, a ${CORE_NM} nm core, layers ${PITCH_NM} nm apart (the figure published for the 128-layer part). The split of the ${ONO_NM} nm ONO, the select gates' shape and the bit lines are typical; the staircase is drawn ${STAIR_K} times shorter than its 20 µm. The chosen pillar follows the chapter's rules; the others are drawn.`,
