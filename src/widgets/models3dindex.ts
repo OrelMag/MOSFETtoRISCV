@@ -64,7 +64,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'cell', title: 'A standard cell, layer by layer', category: 'devices', chapter: 'silicon', step: 0,
     summary: 'A CMOS cell from well to metal 1 with a section plane through a gate: n+, oxide, poly, n+.',
-    files: ['cell3d', 'cell3dview', 'cell3dparts'], factory: 'cell3d', codex: ['stdcell', 'cmos'],
+    files: ['cell3d', 'cell3dview', 'cell3dkit', 'cell3dparts'], factory: 'cell3d', codex: ['stdcell', 'cmos'],
     open: () => import('./cell3d').then((m) => m.cell3d()),
   },
   {
