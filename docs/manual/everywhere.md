@@ -19,6 +19,7 @@ sharing, printing, backups, phones, offline use and the desktop program.
 - [Bookmark a place and write a note](#bookmark-a-place-and-write-a-note)
 - [Review what you have read](#review-what-you-have-read)
 - [Use a 3D model](#use-a-3d-model)
+- [Make room for the circuit](#make-room-for-the-circuit)
 - [Share a circuit as an image or a link](#share-a-circuit-as-an-image-or-a-link)
 - [Print a chapter or save it as a PDF](#print-a-chapter-or-save-it-as-a-pdf)
 - [Back up your progress and move it to another browser](#back-up-your-progress-and-move-it-to-another-browser)
@@ -252,6 +253,16 @@ parts apart). Many also have their own controls, such as the transistor's **Gate
 **Take the tour.** Click **Tour ›** for a guided walk through the model, one part at a time, with a caption for each.
 Then **Next ›** moves on and **‹ Back** goes back a stop; at the last stop **Done** ends the tour.
 
+## Make room for the circuit
+
+The circuit's toolbar, above every circuit in a chapter step and in the workbench, has three buttons for this:
+
+- **Fit to screen** (four corners) fits the whole circuit in view again after you have zoomed or moved it. With the circuit
+  focused, **0** does the same.
+- **Hide the side panes** (the last button) gives the circuit the full width of the window, hiding the chapter text and the
+  inspector. Click it again to bring them back.
+- With the circuit focused, **F** folds every panel and the inspector, and brings them back when you press it again.
+
 ## Share a circuit as an image or a link
 
 On any circuit (a chapter step or the workbench), click **Share this view** (the picture icon) in the circuit's toolbar. When the toolbar has no room for it, the same three rows are in **More tools**.
@@ -375,10 +386,13 @@ These work on every page. Press **?** for the full list of the page you are on.
 
 On a circuit, once it has the focus (press **S**): **F** folds every panel, **P** probes wires, **W** asks *Why?* of a wire,
 **Esc** or **Backspace** goes up one level, the arrow keys move a cursor between parts and pins, **Space** toggles the input
-under the cursor, **Enter** toggles an input, opens a part or reads out an output, **Ctrl Enter** runs or pauses the clock,
+under the cursor, **Home** and **End** move the cursor to the first input and the first output, **Enter** toggles an input,
+opens a part or reads out an output, **Ctrl Enter** runs or pauses the clock,
 **Ctrl Z** / **Ctrl Y** undo and redo moving parts, **.** runs one clock cycle (Pulse), **>** one gate delay (Step) and **,**
 goes back a step, **+**, **−** and **0** zoom in, zoom out and fit, **O** shows the next overlay (slack, activity, load and
 more; **Shift O** turns it off), and **Shift F10** (or the menu key) opens the menu of the selected wire or part.
+
+In a CPU panel's program listing, once it has the focus, **↑** and **↓** pick a line and **F9** sets a breakpoint on it.
 
 | Gesture | Mouse | Touch |
 |---|---|---|

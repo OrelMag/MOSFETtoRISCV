@@ -123,7 +123,7 @@ review queue; one backup file carries all progress; the site installs as an app 
 <table>
 <tr>
 <td width="50%"><img src="docs/images/relay3d.png" alt="A telephone relay in 3D beside its coil current and armature travel"><br><sub><b>P1</b>: a relay in 3D on a physical model: pull-in, contact bounce, the 8 ms step a relay computer runs at.</sub></td>
-<td width="50%"><img src="docs/images/triode3d.png" alt="A 6SN7 triode section in 3D with its plate curve"><br><sub><b>P2</b>: a 6SN7 triode warming up, its grid deciding the plate current; tube gates follow.</sub></td>
+<td width="50%"><img src="docs/images/triode3d.png" alt="A 6SN7 triode section in 3D, its grid, heater, cutaway and explode controls below"><br><sub><b>P2</b>: a 6SN7 triode warming up, its grid deciding the plate current; tube gates follow.</sub></td>
 </tr>
 <tr>
 <td><img src="docs/images/mosfet.png" alt="MOSFET cross-section: the channel forms past the threshold voltage"><br><sub><b>Ch. <!--n:ch.mosfet-->1<!--/n--></b>: the MOSFET. Raise the gate past the threshold and the channel forms.</sub></td>
