@@ -57,9 +57,11 @@ const DRIVE_MS = 2 * routeTimeout;
 const throttle = Number(opt('throttle') ?? 1);
 // After the load and two frames: long enough for a 2 Hz automatic clock (settings.autoClock) to tick once.
 const dwell = Number(opt('dwell') ?? 600);
-// `--zoom-open on | off`: View options ▸ Open blocks as you zoom for every route that does not set it itself (on by default
-// since 2026-11-13; `off` is the lens's "off restores today" check, DESIGN.md: the same routes with it on and off).
-const zoomOpen = opt('zoom-open');
+// `--zoom-open on | off | default`: View options ▸ Open blocks as you zoom for every route that does not set it itself. Off
+// unless given: the lens is on by default for readers (2026-11-13), but the bulk of the ~3 400 routes check pages, not the
+// lens, and the lens's own routes set it on (and one leaves it at its default); `default` leaves the setting unset everywhere.
+const zoomOpenOpt = opt('zoom-open') ?? 'off';
+const zoomOpen = zoomOpenOpt === 'default' ? undefined : zoomOpenOpt;
 
 // ---- routes ----------------------------------------------------------------------------------
 
@@ -1723,7 +1725,8 @@ function routes(): Route[] {
   // the fingers on an open inside: a closing pinch, then one spreading to the hand-off, nothing moving under them
   // alu's inside fills its box; pc's is a narrow column in a wider box (fingers on its margin step in all the same)
   for (const vp of TOUCH_VIEWPORTS) for (const part of ['alu', 'pc']) add('#/c/cpu/0', lensOn(vp === TOUCH_VIEWPORTS[0] ? 'light' : 'dark'), ` (zoom lens, fingers on an inside, ${part}, ${vp.name})`, vp, lensTouchDrive(part));
-  add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens at its default, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('open', 'ctl'));
+  // zoomOpen: null is the reader's "never chose" (on); set, so the bulk routes' off does not replace it
+  add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, zoomOpen: null, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens at its default, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('open', 'ctl'));
   add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, zoomOpen: false, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens off, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('off', 'ctl'));
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
   // The layout lock: locked by default on a touch screen, unlocked with a mouse; an arrangement of an older drawing set aside.
