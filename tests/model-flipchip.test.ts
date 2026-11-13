@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { triangles } from '../src/gl/kit/geo';
 import { groundBounce, VIL } from '../src/phys/line';
 import { BOND, BUMP, STACK, bondNh, bumpNh, layerR, parallelNh, roundL, stackR, wireL } from '../src/phys/flipchip';
-import { bondL } from '../src/widgets/package3dparts';
+import { bondL } from '../src/widgets/package3dkit';
 import { padSwing } from '../src/widgets/line';
 import { A, A1, BALL_PITCH, BALLS, BODY, BUMPS, BUMP_TOP, CUT, DIE_TOP, DIE_X, DIE_Z, LID, LID_TOP, MATRIX, SUB_LAYERS, SUB_TOP, TIM_TOP, ballPos, ballPresent, bumpLine, fcModel } from '../src/widgets/flipchip3dkit';
 
