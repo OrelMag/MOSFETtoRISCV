@@ -224,6 +224,9 @@ export const MUX16: ComponentDef = (() => {
     const [, oy] = port(`my_${k}`, 'out'), [, iy] = port('my', `i${k}`);
     netOf(`my.i${k}`).via = { [`my.i${k}`]: [[X + CW - 6, oy], [X + CW - 6, iy]] };
   }
+  // b's pin two units under a's, so the two value badges do not overlap; up into sb just before it
+  netOf('sb.in').via = { 'sb.in': [[3, port('sb', 'in')[1] + 2], [3, port('sb', 'in')[1]]] };
+  delete netOf('sb.in').tags; delete netOf('sa.in').tags;
   const R_ = XM + 6;
   const pa = port('sa', 'in'), pb = port('sb', 'in'), ps = port('inv', 'a');
   return define({
@@ -232,7 +235,7 @@ export const MUX16: ComponentDef = (() => {
     ports: [bus('a', 16, 'in'), bus('b', 16, 'in'), { name: 's', width: 1, dir: 'in', side: 'bottom' }, bus('y', 16, 'out')],
     symbol: { kind: 'mux' },
     spec: ([a, b, s]) => [s ? b : a],
-    netlist: () => ({ pins: { a: [0, pa[1]], b: [0, pb[1]], s: [0, ps[1]], y: [R_, port('my', 'out')[1]] }, instances: b.instances, nets }),
+    netlist: () => ({ pins: { a: [0, pa[1]], b: [0, pb[1] + 2], s: [0, ps[1]], y: [R_, port('my', 'out')[1]] }, instances: b.instances, nets }),
   });
 })();
 

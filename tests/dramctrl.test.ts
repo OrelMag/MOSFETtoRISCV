@@ -135,3 +135,28 @@ describe('workloads priced by the models (chapter 36)', () => {
     expect(schedule(q, 'fcfs', 4, 2).filter((s) => s.outcome === 'hit').length).toBe(0);
   });
 });
+
+// The controller drawn as six blocks (eyes pass, release 2.0): the hierarchy is free, so the gates are the flat drawing's.
+describe('DRAM controller blocks', () => {
+  it('six named blocks, the same NANDs, depth and period as the flat drawing', async () => {
+    const { stats } = await import('../src/sim/stats');
+    const { analyzeTiming } = await import('../src/sim/timing');
+    const { netlistOf } = await import('../src/sim/types');
+    // measured on the flat drawing before the blocks (main 9c0fe7ba): NANDs, clock period in NAND delays, flattened leaves
+    // (two more than flat: the state, wait and refresh blocks each tie their registers' enable to their own 1, a tie cell, no gate)
+    const flat: [DramConfig, number, number, number][] = [
+      [{ k: 6, banks: 2, rowWords: 16, policy: 'open' }, 1095, 34, 1106],
+      [{ k: 6, banks: 2, rowWords: 16, policy: 'closed' }, 1095, 34, 1105],
+      [{ k: 12, banks: 4, rowWords: 32, policy: 'open', hash: true }, 1730, 45, 1741],
+      [{ k: 8, banks: 2, rowWords: 16, policy: 'open' }, 1231, 34, 1242],
+    ];
+    for (const [c, nands, period, leaves] of flat) {
+      const d = dramCtrl(c), f = flatten(d);
+      expect(stats(d).nands).toBe(nands);
+      expect(analyzeTiming(f)?.period).toBe(period);
+      expect(f.leaves.length).toBe(leaves);
+    }
+    const top = netlistOf(dramCtrl(CONFIGS[0]))!;
+    expect(top.instances.map((i) => i.name).sort()).toEqual(['cmd', 'fsm', 'refresh', 'rows', 'rq', 'wait']);
+  });
+});

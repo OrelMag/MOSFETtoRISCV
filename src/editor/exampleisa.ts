@@ -108,11 +108,11 @@ export function rv64Chip(id: string, name: string, src = RV64_SOURCE): ChipDoc {
   s.part('imem', { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src, xlen: 64 } }, [6, 5], { label: 'program (RV64)' });
   s.tap('imem.addr', 'pc'); s.tap('imem.data', 'instr');
   s.part('cpu', { lib: 'rv64im_core' }, [30, 6], { label: 'RV64IM core' });
-  s.tap('cpu.clk', 'clk'); s.tap('cpu.instr', 'instr'); s.tap('cpu.pcLow', 'pc'); s.tap('cpu.instrOut', 'run');
+  s.tap('cpu.clk', 'clk'); s.tap('cpu.instr', 'instr'); s.tap('cpu.pcLow', 'pc'); s.tap('cpu.instrOut', 'instrOut');
   s.part('hj', { const: { width: 32, value: 0x6f } }, [2, 20], { label: 'j .' });
   s.part('eq', { lib: 'eq32' }, [10, 19]);
   s.part('halt', { display: 'halt', width: 1 }, [16, 21]);
-  s.wire('hj.y', 'eq.a'); s.tap('eq.b', 'run'); s.wire('eq.eq', 'halt.a');
+  s.wire('hj.y', 'eq.a'); s.tap('eq.b', 'instrOut'); s.wire('eq.eq', 'halt.a');
   return s.doc(id, name, { notes: NOTES_RV64 });
 }
 
@@ -131,10 +131,10 @@ export function rvvChip(id: string, name: string, src = RVV_SOURCE): ChipDoc {
   s.part('imem', { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src } }, [6, 5], { label: 'program' });
   s.tap('imem.addr', 'pc'); s.tap('imem.data', 'instr');
   s.part('cpu', { lib: 'rv32iv_core' }, [30, 6], { label: 'RV32I + vector core' });
-  s.tap('cpu.clk', 'clk'); s.tap('cpu.instr', 'instr'); s.tap('cpu.pcOut', 'pc'); s.tap('cpu.instrOut', 'run');
+  s.tap('cpu.clk', 'clk'); s.tap('cpu.instr', 'instr'); s.tap('cpu.pcOut', 'pc'); s.tap('cpu.instrOut', 'instrOut');
   s.part('hj', { const: { width: 32, value: 0x6f } }, [2, 20], { label: 'j .' });
   s.part('eq', { lib: 'eq32' }, [10, 19]);
   s.part('halt', { display: 'halt', width: 1 }, [16, 21]);
-  s.wire('hj.y', 'eq.a'); s.tap('eq.b', 'run'); s.wire('eq.eq', 'halt.a');
+  s.wire('hj.y', 'eq.a'); s.tap('eq.b', 'instrOut'); s.wire('eq.eq', 'halt.a');
   return s.doc(id, name, { notes: NOTES_RVV });
 }

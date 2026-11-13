@@ -43,9 +43,11 @@ export const KEEP_SCALE_OPENED = 0.8;
  * scale with those folded (px per unit; null: a choice not allowed, e.g. a right panel leaving the circuit less
  * than FOLD_BESIDE_PX), `fixed[i]` the learner's own choice for panel i (true folded, false open, null free). Of the
  * allowed choices whose scale is at least KEEP_SCALE of the best one, the one keeping the most panels open; on a tie
- * the larger circuit. With none allowed, every free panel folds.
+ * the larger circuit. With none allowed, every free panel folds. `ref`: the scale the share is measured against when not the
+ * best allowed one (the best with every panel folded, where an author's data-keep, not the learner, holds a panel open: the
+ * others then fold until the circuit has its share, multicycle/0 drew at 0.49); when no allowed choice reaches it, the largest.
  */
-export function chooseFolds(n: number, scaleOf: (mask: number) => number | null, fixed: (boolean | null)[] = [], keep = KEEP_SCALE): number {
+export function chooseFolds(n: number, scaleOf: (mask: number) => number | null, fixed: (boolean | null)[] = [], keep = KEEP_SCALE, ref?: number | null): number {
   const bits = (m: number) => { let c = 0; for (; m; m &= m - 1) c++; return c; };
   let open = 0, shut = 0;
   fixed.forEach((f, i) => { if (f === true) shut |= 1 << i; else if (f === false) open |= 1 << i; });
@@ -56,7 +58,8 @@ export function chooseFolds(n: number, scaleOf: (mask: number) => number | null,
     if (s !== null) masks.push([m, s]);
   }
   if (!masks.length) return ((1 << n) - 1) & ~open;
-  const best = Math.max(...masks.map(([, s]) => s));
+  const top = Math.max(...masks.map(([, s]) => s)), best = Math.max(top, ref ?? 0);
+  if (top < keep * best - 1e-9) return masks.find(([, s]) => s === top)![0];
   let pick = masks[0];
   for (const c of masks) {
     if (c[1] < keep * best - 1e-9) continue;

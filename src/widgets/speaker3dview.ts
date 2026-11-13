@@ -39,16 +39,16 @@ export function speakerView(): Widget {
     const draw = () => paint();
     const probeHost = h('span', { class: 'sp-host', 'aria-hidden': 'true' }); // the colour probe lives here: it must outlast replaceChildren below
     const st = modelStage(probeHost, {
-      aria: 'A cut-away moving-coil loudspeaker in 3D with a plot of the held samples behind it: cone, surround, spider, voice coil in the magnet gap, pole piece, ferrite ring, top plate and frame',
+      aria: 'A cut-away moving-coil loudspeaker in 3D with a plot of the held samples behind it: cone, surround, spider, voice coil in the magnet gap, pole piece with its phase plug, ferrite ring, top plate and frame',
       camera: { ...VIEW },
       look: LOOKS.machine,
       limits: { minDist: 120, maxDist: 1200 },
-      note: `Drawn to a Dayton RS180-8: the cone, coil diameter, Xmax and force factor are the datasheet's; the winding and gap heights, the magnet's size and the spider are proportions chosen to fit Xmax. Speaker: the loudest sample is the rated power's peak current, √(2 · ${P_RMS_W} W / ${RE_OHM} Ω) = ${fmt(I_RATED, 1)} A (Dayton: 60 W RMS, Re ${RE_OHM} Ω, Qms ${QMS}); the cone follows the held current through Mms · x'' + Rms · x' + x / Cms = Bl · i and moves ${fmt(peakStrokeMm(d), 2)} mm at most, so its motion is drawn ×${d.mag} (the numbers shown are real). Microphone: the sound is ${SPL_DB} dB SPL (1 Pa rms, 1.41 Pa peak) at the cone, whose real stroke is about ${realPeakUm(d).toFixed(1)} µm at the voice's ${Math.round(f0)} Hz; it is drawn at Xmax × ${DRAW_K}, ${groupNum(ratio)} times larger than real. This is the woofer run backwards in a sealed box, a simplification: a real dynamic microphone has a light diaphragm and a small coil and is flat to several kHz, where this one falls 6 dB per octave. The coil is drawn with 16 of its roughly 64 turns (an estimate from Bl); field arrows and the current's direction are shown for a positive current. Time is slowed 500 times.`,
+      note: `Drawn to a Dayton RS180-8: the cone, coil diameter, Xmax and force factor are the datasheet's; the winding and gap heights, the magnet's size, the phase plug's and the spider are proportions chosen to fit Xmax. Speaker: the loudest sample is the rated power's peak current, √(2 · ${P_RMS_W} W / ${RE_OHM} Ω) = ${fmt(I_RATED, 1)} A (Dayton: 60 W RMS, Re ${RE_OHM} Ω, Qms ${QMS}); the cone follows the held current through Mms · x'' + Rms · x' + x / Cms = Bl · i and moves ${fmt(peakStrokeMm(d), 2)} mm at most, so its motion is drawn ×${d.mag} (the numbers shown are real). Microphone: the sound is ${SPL_DB} dB SPL (1 Pa rms, 1.41 Pa peak) at the cone, whose real stroke is about ${realPeakUm(d).toFixed(1)} µm at the voice's ${Math.round(f0)} Hz; it is drawn at Xmax × ${DRAW_K}, ${groupNum(ratio)} times larger than real. This is the woofer run backwards in a sealed box, a simplification: a real dynamic microphone has a light diaphragm and a small coil and is flat to several kHz, where this one falls 6 dB per octave. The coil is drawn with 16 of its roughly 64 turns (an estimate from Bl); field arrows and the current's direction are shown for a positive current. Time is slowed 500 times.`,
       draw,
     });
     stage = st;
     const palette = (): SpeakerPalette => ({
-      steel: st.rgb('--sp-steel'), magnet: st.rgb('--sp-magnet'), basket: st.rgb('--sp-frame'), cone: st.rgba('--sp-cone', 0.85), dust: st.rgb('--sp-dust'),
+      steel: st.rgb('--sp-steel'), magnet: st.rgb('--sp-magnet'), basket: st.rgb('--sp-frame'), cone: st.rgba('--sp-cone', 0.85), plug: st.rgb('--sp-plug'),
       former: st.rgb('--sp-former'), wire: st.rgb('--sp-wire'), wire2: st.rgb('--sp-wire2'), flux: st.rgb('--sp-flux'), rubber: st.rgb('--sp-rubber'), spider: st.rgb('--sp-spider'),
       stair: st.rgb('--sp-stair'), stairDim: st.rgba('--sp-stair', 0.3), trace: st.rgb('--sp-trace'), cursor: st.rgb('--sp-cursor'),
       live: st.rgb('--m3-charge'), zero: st.rgb('--sp-cursor'),
@@ -138,6 +138,7 @@ export function speakerView(): Widget {
       h('li', null, 'Cone: black anodised aluminium; surround: rubber; spider: treated fabric'),
       h('li', null, 'Voice coil: copper wire on an aluminium former, 38 mm'),
       h('li', null, 'Ferrite ring magnet; steel back plate, top plate and pole piece'),
+      h('li', null, 'Phase plug: solid aluminium, fixed on the pole piece (no dust cap)'),
       h('li', null, 'Frame: cast aluminium, six spokes'));
     const closeBtn = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false' }, 'Close-up of the gap') as HTMLButtonElement;
     closeBtn.addEventListener('click', () => {

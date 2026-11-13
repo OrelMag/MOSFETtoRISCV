@@ -5,8 +5,10 @@
 
 import { digitPixel, segments } from '../runner/model';
 import { stats } from '../sim/stats';
-import { type ComponentDef, type InstanceDef, netlistOf, type PortDef } from '../sim/types';
+import { instPort } from '../sim/geometry';
+import { type ComponentDef, netlistOf, type Netlist, type PortDef } from '../sim/types';
 import { Builder } from './builder';
+import { laid } from './layered';
 import { define, merger, ones, splitter } from './define';
 import { TIE0, TIE1 } from './transistors';
 import { LS00, LS04, LS10, LS138, LS157, LS161, LS173, LS20, LS273, LS283, LS86, TTL_PART, ttlKind } from './ttl';
@@ -119,7 +121,7 @@ class Sheet {
   }
 
   /** The netlist: `outs` maps each output pin to its driver. Call once, after everything is on the sheet. */
-  build(ports: PortDef[], outs: Record<string, Sig>): () => { pins: Record<string, [number, number]>; instances: InstanceDef[]; nets: ReturnType<Builder['nets']> } {
+  build(ports: PortDef[], outs: Record<string, Sig>): (this: ComponentDef) => Netlist {
     const b = this.b;
     b.pins(...inNames(ports));
     const placed = this.chips.map((c) => ({
@@ -161,8 +163,25 @@ class Sheet {
     for (const w of words) { b.add(merger(ones(w.bits.length), 2), undefined, w.name); w.bits.forEach((d, i) => b.wire(d, `${w.name}.i${i}`)); }
     b.next();
     for (const [pin, d] of pinOuts) b.wire(d, pin);
-    const R = b.right, ins = inNames(ports), step = Math.max(4, Math.floor(b.height / Math.max(1, ins.length)));
-    return () => ({ pins: { ...pinsAt(ins, 0, step), ...pinsAt(outNames(ports), R, 4) }, instances: b.instances, nets: b.nets() });
+    // laid out by logic depth (lib/layered.ts): chips in signal order with wires between neighbours; the clock a wire, a tie wired to the chips beside it
+    const ties = new Set(b.instances.filter((i) => i.def === TIE0 || i.def === TIE1).map((i) => `${i.name}.y`));
+    const lay = laid(b, { room: true, gap: 14, aspect: 1.6, x0: 22, pinOrder: ports.map((p) => p.name), wires: Object.fromEntries(b.nets().filter((n) => n.name === 'clk').map((n) => [n.ends[0], true])) });
+    return function (this: ComponentDef) {
+      const nl = lay.call(this);
+      const pos = (e: string): [number, number] => {
+        const dot = e.indexOf('.');
+        if (dot < 0) return nl.pins![e];
+        const x = nl.instances.find((q) => q.name === e.slice(0, dot))!;
+        return instPort(x.def, x.at!, x.flip, e.slice(dot + 1), x.rot).pos as [number, number];
+      };
+      return { ...nl, nets: nl.nets.map((n) => {
+        if (!ties.has(n.ends[0])) return n;
+        const d = pos(n.ends[0]);
+        const far = n.ends.slice(1).filter((e) => { const q = pos(e); return Math.abs(q[0] - d[0]) + Math.abs(q[1] - d[1]) > 12; });
+        const { tags: _t, ...wire } = n;
+        return far.length === 0 ? wire : { ...wire, tags: [n.ends[0], ...far] };
+      }) };
+    };
   }
 }
 

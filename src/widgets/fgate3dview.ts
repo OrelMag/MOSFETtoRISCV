@@ -37,7 +37,7 @@ export function fgateView(): Widget {
     aria: 'A NAND string of four floating-gate flash cells in 3D: each has a control gate with a wire, wrapped down the sides of a floating gate sealed in oxide and holding electrons, with a bit line and a source line at the ends of the string',
     camera: { target: [0, narrow ? 12 : 8, 0], yaw: 0.2, pitch: 0.3, dist: narrow ? 106 : 118 },
     limits: { minDist: 40, maxDist: 300 },
-    note: `Scaled: the layers are drawn about 10 times thicker against the cell than real ones (tunnel oxide 8 nm, ONO about 15 nm equivalent oxide), the floating gate thinner than a real 50 to 100 nm one, and a cell holds ${E_FULL} electrons at full charge here where a real one holds thousands. The voltages are illustrative: a real NAND string has its erased cells below 0 V, reads at about 0 V and passes at 4.5 to 6 V; the model keeps the chapter's NOR-style 1 V erased threshold and 5 V window.`,
+    note: `Scaled: the layers are drawn far thicker against the cell than real ones (tunnel oxide 8 nm, ONO about 15 nm equivalent oxide), the floating gate thinner than a real 50 to 100 nm one, and a cell holds ${E_FULL} electrons at full charge here where a real one holds thousands. The voltages are illustrative: a real NAND string has its erased cells below 0 V, reads at about 0 V and passes at 4.5 to 6 V; the model keeps the chapter's NOR-style 1 V erased threshold and 5 V window.`,
     draw: () => stage.paint(fgParts(pose(), palette()), fgAnchors(pose())),
   });
   const draw = () => stage.paint(fgParts(pose(), palette()), fgAnchors(pose()));

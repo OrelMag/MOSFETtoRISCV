@@ -4,6 +4,7 @@
 
 import '../styles/disk3d.css';
 import { FLASH_REAL_US } from '../flash/model';
+import { groupNum } from '../sim/numfmt';
 import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
@@ -11,7 +12,7 @@ import { frameLoop } from './mosfet';
 import { studioStage } from './studiostage';
 import { DISK_HIDDEN, DISK_HOME, DISK_HOME_FRAME, diskModel, diskMoves } from './disk3dkit';
 import {
-  SECTORS, TRACKS, TURN_MS, driveRows, fmtMs, guessLine, phaseAt, planRead, queueLine, radiusAt, readoutRows, rewriteLine, trackRadius,
+  CYLINDERS, DATASHEET_MEDIA_MBIT, PITCH_EXAGGERATION, PITCH_NM, SECTORS, TRACKS, TURN_MS, trackBytes, driveRows, fmtMs, guessLine, phaseAt, planRead, queueLine, radiusAt, readoutRows, rewriteLine, trackRadius,
   type Kind, type Plan,
 } from './disk3dparts';
 
@@ -20,7 +21,7 @@ export const SLOW = 300;
 const MS_PER_S = 1000 / SLOW;
 
 /** What the drawing exaggerates, simplifies and leaves out (the stage adds the controls' help). */
-const NOTE = 'Drawn to scale in millimetres for a 3.5″ 7200 rpm drive of the Hitachi Deskstar 7K1000.B 500 GB class: its data sheet gives the 101.6 × 147 × 26.1 mm case, 7200 rpm, ramp load / unload and a maximum media rate of 1406 Mbit/s; a retro-hardware listing gives 0.8 ms track-to-track and 8.5 ms average seek; the sectors per track and the 219 nm track pitch are fitted so that the outer track passes that rate and the capacity is 500 GB (the data sheet gives no tracks per inch). 95 mm platters on a 25 mm hole, two of them, four heads, the recording band from r = 20 to 46 mm, the arm pivoting 56 mm from the spindle with the head 46 mm from the pivot. Where the clamp, spacer, E-block, suspensions, voice coil, magnets, yokes, flex cable and board sit follows a teardown’s labelled photos; their sizes are this model’s own, as are the platters’ 1.27 mm thickness and the 1 mm cover the case’s height allows for. Exaggerated: the 12 track rings stand for 118 700 tracks 219 nm apart (drawn about 10 800 times too wide) and are drawn on the platter, where nothing is printed; the heads fly 0.25 mm up instead of a few nanometres; the slider is twice a pico slider’s 1.25 × 1.0 mm; the platters sit 5 mm apart (about 2 mm real) so the arms fit. Simplified: the 16 wedges are only places round the track (at r = 27 mm the arc of a wedge holds about 53 KiB of real 512-byte sectors), and a read transfers one 4 KiB block there, so the transfer is a few hundredths of a millisecond; no zones or servo wedges; the seek is the fitted curve eased out and in, not the actuator’s current profile; a load from the ramp is timed as a seek from the outer track. Left out: the cover, the spindle motor under the hub, the breather and recirculation filters, the actuator latch, the screws. Drive time is slowed 300× for the eye.';
+const NOTE = `Drawn to scale in millimetres for a 3.5″ 7200 rpm drive of the Hitachi Deskstar 7K1000.B 500 GB class: its data sheet (HGST DSDS721008EN-01) gives the 101.6 × 147 × 26.1 mm case, 7200 rpm, ramp load / unload and a maximum media rate of ${DATASHEET_MEDIA_MBIT} Mbit/s but no seek table: the 8.5 ms average seek is its enterprise sibling’s (Deskstar E7K1000) and the 0.8 ms track-to-track a retro-hardware listing’s; the sectors per track and the ${PITCH_NM} nm track pitch are fitted so that the outer track passes that rate and the capacity is 500 GB (the data sheet gives no tracks per inch, nor the platter count: two is our assumption). 95 mm platters on a 25 mm hole, four heads, the recording band from r = 20 to 46 mm, the arm pivoting 56 mm from the spindle with the head 46 mm from the pivot. Where the clamp, spacer, E-block, suspensions, voice coil, magnets, yokes, flex cable and board sit follows a teardown’s labelled photos; their sizes are this model’s own, as are the platters’ 1.27 mm thickness and the 1 mm cover the case’s height allows for. Exaggerated: the 12 track rings stand for ${groupNum(Math.round(CYLINDERS / 100) * 100)} tracks ${PITCH_NM} nm apart (drawn about ${groupNum(Math.round(PITCH_EXAGGERATION / 100) * 100)} times too wide) and are drawn on the platter, where nothing is printed; the heads fly 0.25 mm up instead of a few nanometres; the slider is twice a pico slider’s 1.25 × 1.0 mm; the platters sit 5 mm apart (about 2 mm real) so the arms fit. Simplified: the 16 wedges are only places round the track (at r = 27 mm the arc of a wedge holds about ${Math.round(trackBytes(27) / SECTORS / 1024)} KiB of real 512-byte sectors), and a read transfers one 4 KiB block there, so the transfer is a few hundredths of a millisecond; no zones or servo wedges; the seek is the fitted curve eased out and in, not the actuator’s current profile; a load from the ramp is timed as a seek from the outer track. Left out: the cover, the spindle motor under the hub, the breather and recirculation filters, the actuator latch, the screws. Drive time is slowed 300× for the eye.`;
 
 export function diskView(): Widget {
   // The drive's own clock (ms), the track the head is parked on, the request and its plan.

@@ -63,20 +63,21 @@ describe('the drive', () => {
     expect(mediaRate(BAND_OUT) / 1e6).toBeGreaterThan(150);
     expect(mediaRate(BAND_OUT) / 1e6).toBeLessThan(250);
   });
-  it('matches the drive it names: 500 GB, and an outer media rate at the data sheet maximum of 1406 Mbit/s', () => {
+  it('matches the drive it names: 500 GB, and an outer media rate at the data sheet maximum of 1388 Mbit/s (DSDS721008EN-01)', () => {
     expect(Math.abs(CAPACITY_BYTES / CAPACITY_NAMED_BYTES - 1)).toBeLessThan(0.01);
     expect(Math.abs((mediaRate(BAND_OUT) * 8) / 1e6 / DATASHEET_MEDIA_MBIT - 1)).toBeLessThan(0.01);
     // The capacity from the per-track bytes themselves (4 surfaces, every cylinder at its own radius) agrees with the closed form.
     let sum = 0;
     for (let c = 0; c < CYLINDERS; c += 7) sum += trackBytes(BAND_OUT - (c * (BAND_OUT - BAND_IN)) / (CYLINDERS - 1)) * 7;
     expect(Math.abs((4 * sum) / CAPACITY_BYTES - 1)).toBeLessThan(0.002);
-    expect(OUTER_SECTORS).toBe(358);
-    expect(PITCH_NM).toBe(219);
-    // 219 nm = 116 ktpi; the areal density at the outer edge stays under the family maximum of 244 Gbit/in^2.
+    expect(OUTER_SECTORS).toBe(353);
+    expect(DATASHEET_MEDIA_MBIT).toBe(1388);
+    expect(PITCH_NM).toBe(216);
+    // 216 nm = 118 ktpi; the areal density at the outer edge stays under the family maximum of 270 Gbit/in^2 (same data sheet).
     const ktpi = 25.4e6 / PITCH_NM / 1e3, bpi = (trackBytes(BAND_OUT) * 8) / ((2 * Math.PI * BAND_OUT) / 25.4);
     expect(ktpi).toBeGreaterThan(110);
     expect(ktpi).toBeLessThan(125);
-    expect((ktpi * 1e3 * bpi) / 1e9).toBeLessThan(244);
+    expect((ktpi * 1e3 * bpi) / 1e9).toBeLessThan(270);
   });
   it('the arm puts the head exactly at the radius asked, with zero skew at the stated radius and a few tens of degrees across the band', () => {
     for (let r = BAND_IN; r <= BAND_OUT; r += 0.5) {

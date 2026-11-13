@@ -19,6 +19,8 @@ export const MORE_CROSSINGS_PER_NET = 1;
 export const LOCAL_NETS = 120;
 /** A local net reaches at most this far (grid units), to fewer than FAN sinks. */
 const FAR = 45, FAN = 5;
+/** A near net: every sink within this many grid units of its driver, either way (a pointer pair a short wire would join). */
+const NEAR = 12;
 /** A clock or reset with this many sinks stays a pointer. */
 const CLOCK_FAN = 3;
 /** Rerouting moves wires, so a net kept as a pointer can send another through a part: a few passes settle it. */
@@ -80,6 +82,14 @@ function isLocal(nl: Netlist, n: NetDef): boolean {
   });
 }
 
+/** Every sink within NEAR of the driver, in any direction: wired even where the level's other local nets would tangle. */
+function isNear(nl: Netlist, n: NetDef): boolean {
+  if (manyClock(n) || n.ends.length - 1 >= FAN) return false;
+  const d = endPos(nl, n.ends[0]);
+  if (!d) return false;
+  return n.ends.slice(1).every((e) => { const s = endPos(nl, e); return !!s && Math.abs(s[0] - d[0]) + Math.abs(s[1] - d[1]) <= NEAR; });
+}
+
 const crosses = (bodies: readonly Rect[], p: readonly Vec[]) => {
   for (let i = 0; i + 1 < p.length; i++) {
     const x0 = Math.min(p[i][0], p[i + 1][0]), x1 = Math.max(p[i][0], p[i + 1][0]);
@@ -135,6 +145,34 @@ function wiredClear(def: ComponentDef, nl: Netlist, wire: (n: NetDef) => boolean
   return nl;
 }
 
+/**
+ * A net still drawn as pointers, its sinks near the driver wired and pointers kept for the far ones (the driver keeps its own):
+ * a pointer one gate away reads worse than its wire. A near sink whose wire would run through a part stays a pointer.
+ */
+function nearEnds(def: ComponentDef, nl: Netlist): Netlist {
+  const tagsOf = new Map<number, string[]>();
+  nl.nets.forEach((n, i) => {
+    if (n.tags !== true || n.tagAt || manyClock(n)) return;
+    const d = endPos(nl, n.ends[0]);
+    if (!d) return;
+    const far = n.ends.slice(1).filter((e) => { const s = endPos(nl, e); return !s || Math.abs(s[0] - d[0]) + Math.abs(s[1] - d[1]) > NEAR; });
+    if (far.length && far.length < n.ends.length - 1) tagsOf.set(i, [n.ends[0], ...far]);
+  });
+  if (!tagsOf.size) return nl;
+  for (let pass = 0; pass < CLEAR_PASSES; pass++) {
+    const c = { ...nl, nets: nl.nets.map((n, i) => (tagsOf.has(i) ? { ...n, tags: tagsOf.get(i)! } : n)) };
+    let more = false;
+    for (const net of routedOnce(def, c).nets) {
+      const k = tagsOf.get(net.index);
+      if (!k) continue;
+      const hit = sinksThroughParts(c, net).filter((e) => !k.includes(e));
+      if (hit.length) { k.push(...hit); more = true; }
+    }
+    if (!more) return c;
+  }
+  return nl;
+}
+
 const caches = new Map<number, WeakMap<Netlist, Netlist>>();
 
 /**
@@ -177,6 +215,20 @@ export function drawnNetlist(def: ComponentDef, nl: Netlist, limit = LOCAL_NETS)
     else {
       const local = wiredClear(def, nl, (x) => isLocal(nl, x));
       if (fits(local, Infinity)) out = local;
+      // Near nets (a pointer pair a short wire would join), then the near ends of what is still a pointer: each taken only when it
+      // is no worse than the drawing so far (no more crossings, no new wire through a part, no overlap), so no level loses by them.
+      const noWorse = (from: Netlist, c: Netlist): boolean => {
+        if (c === from) return false;
+        const a = routedOnce(def, from).nets, r = routedOnce(def, c).nets, was = wiresThroughParts(from, a);
+        return !wireOverlaps(r).length && [...wiresThroughParts(c, r)].every((i) => was.has(i)) && wireCrossings(r) <= wireCrossings(a);
+      };
+      // (each only when some net qualifies: a candidate is several routings of the level, felt on a big top)
+      if (out.nets.some((x) => tagged(x) && isNear(nl, x))) {
+        const near = wiredClear(def, out, (x) => tagged(x) && isNear(nl, x));
+        if (noWorse(out, near)) out = near;
+      }
+      const part = nearEnds(def, out);
+      if (noWorse(out, part)) out = part;
     }
   }
   cache.set(nl, out);

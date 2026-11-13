@@ -382,6 +382,7 @@ export class CapstonePage implements Page {
     const ed = this.editor!, ch = this.ch!;
     let main = '';
     ed.editWs((ws) => { const r = importAnswer(ws, ch); main = r.main; return r.ws; });
+    ed.save(); // now: the sandbox page reads storage before this editor is destroyed
     markJump();
     location.hash = `#/sandbox/${main}`;
   }

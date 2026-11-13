@@ -87,11 +87,11 @@ function ownInstrPanel(initial: CustomRow[]): ScenePanel {
     applyRows = (rows) => { row = structuredClone(rows[0]); stage.load(ownInstrScene([row])); };
 
     const title = h('h4', null, 'Your instruction: lwx rd, rs1, rs2', h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel oi-panel', 'data-dock': 'left' }, title,
+    // the stage folds it (data-fold): at a fit where it would cover most of the CPU it starts folded to its title (C4 of the eyes pass)
+    const el = h('div', { class: 'mem-panel oi-panel', 'data-dock': 'left', 'data-fold': 'narrow', 'data-phone': 'flow' }, title,
       h('p', { class: 'py-hint' }, 'The program below uses lwx t2, a0, t0 and wants t2 ← mem[a0 + t0]. The draft only adds. Set the signals, then build the CPU and run it.'),
       h('div', { class: 'oi-cols' }, h('div', null, lines, info), dp),
       h('div', { class: 'py-row' }, build), result);
-    title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.layoutDock(); });
     render();
 
     const update = () => {

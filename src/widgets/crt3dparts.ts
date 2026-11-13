@@ -179,10 +179,12 @@ export const GEOM = (() => {
   const DIAG = 340, W_MM = DIAG * 0.8, H_MM = DIAG * 0.6; // 4:3 (a 14-inch-class tube: 13.4 in)
   const DEFLECT = 90; // full angle, to the corners
   const D = DIAG / 2 / Math.tan(rad(DEFLECT / 2)); // deflection centre to the screen
-  const GUN_PITCH = 5.5, TRIAD = 0.27;
+  // GUN_PITCH: the effective beam spacing S of an in-line gun in the standard 29.1 mm neck, 5.08 mm (US6107729: "In the conventional
+  // neck diameter, the effective S value of electron guns was estimated at 5.08 mm"; its Table 1, circular-hole tube).
+  const GUN_PITCH = 5.08, TRIAD = 0.27;
   // The mask-to-screen gap q follows from the geometry: the beams cross at the mask hole at an angle GUN_PITCH / (D - q) to each other
   // (they left the gun GUN_PITCH apart), and the neighbouring dots of a triad are TRIAD / 3 apart, so q * GUN_PITCH / (D - q) = TRIAD / 3.
-  // Estimated: no primary source gives q for this tube (real tubes' effective beam spacing at the yoke is smaller, their gap larger).
+  // Derived, not quoted: no primary source gives q for this tube.
   const Q = (TRIAD * D) / (3 * GUN_PITCH + TRIAD);
   return {
     DIAG, W_MM, H_MM, DEFLECT, D,

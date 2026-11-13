@@ -4,7 +4,7 @@
 import { isBoxKind, orientedBox, orientGeom, orientPoint, poleX, type Rot, symbolGeom } from '../sim/geometry';
 import type { Category, ComponentDef } from '../sim/types';
 import { s } from '../ui/dom';
-import { boxText, ICON, iconSpot } from './boxtext';
+import { boxText, ICON, iconSpot, labelRect } from './boxtext';
 import { drawCmos } from './cmosdraw';
 import { type PinGeom, type Rect, textWidth } from './route';
 
@@ -413,7 +413,11 @@ function drawUpright(def: ComponentDef, flip: boolean): SVGGElement {
       if (def.symbol.verticalLabel) {
         root.append(s('text', { x: w / 2, y: h / 2, class: 'sym-label', 'text-anchor': 'middle', transform: `rotate(-90 ${w / 2} ${h / 2})`, dy: 0.4 }, def.symbol.label ?? def.name));
       } else if (t.label) {
-        root.append(s('text', { x: t.label.x, y: t.label.y, class: 'sym-label', 'text-anchor': 'middle' }, t.label.text));
+        // shrunk to the box's width; past LABEL_MIN_SCALE also squeezed to it, so a label never runs out of its box
+        // (boxText's fit: the span between the port names on its row, when no row is clear)
+        const sc = t.label.scale, w0 = symbolGeom(def).w - 0.4;
+        const fit = t.label.fit ?? (sc !== undefined && labelRect(t.label).w > w0 ? w0 : undefined);
+        root.append(s('text', { x: t.label.x, y: t.label.y, class: 'sym-label', 'text-anchor': 'middle', style: sc ? `font-size:${(1.05 * sc).toFixed(3)}px` : null, textLength: fit !== undefined ? fit.toFixed(2) : null, lengthAdjust: fit !== undefined ? 'spacingAndGlyphs' : null }, t.label.text));
       }
     }
   }

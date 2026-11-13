@@ -1042,6 +1042,7 @@ function rowArray(o: {
   shared: PortDef[];
 }): ComponentDef {
   const { n } = o, first = o.first ?? 0, rowOf = typeof o.row === 'function' ? o.row : () => o.row as ComponentDef, rg = symbolGeom(rowOf(first));
+  if (n >= 16 && n % 4 === 0) return rowGrid(o, rowOf, rg, 4);
   const P = rg.h + 2, top = (r: number) => 2 + r * P;
   const inPorts = o.shared.filter((p) => p.dir === 'in');
   const xT = (k: number) => 6 + 2 * k, xC = 6 + 2 * inPorts.length + 4, xRow = xC + 12;
@@ -1074,6 +1075,65 @@ function rowArray(o: {
     symbol: { kind: 'box', label: o.label },
     netlist: () => ({
       pins: { ...Object.fromEntries(inPorts.map((p, k) => [p.name, [0, bottom + 2 * k] as [number, number]])), [outP[0].name]: [xQ + 10, mqTop + (n * P) / 2] },
+      instances, nets,
+    }),
+  });
+}
+
+/**
+ * rowArray's rows in C columns side by side, so 32 rows read at the canvas's shape rather than as one tall column. The
+ * shared inputs run as lines along the bottom from the pins and rise on each column's own trunks; each column's outputs
+ * are bundled beside it and the column bundles go down below the grid to one bundle at the right. Bundles are wiring,
+ * so the gates and the bits of the output are the single column's.
+ */
+function rowGrid(o: Parameters<typeof rowArray>[0], rowOf: (r: number) => ComponentDef, rg: ReturnType<typeof symbolGeom>, C: number): ComponentDef {
+  const { n } = o, first = o.first ?? 0, per = n / C;
+  const P = rg.h + 2, top = (j: number) => 2 + j * P;
+  const inPorts = o.shared.filter((p) => p.dir === 'in'), outP = o.shared.filter((p) => p.dir === 'out')[0];
+  const colBundle = merger(Array(per).fill(o.outWidth), P), cbg = symbolGeom(colBundle);
+  // one column: its trunks, the row numbers, the rows, its bundle, the line its bundle drops on
+  const xT = (k: number) => 4 + 2 * k, xC = 4 + 2 * inPorts.length + 4, xRow = xC + 12, xQ = xRow + rg.w + 6, xDrop = xQ + cbg.w + 3;
+  const colW = xDrop + 5, X = (c: number) => 6 + c * colW;
+  const outY = (j: number) => top(j) + rg.ports[o.out].pos[1], mqTop = outY(0) - P / 2;
+  const bottom = top(per) + 2, pinY = (k: number) => bottom + 2 * k, yOut = (c: number) => pinY(inPorts.length) + 2 + 2 * c;
+  const instances: InstanceDef[] = [], nets: NetDef[] = [];
+  const shared = new Map(inPorts.map((p) => [p.name, { name: p.name, ends: [p.name], via: {} as Record<string, [number, number][]> }]));
+  const final = merger(Array(C).fill(per * o.outWidth), 2), fg = symbolGeom(final);
+  const xF = X(C), fTop = yOut(0) - fg.ports.i0.pos[1];
+  instances.push({ name: 'bundle', def: final, at: [xF, fTop] });
+  for (let c = 0; c < C; c++) {
+    const x = X(c), bq = `bundle${c}`;
+    instances.push({ name: bq, def: colBundle, at: [x + xQ, mqTop] });
+    for (let j = 0; j < per; j++) {
+      const r = c * per + j;
+      if (r < first) {
+        instances.push({ name: `z${r}`, def: constWord(o.outWidth, 0), at: [x + xRow + rg.w - 6, outY(j) - 1], label: `${r}: none` });
+        nets.push({ name: `q${r}`, ends: [`z${r}.y`, `${bq}.i${j}`] });
+        continue;
+      }
+      instances.push({ name: `r${r}`, def: rowOf(r), at: [x + xRow, top(j)], label: `${r}` });
+      if (o.me) {
+        const k = constWord(o.me.width, r), kg = symbolGeom(k);
+        instances.push({ name: `k${r}`, def: k, at: [x + xC, top(j) + rg.ports[o.me.port].pos[1] - kg.ports.y.pos[1]] });
+        nets.push({ name: `me${r}`, ends: [`k${r}.y`, `r${r}.${o.me.port}`] });
+      }
+      inPorts.forEach((p, k) => {
+        const s = shared.get(p.name)!, end = `r${r}.${p.name}`, py = top(j) + rg.ports[p.name].pos[1];
+        s.ends.push(end);
+        s.via[end] = [[x + xT(k), pinY(k)], [x + xT(k), py]];
+      });
+      nets.push({ name: `q${r}`, ends: [`r${r}.${o.out}`, `${bq}.i${j}`] });
+    }
+    const by = mqTop + cbg.ports.out.pos[1];
+    nets.push({ name: `${outP.name}${c}`, ends: [`${bq}.out`, `bundle.i${c}`], via: { [`bundle.i${c}`]: [[x + xDrop, by], [x + xDrop, yOut(c)]] } });
+  }
+  nets.push(...shared.values());
+  nets.push({ name: outP.name, ends: ['bundle.out', outP.name] });
+  return define({
+    id: o.id, name: o.name, category: 'cpu', summary: o.summary, ports: o.shared,
+    symbol: { kind: 'box', label: o.label },
+    netlist: () => ({
+      pins: { ...Object.fromEntries(inPorts.map((p, k) => [p.name, [0, pinY(k)] as [number, number]])), [outP.name]: [xF + fg.w + 6, fTop + fg.ports.out.pos[1]] },
       instances, nets,
     }),
   });

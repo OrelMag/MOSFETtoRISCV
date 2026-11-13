@@ -1,17 +1,19 @@
 // A 3.5" 7200 rpm hard disk as parts and a timing model (DOM-free, tested). Units are millimetres.
 //
 // What is real (representative of a 3.5" desktop drive; sources in the commit message and the on-screen note):
-//   platter 95 mm across, 25 mm hole, 1.27 mm thick; two platters, four heads; recording band r = 20 … 46 mm; a rotary
-//   voice-coil actuator pivoting 56 mm from the spindle, head 46 mm from its pivot (zero skew near mid-band); 7200 rpm.
-// The drive named is the Hitachi Deskstar 7K1000.B 500 GB (HDT721050SLA360, 2 platters). Its data sheet (HGST, 2009) gives a
-//   maximum media transfer rate of 1406 Mbit/s (the Dustin-hosted copy says 1388) and, for the family, a maximum areal density
-//   of 244 Gbit/in²; it does not give tracks per inch. So OUTER_SECTORS is set from the media rate (the outer track at 7200 rpm
-//   must pass 1406 Mbit/s) and the track pitch is then chosen so the capacity comes to 500 GB: both are fits, not data-sheet
-//   values (the result, about 116 ktpi and 119 Gbit/in² at the outer edge, is plausible for a 500 GB two-platter model
-//   below the family maximum). Sectors are drawn as 4 KiB (eight real 512-byte ones), zoned density in effect.
-// What the timing is: seek = a + b·√distance, fitted to a datasheet's track-to-track and average seek; rotation is exact,
+//   platter 95 mm across, 25 mm hole; two platters, four heads; recording band r = 20 … 46 mm; a rotary voice-coil actuator
+//   pivoting 56 mm from the spindle, head 46 mm from its pivot (zero skew near mid-band); 7200 rpm. The platter's 1.27 mm
+//   thickness is illustrative (no source found for a drive of this era).
+// The drive named is the Hitachi Deskstar 7K1000.B 500 GB (HDT721050SLA360). Its data sheet (HGST DSDS721008EN-01, read at
+//   https://cdn.inet.se/pdf/4303432_0.pdf) gives a maximum media transfer rate of 1388 Mbit/s and, for the family, a maximum
+//   areal density of 270 Gbit/in²; it gives no tracks per inch and no platter count (two for 500 GB is our assumption: the
+//   1 TB model has three). So OUTER_SECTORS is set from the media rate (the outer track at 7200 rpm must pass 1388 Mbit/s) and
+//   the track pitch is then chosen so the capacity comes to 500 GB: both are fits, not data-sheet values (the result, about
+//   118 ktpi and 120 Gbit/in² at the outer edge, is plausible for a 500 GB two-platter model below the family maximum).
+//   Sectors are drawn as 4 KiB (eight real 512-byte ones), zoned density in effect.
+// What the timing is: seek = a + b·√distance, fitted to a track-to-track and an average seek; rotation is exact,
 //   so the rotational latency is wherever the sector happens to be when the arm arrives; transfer is the sector's arc.
-// What is drawn bigger than it is: the tracks (12 rings stand for 260 000), the flying height, the platter spacing.
+// What is drawn bigger than it is: the tracks (12 rings stand for CYLINDERS), the flying height, the platter spacing.
 
 import { FLASH_REAL_US, FLASH_TIMES } from '../flash/model';
 import { CLOCK_NS } from '../dram/timing';
@@ -28,7 +30,7 @@ export const AVG_LATENCY_MS = TURN_MS / 2;
 export const PLATTER_R = 47.5, HOLE_R = 12.5, PLATTER_T = 1.27, PLATTERS = 2, HEADS = 4;
 export const BAND_IN = 20, BAND_OUT = 46;
 /** Track pitch, nm (fitted to 500 GB, see the header), and the cylinders it makes of the band. */
-export const PITCH_NM = 219;
+export const PITCH_NM = 216;
 export const CYLINDERS = Math.round(((BAND_OUT - BAND_IN) * 1e6) / PITCH_NM);
 /** Actuator: the pivot's distance from the spindle, and the pivot-to-head length. */
 export const PIVOT_D = 56, ARM_L = 46;
@@ -37,9 +39,9 @@ export const PIVOT_D = 56, ARM_L = 46;
 export const TRACKS = 12, SECTORS = 16;
 export const SECTOR_BYTES = 4096;
 /** Sectors on the outermost track; a track holds that many × (its radius / the outer radius). */
-export const OUTER_SECTORS = 358;
-/** The data sheet's maximum media transfer rate, Mbit/s (HGST data sheet, 7K1000.B), and the capacity named. */
-export const DATASHEET_MEDIA_MBIT = 1406, CAPACITY_NAMED_BYTES = 500e9;
+export const OUTER_SECTORS = 353;
+/** The data sheet's maximum media transfer rate, Mbit/s (HGST DSDS721008EN-01, 7K1000.B), and the capacity named. */
+export const DATASHEET_MEDIA_MBIT = 1388, CAPACITY_NAMED_BYTES = 500e9;
 /** Recording surfaces (a head each). */
 export const SURFACES = HEADS;
 /** Capacity of the drawn drive: surfaces × cylinders × the average track (bytes grow linearly with radius, so the band's mean radius). */
@@ -51,7 +53,8 @@ export const RAMP_R = 49.5;
 export const TRACK_PITCH_MM = (BAND_OUT - BAND_IN) / (TRACKS - 1);
 export const PITCH_EXAGGERATION = (TRACK_PITCH_MM * 1e6) / PITCH_NM;
 
-/** Seek datasheet points (ms): track to track, and the average over random pairs. Hitachi Deskstar 7K1000.B; Maxtor D740X: 0.8 / 8.5 / 17.8. */
+/** Seek points (ms): track to track, and the average over random pairs. The 7K1000.B data sheet has no seek table: 8.5 ms average is
+ *  the Deskstar E7K1000 sheet's (its enterprise sibling), 0.8 ms track-to-track a retro-hardware listing's; 15.1 ms full stroke is unsourced. */
 export const SEEK_T2T_MS = 0.8, SEEK_AVG_MS = 8.5, SEEK_FULL_DATASHEET_MS = 15.1;
 /** t(d) = A + B·√d for d ≥ 1 cylinders. For a distance |u − v|·N between uniform random cylinders, E[√d] = (8/15)·√N. */
 export const SEEK_B = (SEEK_AVG_MS - SEEK_T2T_MS) / ((8 / 15) * Math.sqrt(CYLINDERS) - 1);

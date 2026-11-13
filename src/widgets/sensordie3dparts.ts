@@ -84,6 +84,38 @@ export function cellValue(s: Scene, c: number, r: number, shutter: Shutter, texp
   return lit / SAMPLES;
 }
 
+/**
+ * Every cell's SAMPLES, taken once per scene, shutter and exposure: bit i of `lit` is set where sample i sees the background,
+ * and the sample times depend only on the cell's row. A slow-motion tick then counts the bits whose time has come instead of
+ * redoing 46 000 image tests (dieParts ran at 13 frames/s on a throttled phone), with the same numbers as cellValue.
+ */
+interface Samples { key: string; lit: Uint16Array; t: Float64Array }
+let samples: Samples | null = null;
+function samplesOf(s: Scene, shutter: Shutter, texp: number): Samples {
+  const key = `${s.kind} ${s.v} ${s.width} ${s.rps} ${s.blades} ${s.radius} ${shutter} ${texp}`;
+  if (samples?.key === key) return samples;
+  const lit = new Uint16Array(ROWS * COLS), t = new Float64Array(ROWS * SAMPLES);
+  for (let r = 0; r < ROWS; r++) {
+    const [a, b] = exposureWindow(cellRow(r), texp, shutter, T_ROW);
+    for (let i = 0; i < SAMPLES; i++) t[r * SAMPLES + i] = a + ((i + 0.5) * (b - a)) / SAMPLES;
+    for (let c = 0; c < COLS; c++) {
+      const [x, y] = cellPx(c, r);
+      let m = 0;
+      for (let i = 0; i < SAMPLES; i++) if (!covered(s, x, y, t[r * SAMPLES + i])) m |= 1 << i;
+      lit[r * COLS + c] = m;
+    }
+  }
+  return (samples = { key, lit, t });
+}
+/** cellValue(s, c, r, shutter, texp, now), read from the cached samples. */
+export function cellLight(s: Scene, c: number, r: number, shutter: Shutter, texp: number, now = Infinity): number {
+  const S = samplesOf(s, shutter, texp), m = S.lit[r * COLS + c];
+  let n = 0;
+  // a sample counts once its time has come: the times rise with i and all lie inside the window, so t <= min(b, now) is t <= now
+  for (let i = 0; i < SAMPLES && S.t[r * SAMPLES + i] <= now; i++) n += (m >> i) & 1;
+  return n / SAMPLES;
+}
+
 /** The whole captured frame, rows of cells. */
 export const captureFrame = (s: Scene, shutter: Shutter, texp: number): number[][] =>
   Array.from({ length: ROWS }, (_, r) => Array.from({ length: COLS }, (_, c) => cellValue(s, c, r, shutter, texp)));
@@ -148,11 +180,11 @@ export function dieParts(q: DiePose, P: DiePalette): Part[] {
   for (let x = X0 + 4; x < X1 - 2; x += 6) for (const z of [Z0 + 2, Z1 - 2]) out.push(box(P.pad, x - 1.6, x + 1.6, 0, 0.4, z - 1.6, z + 1.6, 0.6));
   for (let z = Z0 + 8; z < Z1 - 6; z += 6) for (const x of [X0 + 2, X1 - 2]) out.push(box(P.pad, x - 1.6, x + 1.6, 0, 0.4, z - 1.6, z + 1.6, 0.6));
   // The pixel array: a cell's colour is what it holds now (read: its value; exposing: charging; else reset).
-  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+  for (let r = 0; r < ROWS; r++) for (let c = 0, started = q.now >= exposureWindow(cellRow(r), q.texp, q.shutter, T_ROW)[0]; c < COLS; c++) {
     const [x, z] = cellXZ(c, r);
     let col: RGB;
-    if (st.done[r] || (st.reading !== null && r === st.reading)) col = mix(P.dark, P.lit, cellValue(q.scene, c, r, q.shutter, q.texp));
-    else if (q.now >= exposureWindow(cellRow(r), q.texp, q.shutter, T_ROW)[0]) col = mix(P.idle, P.expose, cellValue(q.scene, c, r, q.shutter, q.texp, q.now));
+    if (st.done[r] || (st.reading !== null && r === st.reading)) col = mix(P.dark, P.lit, cellLight(q.scene, c, r, q.shutter, q.texp));
+    else if (started) col = mix(P.idle, P.expose, cellLight(q.scene, c, r, q.shutter, q.texp, q.now));
     else col = P.idle;
     out.push(box(col, x - CW * 0.46, x + CW * 0.46, 0, Y0, z - CH * 0.46, z + CH * 0.46));
   }
@@ -188,7 +220,7 @@ export function dieParts(q: DiePose, P: DiePalette): Part[] {
   // ramp passes the column's level (a brighter pixel, a later flip, a larger count).
   const rampDone = st.reading !== null ? st.ramp : 0;
   for (let c = 0; c < COLS; c++) {
-    const [x] = cellXZ(c, 0), v = st.reading !== null ? cellValue(q.scene, c, st.reading, q.shutter, q.texp) : 0;
+    const [x] = cellXZ(c, 0), v = st.reading !== null ? cellLight(q.scene, c, st.reading, q.shutter, q.texp) : 0;
     const flipped = st.reading !== null && rampDone >= v, count = st.reading === null ? 0 : Math.min(rampDone, v);
     const cmp = box(flipped ? P.read : P.logic, x - CW * 0.4, x + CW * 0.4, 0, Y0, ADC_Z0, ADC_Z0 + 4);
     if (flipped) cmp.emissive = mix([0, 0, 0], P.read, 0.4);

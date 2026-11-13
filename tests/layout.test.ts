@@ -9,7 +9,7 @@ import { deadInstances } from '../src/sim/dead';
 import { netlistOf } from '../src/sim/types';
 import { backwardEnds, labelOverlaps, symbolOverlaps } from '../src/view/route';
 import { orGloss } from '../src/view/symbols';
-import { boxText, boxTextOverlaps, ICON, iconSpot, labelRect, portTextRect } from '../src/view/boxtext';
+import { boxText, boxTextOverlaps, ICON, iconSpot, LABEL_MIN_SCALE, labelRect, portTextRect } from '../src/view/boxtext';
 import { counter } from '../src/lib/sequential';
 import { symbolGeom } from '../src/sim/geometry';
 import { families, initialParams } from '../src/lib/resolve';
@@ -71,6 +71,19 @@ describe('schematic labels', () => {
   it.each(defs.map((d) => [d.id, d] as const))('%s: no wire reaches a pin from behind its symbol', (_, d) => {
     expect(backwardEnds(d, netlistOf(d)!)).toEqual([]);
   });
+  // an input pin draws its value beside it (a switch, or a badge for a word): two in one column a unit apart overlap
+  it('no two input pins in one column sit closer than 2 units (their value badges would overlap)', () => {
+    const close: string[] = [];
+    for (const d of defs) {
+      const pins = netlistOf(d)!.pins ?? {};
+      const ins = d.ports.filter((p) => p.dir !== 'out' && pins[p.name]).map((p) => [p.name, pins[p.name]] as const);
+      for (let i = 0; i < ins.length; i++) for (let j = i + 1; j < ins.length; j++) {
+        const [n, a] = ins[i], [m, b] = ins[j];
+        if (a[0] === b[0] && Math.abs(a[1] - b[1]) < 2) close.push(`${d.id}: ${n} ${m}`);
+      }
+    }
+    expect(close).toEqual([]);
+  });
 });
 
 describe('dead parts', () => {
@@ -107,6 +120,18 @@ describe('box symbol text', () => {
   const boxes = [...registry.values()].filter((d) => d.symbol.kind === 'box');
   it.each(boxes.map((d) => [d.id, d] as const))('%s: no port name or label hides another', (_, d) => {
     expect(boxTextOverlaps(d)).toEqual([]);
+  });
+  it('every box label fits its box: shrunk to the width (squeezed past LABEL_MIN_SCALE), never past the edges', () => {
+    const wide: string[] = [];
+    for (const d of boxes) {
+      if (d.symbol.verticalLabel) continue;
+      const t = boxText(d), w = symbolGeom(d).w;
+      if (!t.label) continue;
+      const lw = labelRect(t.label).w;
+      // at the floor scale symbols.ts squeezes it to w - 0.4 by textLength, so only a full-size or partly shrunk label is measured
+      if (t.label.scale !== LABEL_MIN_SCALE && lw > w - 0.4 + 1e-6) wide.push(`${d.id}: ${t.label.text} ${lw.toFixed(2)} > ${(w - 0.4).toFixed(2)}`);
+    }
+    expect(wide).toEqual([]);
   });
   it('the card reader\'s label keeps clear of its port names (not registered: built per deck)', () => {
     const d = deckReader(asmDeck('t', 'li a0, 1\nloop: j loop'), 'word', { feed: 2 }), t = boxText(d);
