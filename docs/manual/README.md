@@ -52,11 +52,10 @@ gestures, and what to do when something looks wrong.
 - **Open blocks as you zoom** is on by default: zoom into any block and its inside opens in place, live; zoom
   further to step in. **Opened blocks without colour** is on too, so an opened block's inside reads on the plain
   background. Turn either off in View options.
-- Every 3D model sits on the same stage:
-  - drag to turn;
-  - click the model, then scroll to zoom;
-  - **Cutaway** and **Explode**;
-  - a **Tour**;
-  - the **Names** switch (**N**) to hide or show the labels;
-  - full screen.
+- Every 3D model sits on the same stage, with the same controls:
+  - drag to turn it;
+  - **Cutaway** and **Explode**, on the models that open up;
+  - a **Tour** of its parts;
+  - **Hide names** (**N**) to hide or show the labels;
+  - **Save image**, **Full screen** and **Reset view**.
 - 3D models print as figures when you print a chapter.

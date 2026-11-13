@@ -325,7 +325,9 @@ Click **Statistics** in the left pane. **Hardware statistics** lists every part:
 - boxes inside.
 
 Use the tabs to see it built in **CMOS**, **Relays** or **Tubes**. Click a column heading to sort by it; the table
-starts sorted by **NAND gates**. Click a name to open that part on the workbench.
+starts sorted by **NAND gates**. Click a name to open that part on the workbench. The buttons above the table keep
+one category (**Logic gate**, **Arithmetic**, **Memory**, …); **Group sizes** puts a part's sizes on one row, and
+**Show splitters, mergers and wire parts** adds the wiring parts.
 
 ![Hardware statistics](img/workbench/20-statistics.png)
 
@@ -335,7 +337,8 @@ Click **Benchmarks**.
 - **Speed against cost** plots every processor in the site: its mean time on the same programs (Fibonacci, insertion
   sort, matrix multiply and more) against its size in NAND gates. Down and left is better.
 - The **Cost** and **Energy** switches above it change what the plot shows.
-- The table below gives each processor's NAND gates, clock period and its result on each program.
+- The table below gives each processor's NAND gates, clock period and its result on each program. Open a row for its
+  cache misses, stalls and energy.
 
 ![Benchmarks: speed against cost](img/workbench/21-benchmarks.png)
 
