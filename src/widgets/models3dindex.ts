@@ -106,7 +106,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'cardreader', title: 'The card reader', category: 'machines', chapter: 'cards', step: 5,
     summary: 'Picker knife, feed rolls and read station feeding a computer the sum program, edge by edge.',
-    files: ['cardreader3d', 'cardreader3dview', 'cardreader3dparts'], factory: 'cardReader3d', codex: ['hollerith'],
+    files: ['cardreader3d', 'cardreader3dview', 'cardreader3dparts', 'cardreader3dkit'], factory: 'cardReader3d', codex: ['hollerith'],
     // The chapter's deck: the sum program, a card a word, two edges a card.
     open: () => Promise.all([import('./cardreader3d'), import('../cards/card'), import('../riscv/asm'), import('../riscv/programs')])
       .then(([m, card, asm, progs]) => {

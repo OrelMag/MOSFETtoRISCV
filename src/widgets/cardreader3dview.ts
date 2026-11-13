@@ -10,10 +10,12 @@ import type { Widget } from '../view/stage';
 import { COLUMNS, type Deck } from '../cards/card';
 import { readerProgress, type ReaderMode } from '../cards/reader';
 import { frameLoop } from './mosfet';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
-import { ORIENTS, ORIENT_NAMES, ReaderRun, orientIndex, readerAnchors, readerLayout, readerParts, type Orient, type ReaderPalette } from './cardreader3dparts';
-import type { OrbitView } from '../gl/camera';
+import { packInstances } from '../gl/instances';
+import { M } from '../gl/kit/materials';
+import { boundsOfNamed, fitView } from '../gl/kit/scene';
+import { ORIENTS, ORIENT_NAMES, ReaderRun, orientIndex, readerLayout, type Orient } from './cardreader3dparts';
+import { BEAM, BRUSH, CELL, FRAME_GROUPS, HOME, LAMP, brushes, cells, cutAt, cutColumn, moveX, panelLamps, readerModel, type ReaderLook, type ReaderRgb } from './cardreader3dkit';
+import { studioStage, type StudioStage } from './studiostage';
 
 /** The rows by bit (bit 0 row 12 … bit 11 row 9). */
 const ROW_NAMES = ['12', '11', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
@@ -21,15 +23,9 @@ const ROW_NAMES = ['12', '11', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 const RATE: Record<ReaderMode, number> = { word: 2, column: 40 };
 /** The share of a period the motion takes, and a stepped edge's motion. */
 const MOVE = 0.75, STEP_MS = 420;
-const VIEWS: Record<ReaderMode, OrbitView> = {
-  word: { target: [-2, 16, -8], yaw: 0.32, pitch: 0.55, dist: 290 },
-  column: { target: [14, 10, -10], yaw: 0.72, pitch: 0.58, dist: 410 },
-};
-/** The read station up close. */
-const CLOSE: Record<ReaderMode, OrbitView> = {
-  word: { target: [-4, 10, 10], yaw: 0.55, pitch: 0.62, dist: 95 },
-  column: { target: [0, 10, 0], yaw: 0.65, pitch: 0.55, dist: 85 },
-};
+/** The read station up close: its direction (framed on 'stationbox'). */
+const CLOSE = { yaw: 0.55, pitch: 0.55 };
+const FALLBACK: ReaderRgb = { live: [1, 0.75, 0.3], brass: [0.88, 0.7, 0.3], cellOff: [0.3, 0.28, 0.27], lampOff: [0.36, 0.33, 0.31], alarm: [1, 0.4, 0.35], beam: [1, 0.9, 0.55] };
 const hex = (w: number, d = 8) => `0x${(w >>> 0).toString(16).padStart(d, '0')}`;
 
 export function readerView(deck: Deck, feed: number, sources: readonly string[]): Widget {
@@ -38,28 +34,71 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
   let mode: ReaderMode = 'word', dirty = false, run = new ReaderRun(deck, mode, feed, { orient }), next: 0 | 1 = 1, running = false, seenErr = 0;
   // u: how far the motion since the last edge has gone (1 settled); tau: the running clock's phase within a period.
   let u = 1, tau = 0, stepT = -1;
-  // The station close-up (the button is made with the controls below; a draw can come first, from the renderer).
-  let close = false, closeBtn: HTMLButtonElement | null = null;
+  // The station close-up (the button is made with the controls below).
+  let close = false, stageRef: StudioStage | null = null;
+  const rgb = (): ReaderRgb => {
+    const st = stageRef;
+    return st ? { live: st.rgb('--m3-charge'), brass: st.rgb('--cr-brass'), cellOff: st.rgb('--cr-lamp'), lampOff: st.rgb('--cr-lamp'), alarm: st.rgb('--cr-alarm'), beam: st.rgb('--cr-beam') } : FALLBACK;
+  };
+  const look = (detail: ReaderLook['detail']): ReaderLook => ({ detail, run, L: readerLayout(run, u), next, rgb: rgb() });
+  let cutCol = cutColumn(run, readerLayout(run, 1));
 
   const panel = h('div', { class: 'panel' });
-  const stage = modelStage(panel, {
-    look: LOOKS.machine,
+  const stage = studioStage({
     aria: 'A card reader in 3D feeding a computer: a hopper of punched cards, a picker knife, feed rolls, the read station and a stacker, and the computer’s panel of lamps',
-    camera: { ...VIEWS.word },
-    limits: { minDist: 70, maxDist: 800 },
-    note: 'The card is 7⅜ × 3¼ in with its corner clipped, columns 0.087 in apart, rows ¼ in; it is drawn 7 times too thick (1.25 mm for 0.18 mm) so a stack can be seen, and the throat is wider for the same reason. The brushes, rolls, the 56 mm between the two stations (illustrative: no source gives the spacing) and the timing are drawn, not modelled. The reader part holds a card at the first station until it is taken; a real reader reads on the move, a row or column at a time against a timing wheel. The second station and the checks are drawn here (the IBM 1402 read every card at two brush stations and the 2501 read every column twice; no source found gives the 711 a second station): the reader part itself has none.',
-    draw: () => paint(),
+    home: { target: [0, 0, 0], ...HOME.word, dist: 300 },
+    homeFrame: ['homebox'],
+    // one shape for both machines and every view (a rebuild would otherwise resize the canvas and refit home)
+    aspect: 1.05,
+    hidden: [...FRAME_GROUPS],
+    knobs: { cut: 0, explode: 0 },
+    limits: { minDist: 8, maxDist: 900 },
+    // the tour shows a card at the station: if one is on its way, it is fed there first (the reader stepped, as Step would)
+    onBeat: (i) => { if (i === 0) feedForTour(); key = ''; put(); },
+    onKnobs: () => put(),
+    note: 'The card is 7⅜ × 3¼ in with its corner clipped, columns 0.087 in apart, rows ¼ in, its holes cut right through; it is drawn 7 times too thick (1.25 mm for 0.18 mm) so a stack can be seen, and the throat is wider for the same reason. The brushes, rolls, frame, the 56 mm between the two stations (illustrative: no source gives the spacing) and the timing are drawn, not modelled; the 711 had a brush for each of the 80 columns, as here. The reader part holds a card at the first station until it is taken; a real reader reads on the move, a row or column at a time against a timing wheel (here the rows pass the brushes, lighting in turn, as a card slides in and out). The second station and the checks are drawn here (the IBM 1402 read every card at two brush stations and the 2501 read every column twice; no source found gives the 711 a second station): the reader part itself has none.',
+    build: (detail) => readerModel(look(detail), cutCol),
   });
-  const palette = (): ReaderPalette => ({
-    frame: stage.rgb('--m3-si'), bed: stage.rgb('--cr-bed'), card: stage.rgb('--cr-card'), hole: stage.rgb('--cr-hole'), metal: stage.rgb('--m3-metal'),
-    brass: stage.rgb('--cr-brass'), live: stage.rgb('--m3-charge'), lampOff: stage.rgb('--cr-lamp'), panel: stage.rgb('--cr-panel'),
-    beam: stage.rgba('--cr-beam', 0.55), rubber: stage.rgb('--cr-rubber'), alarm: stage.rgb('--cr-alarm'),
-  });
-  function paint(): void {
-    const L = readerLayout(run, u);
-    if (closeBtn) closeBtn.hidden = stage.isFlat(); // the flat view has one fixed view
-    stage.paint(readerParts(run, L, next, palette()), readerAnchors(run, L));
+  stageRef = stage;
+  const NONE = new Float32Array(0);
+  const mats = {
+    brush: M.make({ base: [1, 1, 1], metal: 0.7, rough: 0.35, label: 'brush (phosphor-bronze wires)' }),
+    cell: M.make({ base: [1, 1, 1], metal: 0.2, rough: 0.4, label: 'photocell' }),
+    beam: M.make({ base: [1, 1, 1], metal: 0, rough: 0.5, transmit: 0.4, bloom: 1.2, label: 'light through a hole (drawn)' }),
+    lamp: M.make({ base: [1, 1, 1], metal: 0, rough: 0.3, coat: 0.6, label: 'panel lamp' }),
+  };
+  /** What decides the model's own parts: the machine, the cards in each place and how they lie, the cut's column. */
+  let key = '', flatAt = 0;
+  const keyOf = (L: ReturnType<typeof readerLayout>) => [run.mode, L.hopper, L.stacker, L.moving.map((q) => q.k).join(','), run.orient.map((o) => orientIndex(o)).join(''), run.dirty, cutCol].join('|');
+  function put(): void {
+    const L = readerLayout(run, u), now = performance.now();
+    if (stage.isFlat()) { if (keyOf(L) !== key || now - flatAt > 150) { key = keyOf(L); flatAt = now; stage.refresh(); } return; }
+    const c = cutColumn(run, L);
+    if (c !== cutCol && stage.knobs().cut === 0) cutCol = c; // the cut stays on its column while it is open
+    const k = keyOf(L);
+    if (k !== key) { key = k; stage.refresh(); }
+    const moves = new Map<string, Float32Array>(L.moving.map((q, i) => [`mv${i}`, moveX(q.cx)]));
+    moves.set('knife', moveX(L.knife * 14));
+    stage.move(moves);
+    const lk = { L, rgb: rgb() }, upTo = cutAt(run.mode, cutCol, stage.knobs().cut);
+    stage.instances('brush', BRUSH, mats.brush, run.mode === 'word' ? packInstances(brushes(lk, upTo)) : NONE);
+    const cs = run.mode === 'column' ? cells(lk, upTo) : { cells: [], beams: [] };
+    stage.instances('cell', CELL, mats.cell, packInstances(cs.cells));
+    stage.instances('beam', BEAM, mats.beam, packInstances(cs.beams));
+    stage.instances('lamp', LAMP, mats.lamp, packInstances(panelLamps(run, next, rgb())));
+    stage.studio()?.invalidate();
   }
+  const paint = (): void => put();
+  /** Ease to a framing of the model's groups from a direction, once the new labels have set the gutters. */
+  function frameOn(groups: string[], yaw: number, pitch: number): void {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const st = stage.studio(), cv = stage.el.querySelector('canvas');
+      if (!st || !cv) return;
+      const f = fitView(boundsOfNamed(readerModel(look('full'), cutCol), groups), yaw, pitch, st.camera.fov, cv.clientWidth / Math.max(1, cv.clientHeight), 0.1);
+      stage.goTo({ yaw, pitch, target: f.target, dist: f.dist });
+    }));
+  }
+  const homeView = () => (close ? frameOn(['stationbox'], CLOSE.yaw, CLOSE.pitch) : frameOn(['homebox'], HOME[mode].yaw, HOME[mode].pitch));
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), mem = h('ol', { class: 'cr-mem' });
   const memHead = h('h4', null, 'The computer’s memory');
@@ -144,6 +183,11 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
   }
 
   function edge(): void { run.edge(next); }
+  function feedForTour(): void {
+    running = false;
+    for (let n = 0; n < 64 && !run.out[2] && readerProgress(run.st).feeding; n++) edge();
+    u = 1; stepT = -1; readout(true);
+  }
   const loop = frameLoop((now, dt) => {
     if (running) {
       tau += dt * (reducedMotion() ? Math.min(RATE[mode], 4) : RATE[mode]); // no lamps blinking 40 times a second
@@ -199,19 +243,18 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
       if (mode === m) return;
       mode = m;
       modeBtns.forEach((x, i) => { const on = (['word', 'column'] as const)[i] === m; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); });
-      stage.setView({ ...(close ? CLOSE : VIEWS)[m] });
       restart();
+      homeView();
     });
     if (m === mode) b.classList.add('on');
     return b;
   });
-  const cb = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false' }, 'Close-up of the station') as HTMLButtonElement;
-  closeBtn = cb;
-  cb.addEventListener('click', () => {
+  const closeBtn = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false' }, 'Close-up of the station') as HTMLButtonElement;
+  closeBtn.addEventListener('click', () => {
     close = !close;
-    cb.setAttribute('aria-pressed', String(close));
-    cb.textContent = close ? 'Whole machine' : 'Close-up of the station';
-    stage.setView({ ...(close ? CLOSE : VIEWS)[mode] });
+    closeBtn.setAttribute('aria-pressed', String(close));
+    closeBtn.textContent = close ? 'Whole machine' : 'Close-up of the station';
+    homeView();
   });
 
   panel.append(
@@ -221,11 +264,11 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
       h('div', { class: 'r3-main' },
         h('div', { class: 'r3-ctl' },
           h('div', { class: 'seg cr-seg', role: 'group', 'aria-label': 'Which reader' }, ...modeBtns),
-          h('div', { class: 'r3-btns' }, runBtn, stepBtn, takeBtn, turnBtn, dirtyBtn, resetBtn, closeBtn, stage.resetBtn)),
-        stage.el, stage.hint, live),
+          h('div', { class: 'r3-btns' }, runBtn, stepBtn, takeBtn, turnBtn, dirtyBtn, resetBtn, closeBtn)),
+        stage.el, live),
       h('div', { class: 'r3-side' }, h('h4', null, 'This reader ', h('span', { class: 'r3-badge' }, 'the chapter’s part')), kv, memHead, mem)));
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape' && running) { running = false; readout(true); kick(); } });
   readout(true);
-  paint();
-  return { el: panel, destroy() { loop.stop(); stage.destroy(); } };
+  const ready = setInterval(() => { if (stage.studio() || stage.isFlat()) { clearInterval(ready); key = ''; put(); } }, 100);
+  return { el: panel, destroy() { clearInterval(ready); loop.stop(); stage.destroy(); } };
 }
