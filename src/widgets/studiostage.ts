@@ -19,7 +19,9 @@ import type { Geo } from '../gl/kit/geo';
 import type { Colour, Material } from '../gl/kit/materials';
 import { anchorAt, applyMat, aspectOf, boundsOf, boundsOfNamed, cutsAt, fitView, isCut, itemMatrix, pick, type Item, type Model3, type Moves, type StudioAnchor } from '../gl/kit/scene';
 import type { Studio } from '../gl/studio';
-import { h, s } from '../ui/dom';
+import { h, icon, s } from '../ui/dom';
+import { settings } from '../ui/settings';
+import { badgeForm, gutterOf, namesShown } from '../gl/kit/names';
 import { reducedMotion } from '../ui/motion';
 import { modelFrame } from './modelframe';
 
@@ -138,7 +140,38 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   // home frames what home shows: parts hidden outside the tour (o.hidden) do not widen it
   const shownModel = (): Model3 => (defHidden ? { ...model, items: model.items.filter((it) => !((it.group && defHidden.has(it.group)) || (it.name && defHidden.has(it.name)))) } : model);
   const homeBox = () => (o.homeFrame ? boundsOfNamed(model, o.homeFrame) : boundsOf(shownModel()));
+  // ---- names: the corner tag button, N, settings.modelNames ----
+  let namesOn = settings.modelNames;
+  // a tag (the icon set is on the first-load path; this one lives with the only button that uses it)
+  const tag = icon('plus', 16);
+  tag.innerHTML = '<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>';
+  const namesBtn = h('button', { type: 'button', class: 'r3-tool st-names' }, tag) as HTMLButtonElement;
+  namesBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  namesBtn.addEventListener('click', () => settings.set('modelNames', !namesOn));
+  const showNamesBtn = () => {
+    const label = namesOn ? 'Hide names' : 'Show names';
+    namesBtn.setAttribute('aria-label', label); namesBtn.title = `${label} (N)`; namesBtn.setAttribute('aria-pressed', String(namesOn));
+  };
+  showNamesBtn();
+  el.addEventListener('keydown', (e) => {
+    if (e.key !== 'n' && e.key !== 'N') return;
+    if (e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement).closest('input, textarea, select, [contenteditable="true"]')) return;
+    e.preventDefault();
+    settings.set('modelNames', !namesOn);
+  });
+  /** The switch moved: names, list and gutters follow; the canvas widens or narrows (home refits only if the view is home). */
+  function applyNames(): void {
+    namesOn = settings.modelNames;
+    showNamesBtn();
+    list.hidden = !namesOn;
+    el.classList.toggle('st-nonames', !namesOn);
+    layout();
+    if (mode === 'flat') drawFlat(); else { placeLabels(); st?.invalidate(); }
+  }
   const frame = modelFrame({ stage: view, name: o.aria, renderer: () => (mode === 'gl' ? (st as unknown as Renderer) : null), root: () => el.closest<HTMLElement>('.m3d, .widget') ?? el });
+  frame.el.prepend(namesBtn);
+  list.hidden = !namesOn;
+  el.classList.toggle('st-nonames', !namesOn);
 
   // ---------------------------------------------------------------- framing
 
@@ -153,11 +186,11 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     aspect = o.aspect ?? Math.max(ASPECT_MIN, Math.min(ASPECT_MAX, aspectOf(box, o.home.yaw, o.home.pitch) * 1.15));
     layout();
   };
-  const isNarrow = () => el.clientWidth - 2 * gutterW < MIN_CANVAS || rows.length === 0;
+  const isNarrow = () => badgeForm(namesOn, el.clientWidth, gutterW, rows.length, MIN_CANVAS);
   const layout = () => {
     const C = el.clientWidth;
     if (!C) return;
-    const narrow = isNarrow(), g = narrow ? 0 : gutterW, maxH = Math.max(MIN_CANVAS_H, Math.min(window.innerHeight * 0.78, 760));
+    const narrow = isNarrow(), g = narrow ? 0 : gutterOf(namesOn, gutterW), maxH = Math.max(MIN_CANVAS_H, Math.min(window.innerHeight * 0.78, 760));
     let wc = C - 2 * g, hh = Math.max(MIN_CANVAS_H, wc / aspect);
     if (hh > maxH) { hh = maxH; wc = Math.min(wc, hh * aspect); }
     const W = Math.round(wc + 2 * g), H = Math.round(hh), key = `${W}x${H}x${g}`;
@@ -236,7 +269,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     const W = canvas.clientWidth, H = canvas.clientHeight, cam = st.camera, eye = cam.eye(), under = cam.pitch < -0.25, narrow = gutNow === 0, g = gutNow;
     const k = st.knobs().explode;
     const seen: { r: typeof rows[number]; x: number; y: number; away: boolean }[] = [];
-    const quiet = beat >= 0 && model.beats?.[beat]?.labels === false;
+    const quiet = !namesShown(namesOn, beat >= 0 ? model.beats?.[beat]?.labels : undefined);
     const cutNow = model.cutLabels ? cutsAt(model, st.knobs().cut) : [], isOpen = st.knobs().cut > 0.5;
     for (const r of rows) {
       const hiddenPart = !!hiddenNow && !!r.a.on && hiddenNow.has(r.a.on);
@@ -454,7 +487,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     const sc = Math.min((FW * 0.9) / (x1 - x0 || 1), (FH * 0.9) / (y1 - y0 || 1)), X = (x: number) => FW / 2 + (x - (x0 + x1) / 2) * sc, Y = (y: number) => FH / 2 - (y - (y0 + y1) / 2) * sc;
     const g = s('g');
     for (const f of faces) g.append(s('polygon', { points: f.pts.map(([x, y]) => `${X(x).toFixed(1)},${Y(y).toFixed(1)}`).join(' '), style: `fill:${f.fill};stroke:${f.fill}`, class: 'st-face' }));
-    for (const a of m.anchors ?? []) {
+    for (const a of namesOn ? m.anchors ?? [] : []) {
       if (a.minor || a.under) continue;
       const [x, y] = pr(anchorAt(m, a, k.explode, curMoves));
       g.append(s('text', { x: X(x), y: Y(y), class: 'm3-flat-lbl', 'text-anchor': 'middle' }, a.text));
@@ -498,6 +531,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     st?.setKnobs(knobs());
   };
   const unwatch = watchTheme(() => { colors.invalidate(); lights(); refresh(); });
+  // one setting for every model (the menu's "3D model names", another model's button): follow it live
+  const unnames = settings.onChange(() => { if (settings.modelNames !== namesOn) applyNames(); });
   // a column that changes width (a window resize, a drawer) re-lays the canvas out; the render that follows refits home
   const ro = new ResizeObserver(() => { layout(); st?.invalidate(); });
   ro.observe(el);
@@ -545,6 +580,6 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     rgb: (t) => colors.rgb(t),
     knobs: () => knobs(),
     setKnobs(k) { if (k.cut !== undefined) cutIn.value = String(k.cut); if (k.explode !== undefined) exIn.value = String(k.explode); applyKnobs(); },
-    destroy() { dead = true; cancelAnimationFrame(tween); cancelAnimationFrame(hoverRaf); ro.disconnect(); frame.destroy(); unwatch(); st?.destroy(); st = null; colors.destroy(); },
+    destroy() { dead = true; cancelAnimationFrame(tween); cancelAnimationFrame(hoverRaf); ro.disconnect(); frame.destroy(); unwatch(); unnames(); st?.destroy(); st = null; colors.destroy(); },
   };
 }

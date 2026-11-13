@@ -626,6 +626,33 @@ const mapDrive = (k: number, of: number) => `(async () => {
   return bad;
 })()`;
 
+/** A 3D model with settings.modelNames off: no name, leader or badge drawn, the list under the canvas hidden, the Names
+ *  button saying "Show names"; then N turns them back on (and off again). */
+const NAMES_OFF_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let view = null;
+  for (let i = 0; i < 40 && !view; i++) { view = document.querySelector('.st-view'); if (!view) await wait(250); }
+  if (!view) return ['no 3D model stage'];
+  const st = view.closest('.st');
+  await wait(800);
+  const shown = (e) => e.style.display !== 'none' && !e.hidden && e.getClientRects().length > 0;
+  const bad = [];
+  const names = [...st.querySelectorAll('.st-lbl, .st-badge')].filter(shown).length;
+  if (names) bad.push(names + ' names or badges drawn with names off');
+  if (st.querySelector('.st-leaders')?.childElementCount) bad.push('leaders drawn with names off');
+  const list = st.querySelector('.st-list');
+  if (list && !list.hidden) bad.push('the list of names is shown with names off');
+  const btn = st.querySelector('.st-names') ?? st.closest('.m3d, .widget')?.querySelector('.st-names');
+  if (!btn) return [...bad, 'no Names button'];
+  if (btn.getAttribute('aria-label') !== 'Show names' || btn.getAttribute('aria-pressed') !== 'false') bad.push('the Names button does not say Show names');
+  st.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));
+  await wait(600);
+  if (btn.getAttribute('aria-pressed') !== 'true') bad.push('N did not turn names on');
+  else if (![...st.querySelectorAll('.st-lbl, .st-badge')].some(shown)) bad.push('N turned names on but none is drawn');
+  st.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));
+  return bad;
+})()`;
+
 const GALLERY_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
@@ -1428,6 +1455,11 @@ function routes(): Route[] {
   // Every 3D model (all on the studio renderer, gl/studio.ts), dark and on a phone.
   for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, themed('dark'), ' (3D model, studio, dark)');
   for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ` (3D model, studio, ${phoneVp.name})`, phoneVp);
+  // the Names switch off (settings.modelNames): nothing named on the stage, no overflow, on a phone and wide
+  const namesOff = { [SETTINGS_KEY]: JSON.stringify({ theme: 'light', modelNames: false, coachDone: { stage: true, sandbox: true } }) };
+  const m0 = MODELS_3D[0];
+  add(`#/c/${m0.chapter}/${m0.step}`, namesOff, ` (3D model, names off, ${phoneVp.name})`, phoneVp, NAMES_OFF_DRIVE);
+  add(`#/c/${m0.chapter}/${m0.step}`, namesOff, ' (3D model, names off)', undefined, NAMES_OFF_DRIVE);
   for (const n of NODES) {
     add(`#/campaign/play/${n.id}`, unlocked);
     // Lessons, drills and programs open on the map instead (pages/level.ts levelRoute).

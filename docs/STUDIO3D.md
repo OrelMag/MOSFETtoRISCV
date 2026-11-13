@@ -172,12 +172,21 @@ Methods beyond the freeze:
 **Layout, top to bottom:** the canvas, the numbered list, the tour caption, `slot` (the model's own controls), the bar (Cutaway, Explode, Back, Tour, Reset view), the hint.
 - **Aspect:** the canvas takes the model's aspect from `aspectOf`, clamped to 0.62–1.9, but is never under 240 px tall: a long, low model (the relay) gets room above and below rather than a strip. Its width is held so a tall model fits about 78 % of the screen's height.
 - **Home view:** refitted with `fitView` whenever the canvas size changes and the camera is home.
-- **Corner tools:** turn, save image, full screen.
+- **Corner tools:** names, turn, save image, full screen.
 
 **Labels: picked by measured width, not by device.**
 - **Gutter form:** the names sit in gutters beside the canvas, with leaders to the parts. The gutters are as wide as the longest name.
 - **Badge form:** numbered badges sit at the canvas edges with leaders, and the names go in a list under it. This form is used when the canvas between the gutters would be under 260 px wide.
 - The badges spread so they never clump. An anchor whose face turns away is dimmed.
+
+**Names switch (every model, nothing to author):** a fourth corner tool (a tag; `aria-pressed`, "Hide names" / "Show names";
+key N while the stage has focus) and the view menu's "3D model names" row drive one remembered setting for all models,
+`settings.modelNames` (default on; in VIEW_KEYS, so Reset view turns it back on). Off: no gutter names, leaders, dots,
+phone badges or list, and the canvas takes the gutters' width back (the home view refits if the camera is still home; a
+moved camera stays). Pointing at a part still opens its card; the status chips, scale bar and tour caption stay; a beat's
+`labels` cannot turn names on while the switch is off. Save image, full screen and the flat fallback follow it. The
+DOM-free rules are `gl/kit/names.ts` (gutterOf, badgeForm, namesShown; tests/model-names.test.ts); the smoke's
+"(3D model, names off …)" routes check nothing is named and N brings them back.
 
 **Hover and pick:**
 - Hovering a part rims it and shows a card with its name, material, size, note and source. A click keeps the card.
