@@ -187,7 +187,11 @@ export class ChapterPage implements Page {
     // the recap leaves the last step's circuit on the stage: say so (app.css .recap-on)
     this.el.classList.remove('recap-on');
     if (i === this.recap) {
-      this.show(steps.length - 1, path);
+      // arriving at the recap with the last circuit not on the stage (a cold load, a link): a card offers it, rather than building
+      // a scene that may be tens of thousands of parts for a page of questions (G-10)
+      const last = stageStepOf((k) => !!(steps[k].scene || steps[k].widget), steps.length - 1);
+      if (last >= 0 && last !== this.shownStep && steps[last].scene) this.offerLast(last, path);
+      else this.show(steps.length - 1, path);
       // only a circuit: over a widget's card the chip would sit on its title
       this.el.classList.toggle('recap-on', this.sceneShown);
       this.renderHead();
@@ -213,6 +217,19 @@ export class ChapterPage implements Page {
     if (lost && (was === document.body || !was || this.el.contains(was) || !was.isConnected)) title?.focus({ preventScroll: true });
     const n = this.chapter.steps.length;
     this.notes.announce(this.step === this.recap ? `Recap, ${this.chapter.title}` : `Step ${this.step + 1} of ${n}: ${this.chapter.steps[this.step].title}`);
+  }
+
+  /** The recap's stage when the last circuit is not built yet: what it is, and a button that builds it. */
+  private offerLast(k: number, path?: string[]): void {
+    const st = this.chapter.steps[k];
+    const build = h('button', { class: 'btn primary', onclick: () => { this.show(this.chapter.steps.length - 1, path); this.el.classList.toggle('recap-on', this.sceneShown); } }, 'Build it');
+    this.stage.showWidget({ el: h('div', { class: 'stage-intro', role: 'note' }, h('p', null, 'The last step\'s circuit'),
+      h('p', { class: 'sub' }, `Step ${k + 1}, “${st.title}”. It is built only when asked for here, as some are large.`), h('p', null, build)) });
+    this.shownStep = -1;
+    this.sceneShown = false;
+    this.el.classList.add('no-inspector');
+    widgetStepOwner = this;
+    document.documentElement.setAttribute('data-widget-step', '');
   }
 
   /**
