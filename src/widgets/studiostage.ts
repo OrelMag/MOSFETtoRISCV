@@ -94,10 +94,7 @@ const ASPECT_MIN = 0.62, ASPECT_MAX = 1.9;
 const ease = (t: number) => t * t * (3 - 2 * t);
 
 export function studioStage(o: StudioStageOptions): StudioStage {
-  const listId = `st-parts-${++stageSeq}`;
-  // role application: a screen reader in browse mode would take the arrows the canvas turns the model with
-  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, role: 'application', 'aria-roledescription': '3D model', 'aria-describedby': listId,
-    'aria-label': `${o.aria}: drag or arrows to turn, wheel, pinch or + and − to zoom; point at a part, or press Enter for the list of parts` }) as HTMLCanvasElement;
+  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': `${o.aria}: drag to turn, wheel or pinch to zoom; point at a part for its name` }) as HTMLCanvasElement;
   const flat = s('svg', { class: 'r3-flat', viewBox: `0 0 ${FW} ${FH}`, role: 'img', 'aria-label': o.aria }) as SVGSVGElement;
   flat.style.display = 'none';
   const leaders = s('svg', { class: 'st-leaders', 'aria-hidden': 'true' }) as SVGSVGElement;
@@ -113,7 +110,14 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   // the gutters lie over the canvas's side bands: the canvas takes the column's width and the model is fitted between them
   const view = h('div', { class: 'st-view r3-stage' }, canvas, flat, gutL, gutR, leaders, badges, card, chips, stats, scaleBar);
   const stage = h('div', { class: 'st-stage' }, view);
+  // The parts as buttons (the list below): the canvas is described by it, and its name says how to reach it. Role application:
+  // a screen reader in browse mode would take the arrows the canvas turns the model with.
+  const listId = `st-parts-${++stageSeq}`;
   const list = h('ol', { class: 'st-list', id: listId, 'aria-label': 'Parts' });
+  canvas.setAttribute('role', 'application');
+  canvas.setAttribute('aria-roledescription', '3D model');
+  canvas.setAttribute('aria-describedby', listId);
+  canvas.setAttribute('aria-label', `${o.aria}: drag or arrows to turn, wheel, pinch or + and − to zoom; point at a part, or press Enter for the list of parts`);
 
   const exIn = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: 0, 'aria-label': 'Exploded view' }) as HTMLInputElement;
   const cutIn = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: o.knobs?.cut ?? 0, 'aria-label': 'Cutaway' }) as HTMLInputElement;
