@@ -22,7 +22,7 @@ const mvOf = (frac: number) => `${(frac * VDD_VOLTS * 1000).toFixed(frac * VDD_V
 /** The whole array in view, the lines as long as the ratio makes them. */
 function viewFor(ratio: number): OrbitView {
   const zf = Z_OF(0) + 7, zb = LINE_Z0 - lineLength(ratio) - 4, depth = zf - zb;
-  return { target: [6, 2, (zf + zb) / 2 + 4], yaw: -0.45, pitch: 0.62, dist: 48 + 1.25 * depth };
+  return { target: [6, 2, (zf + zb) / 2 + 4], yaw: 2.55, pitch: 0.62, dist: 48 + 1.25 * depth };
 }
 
 export function dramView(): Widget {

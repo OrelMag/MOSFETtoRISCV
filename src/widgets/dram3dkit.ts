@@ -99,9 +99,9 @@ export function dramModel(s: DramSnap, detail: 'full' | 'flat' = 'full'): Model3
 
   const up: Vec3 = [0, 1, 0], left: Vec3 = [-1, 0.2, 0.4], r = s.open >= 0 ? s.open : 0, cl = cols - 1;
   const anchors: StudioAnchor[] = [
-    { text: s.open >= 0 ? `word line, row ${r}: raised` : `word line, row ${r}`, p: [x0 + 1, 0.3, Z_OF(r) + 4.4], side: 'l', n: left, on: 'wordlines' },
-    { text: `bit line: ${s.ratio}× a cell (${s.ratio * CELL_C} fF)`, p: [BL_X(1), PAD + HMAX * 0.62, LINE_Z0 - L * 0.5], side: 't', n: up, on: 'lines' },
-    { text: s.sensed ? 'sense amplifiers: driving' : 'sense amplifiers', p: [BLB_X(cl) + 1.6, 1.2, LINE_Z0 + 2], side: 'r', n: up, on: 'amps' },
+    { text: s.open >= 0 ? `word line ${r}: raised` : `word line ${r}`, p: [x0 + 1, 0.3, Z_OF(r) + 4.4], side: 'l', n: left, on: 'wordlines' },
+    { text: `bit line, ${s.ratio}× a cell`, p: [BL_X(1), PAD + HMAX * 0.62, LINE_Z0 - L * 0.5], side: 't', n: up, on: 'lines' },
+    { text: s.sensed ? 'amplifiers: driving' : 'sense amplifiers', p: [BLB_X(cl) + 1.6, 1.2, LINE_Z0 + 2], side: 'r', n: up, on: 'amps' },
     { text: 'cell, 25 fF', p: [X_OF(cl) + R_CELL, PAD + WELL, Z_OF(rows - 1)], side: 'r', n: up, on: 'cells' },
     { text: 'reference bit line', p: [BLB_X(cl), PAD + HMAX * 0.55, LINE_Z0 - L * 0.7], side: 'r', n: up, on: 'lines', minor: true },
     { text: 'access transistor', p: [X_OF(cl) + 3.9, 1.2, Z_OF(0)], side: 'r', n: up, on: 'fets', minor: true },
@@ -111,14 +111,33 @@ export function dramModel(s: DramSnap, detail: 'full' | 'flat' = 'full'): Model3
   const beats: Beat[] = [
     { title: 'A cell is a column of charge', text: `Each well is a ${CELL_C} fF capacitor, and the liquid in it is its charge: as high as its voltage, as wide as its capacitance. A 1 is a full column, a 0 an empty well.`, view: v(-0.5, 0.75), frame: ['cells'], show: ['cells', 'plate'] },
     { title: 'The word line opens a row', text: 'Raising a row’s word line turns on the access transistor beside every cell of that row, joining each cell to its column’s bit line. Every other row stays sealed.', view: v(-0.35, 0.6), frame: ['cells', 'wordlines'], show: ['wordlines', 'fets', 'cells'] },
-    { title: 'A bit line is a long trough', text: `A bit line runs past every cell of its column, so its capacitance is many cells’ worth: here ${s.ratio}× a cell, its trough ${s.ratio}× a well’s area. A cell’s charge poured into it moves its level only a little.`, view: v(-0.6, 0.55), frame: ['lines'], show: ['lines'] },
-    { title: 'Above or below VDD/2', text: 'Both lines start at VDD/2, the glass sheet. Sharing a 1 lifts the bit line a little above it, a 0 drops it a little below; the reference line, with no cells, stays at VDD/2.', view: v(-0.15, 0.25), frame: ['lines', 'half'], show: ['lines', 'half'] },
-    { title: 'The amplifier decides', text: 'Enabled, each sense amplifier compares its two lines and drives the higher to VDD and the lower to 0. The open row’s cells, still connected, refill to a full 1 or an empty 0: a read destroys and restores.', view: v(-0.5, 0.65), frame: ['amps', 'lines'], show: ['amps', 'lines', 'cells'] },
+    { title: 'A bit line is a long trough', text: `A bit line runs past every cell of its column, so its capacitance is many cells’ worth: here ${s.ratio}× a cell, its trough ${s.ratio}× a well’s area. A cell’s charge poured into it moves its level only a little.`, view: v(2.6, 0.55), frame: ['lines'], show: ['lines'] },
+    { title: 'Above or below VDD/2', text: 'Both lines start at VDD/2, the glass sheet. Sharing a 1 lifts the bit line a little above it, a 0 drops it a little below; the reference line, with no cells, stays at VDD/2.', view: v(2.95, 0.25), frame: ['lines', 'half'], show: ['lines', 'half'] },
+    { title: 'The amplifier decides', text: 'Enabled, each sense amplifier compares its two lines and drives the higher to VDD and the lower to 0. The open row’s cells, still connected, refill to a full 1 or an empty 0: a read destroys and restores.', view: v(2.45, 0.65), frame: ['amps', 'lines'], show: ['amps', 'lines', 'cells'] },
   ];
-  return { items, anchors, beats, floor: -1.25, look: { exposure: 0.95 } };
+  return { items: mergeAlike(items), anchors, beats, floor: -1.25, look: { exposure: 0.95 } };
 }
 
-export const DRAM_HOME = { yaw: -0.45, pitch: 0.62, target: [6, 2, -20] as Vec3, dist: 120 };
+/** Parts alike (same name, group and material) drawn as one item, so the array is a few dozen draws, not ninety; the
+ *  charges stay one item each (each is its own level). A merged part keeps a note only if every copy had the same one. */
+function mergeAlike(items: Item[]): Item[] {
+  const out: Item[] = [], by = new Map<string, Item[]>(), key = new Map<Material, number>();
+  for (const it of items) {
+    if (it.name?.startsWith('charge')) { out.push(it); continue; }
+    if (!key.has(it.mat)) key.set(it.mat, key.size);
+    const kk = `${it.name}|${it.group}|${key.get(it.mat)}`, list = by.get(kk);
+    if (list) list.push(it); else { const l = [it]; by.set(kk, l); out.push(it); }
+  }
+  return out.map((it) => {
+    if (it.name?.startsWith('charge')) return it;
+    const list = by.get(`${it.name}|${it.group}|${key.get(it.mat)}`)!;
+    if (list.length === 1) return it;
+    const same = list.every((x) => x.info?.note === it.info?.note);
+    return { ...it, geo: merge(list.map((x) => x.geo), it.name), info: { ...it.info, note: same ? it.info?.note : undefined } };
+  });
+}
+
+export const DRAM_HOME = { yaw: 2.55, pitch: 0.62, target: [6, 2, -20] as Vec3, dist: 120 };
 /** The canvas's shape: the bit lines grow with the ratio, the canvas should not jump. */
 export const DRAM_ASPECT = 1.45;
 /** The drawn levels of a snapshot, for tests: every charge solid's height over the well floor, by where it stands. */

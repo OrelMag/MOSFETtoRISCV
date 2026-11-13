@@ -373,7 +373,7 @@ export function diskModel(s: DiskLook, detail: 'full' | 'flat' = 'full'): Model3
   const lights = [{ p: [20, -110, 0] as Vec3, colour: [1, 1, 1] as [number, number, number], power: 0.9, range: 220 }];
   // the key light where the home view's reflection in the platters points: the mirror shows the softbox, as a polished
   // platter does any bright light (the renderer has no reflections of the parts themselves)
-  return { items, anchors, beats, lights, floor: BOTTOM_Y - 0.1, look: { exposure: 0.82, keyDir: KEY_DIR } };
+  return { items, anchors, beats, lights, floor: BOTTOM_Y - 0.1, flatOrder: 'items', look: { exposure: 0.82, keyDir: KEY_DIR } };
 }
 
 /** The ramp's angle round the spindle: where the parked head is. */

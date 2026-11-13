@@ -105,16 +105,20 @@ describe('the drawing', () => {
   it('the open row’s access transistors and word line are lit, the amplifiers only while sensing', () => {
     const b = new DramBench(); b.write(); b.activate(1);
     const lit = (q: DramBench) => dramModel(q.snap()).items;
-    expect(lit(b).filter((i) => i.mat === MATS.fetOn)).toHaveLength(4);
+    // the lit transistors are the open row's (merged into one part), the raised word line too
+    const on = lit(b).filter((i) => i.mat === MATS.fetOn), z1 = Z_OF(1);
+    expect(on).toHaveLength(1);
+    expect(on[0].geo.min[2]).toBeGreaterThan(z1 - 1); expect(on[0].geo.max[2]).toBeLessThan(z1 + 1);
+    expect(on[0].geo.max[0] - on[0].geo.min[0]).toBeGreaterThan(3 * 9);
     expect(lit(b).filter((i) => i.mat === MATS.wlUp)).toHaveLength(1);
     expect(lit(b).filter((i) => i.mat === MATS.ampOn)).toHaveLength(0);
     b.sense();
-    expect(lit(b).filter((i) => i.mat === MATS.ampOn)).toHaveLength(4);
+    expect(lit(b).filter((i) => i.mat === MATS.ampOn)).toHaveLength(1);
   });
   it('anchors name the ratio from the bench, and the first frame has a row open with a stored pattern', () => {
     const b = new DramBench(16); b.write(); b.activate(0);
     expect(b.snap().open).toBe(0);
-    expect((dramModel(b.snap()).anchors ?? []).map((a) => a.text)).toContain(`bit line: 16× a cell (${16 * CELL_C} fF)`);
+    expect((dramModel(b.snap()).anchors ?? []).map((a) => a.text)).toContain(`bit line, 16× a cell`);
     expect(dramModel(b.snap()).items.length).toBeLessThan(220);
   });
 });
