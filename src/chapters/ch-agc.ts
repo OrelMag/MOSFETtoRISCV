@@ -275,14 +275,14 @@ export const chAppendixAgc: Chapter = {
     {
       title: 'A logic module',
       body: `
-        <p>Every gate of this appendix, from step 0's three transistors to the registers, is one part: a chip holding two
+        <p>Every gate of this appendix, from the three transistors of the first step to the registers, is one part: a chip holding two
         three-input NOR gates, sealed in a flatpack ${FLATPACK_IN} inches long with ten gold leads (MIT drawing 1006321). A logic
         module is ${PACKAGES} of them welded to two boards, ${MODULE_GATES} gates, potted in epoxy; four of these modules, A8 to
         A11, are the arithmetic unit and the central registers, four bits each (K. Shirriff's study of the computer).</p>
-        <p>The count works the same way at every scale. Step 2's four-bit adder is ${ADDER_GATES} NOR gates, so
-        ${ADDER_PACKAGES} flatpacks; step 4's four-bit register is ${REG_GATES} gates, ${REG_PACKAGES} flatpacks. With one
+        <p>The count works the same way at every scale. The four-bit adder of “The end-around carry” is ${ADDER_GATES} NOR gates, so
+        ${ADDER_PACKAGES} flatpacks; the four-bit register of “Registers of NOR gates” is ${REG_GATES} gates, ${REG_PACKAGES} flatpacks. With one
         kind of part, the computer's cost is a single number: about 2800 packages of the same chip.</p>
-        <div class="try">Cut the module open and light the adder, then open a flatpack and its die and set a, b and c.</div>`,
+        <div class="try">On Module, press Light the adder: its packages among the ${PACKAGES}. Then pick Flatpack, then Gate, and set a, b and c.</div>`,
       widget: () => agcModule3d(),
     },
   ],

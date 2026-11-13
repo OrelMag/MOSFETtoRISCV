@@ -88,7 +88,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'nmosgate', title: 'A 6502-style NMOS gate', category: 'devices', chapter: 'appendix-6502', step: 7,
     summary: 'A two-input NOR in diffusion, polysilicon and aluminium: two pull-downs and a depletion load, three transistors, a ratio of four.',
-    files: ['nmosgate3d', 'nmosgate3dview', 'nmosgate3dkit'], factory: 'nmosGate3d', codex: ['cmos'],
+    files: ['nmosgate3d', 'nmosgate3dview', 'nmosgate3dkit'], factory: 'nmosGate3d', codex: ['nor'],
     open: () => import('./nmosgate3d').then((m) => m.nmosGate3d()),
   },
   {
@@ -250,7 +250,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'eniac', title: 'ENIAC\'s decade ring', category: 'machines', chapter: 'tubes', step: 7,
     summary: 'Two plug-in decade units: ten 6SN7 flip-flops in a ring, a neon each, the lit one moving a stage a pulse and carrying into the tens past nine.',
-    files: ['eniac3d', 'eniac3dview', 'eniac3dkit', 'eniac3dgeom'], factory: 'eniac3d', codex: ['ecclesjordan'],
+    files: ['eniac3d', 'eniac3dview', 'eniac3dkit', 'eniac3dgeom'], factory: 'eniac3d', codex: ['ecclesjordan', 'triode'],
     open: () => import('./eniac3d').then((m) => m.eniac3d()),
   },
   {
@@ -261,7 +261,7 @@ export const MODELS_3D: readonly Model3d[] = [
   },
   {
     id: 'agcmodule', title: 'AGC logic module', category: 'machines', chapter: 'appendix-agc', step: 8,
-    summary: 'The Apollo computer\'s one part: a dual NOR flatpack, 120 to a module, the module in its tray, one gate on the die down to its transistors.',
+    summary: 'The Apollo computer\'s only logic chip, a dual NOR flatpack, 120 to a module, the module in its tray, one gate on the die down to its transistors.',
     files: ['agcmodule3d', 'agcmodule3dview', 'agcmodule3dkit', 'agcmodule3dgeom'], factory: 'agcModule3d', codex: ['agc', 'nor'],
     open: () => import('./agcmodule3d').then((m) => m.agcModule3d()),
   },
