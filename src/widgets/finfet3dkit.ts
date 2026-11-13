@@ -94,7 +94,24 @@ export function partsOf(k: GateKind): Parts {
 export const FF_HOME: OrbitView = { target: [0, 8, 0], yaw: 0.4, pitch: 0.28, dist: 195 };
 const NAME: Record<GateKind, string> = { planar: 'planar channel', fin: 'fins', sheets: 'nanosheets' };
 
-export function finfetModel(k: GateKind, on: boolean): Model3 {
+/** The comparison: the three devices side by side, one scale, each on its own footprint (x offsets, nm). */
+export const COMPARE_X: Record<GateKind, number> = { planar: -135, fin: 0, sheets: 135 };
+export const COMPARE_VIEW: OrbitView = { target: [0, 8, 0], yaw: 0.2, pitch: 0.24, dist: 330 };
+const KIND_LABEL: Record<GateKind, string> = { planar: 'planar', fin: 'fin', sheets: 'sheets' };
+
+/** A device or 'all': the three side by side (the tour's last beat), off unless `on`. */
+export function finfetModel(k: GateKind | 'all', on: boolean): Model3 {
+  if (k === 'all') {
+    const items: Item[] = [], anchors: StudioAnchor[] = [];
+    for (const kk of ['planar', 'fin', 'sheets'] as const) {
+      const m = finfetModel(kk, on), dx = COMPARE_X[kk], t = tr(dx, 0, 0);
+      for (const it of m.items) items.push({ ...it, geo: transform(it.geo, t), name: `${it.name} (${KIND_LABEL[kk]})` });
+      const r = offRatio(DEVICES[kk], DEVICES.planar);
+      const at: [number, number] = kk === 'planar' ? [0, -5] : kk === 'fin' ? [FIN_X[0], DEVICES.fin.H / 2] : [0, 22.5];
+      anchors.push({ text: `${KIND_LABEL[kk]}: off ${kk === 'planar' ? '1' : `1/${Math.round(1 / r)}`}`, p: [dx + at[0], at[1], 0], side: kk === 'sheets' ? 'r' : 'l', gutter: kk === 'sheets' ? 'r' : 'l', n: [0, 0, 1] });
+    }
+    return { items, anchors, beats: beatsOf(), floor: Y_SUB, look: { exposure: 1 }, cuts: { planes: [{ n: [0, 0, 1], d: 0 }], open: [ZS + 2] } };
+  }
   const p = partsOf(k), items: Item[] = [], d = DEVICES[k];
   const add = (geo: Geo[], mat: Material, name: string, group: string, extra: Partial<Item> = {}) => { if (geo.length) items.push({ geo: merge(geo, name), mat, name, group, ...extra }); };
   const dim = (s: string) => ({ dim: s, source: d.source });
@@ -122,12 +139,18 @@ export function finfetModel(k: GateKind, on: boolean): Model3 {
     { text: 'substrate', p: [-35, -32, 0], side: 'l', n: [0, 0, 1] },
   ];
   if (k === 'fin') anchors.push({ text: 'sub-fin', p: [FIN_X[1], -10, 0], side: 'r', n: [0, 0, 1] });
-  const beats: Beat[] = [
-    { title: 'A gate on one side', text: `The planar transistor: the gate sits on top of the channel and holds it from one side. At a ${d.L} nm gate the drain’s field reaches in from below, and the transistor no longer turns fully off.`, view: FF_HOME, cut: 1 },
+  return { items, anchors, beats: beatsOf(), floor: Y_SUB, look: { exposure: 1 }, cuts: { planes: [{ n: [0, 0, 1], d: 0 }], open: [ZS + 2] } };
+}
+
+/** The tour, the same on every device (finfet3dview.ts BEAT_STATE says which device and gate state each shows). */
+function beatsOf(): Beat[] {
+  const L = DEVICES.sheets.L;
+  return [
+    { title: 'A gate on one side', text: `The planar transistor: the gate sits on top of the channel and holds it from one side. At a ${L} nm gate the drain’s field reaches in from below, and the transistor no longer turns fully off.`, view: FF_HOME, cut: 1 },
     { title: 'A fin: three sides', text: `Stand the channel up as a fin and wrap the gate over it: Intel’s 22 nm fins were 8 nm wide and 34 nm tall at a 60 nm pitch. The gate holds it from both walls and the top, and the width that conducts is the walls plus the top, ${weff(DEVICES.fin)} nm per fin.`, view: { target: [0, 12, 0], yaw: 0.3, pitch: 0.24, dist: 200 }, cut: 1 },
     { title: 'Below the gate', text: 'Under the trench oxide’s top the fin goes on down into the substrate, where no gate reaches: off, that is where a bulk fin leaks.', view: { target: [30, -10, 0], yaw: 0.45, pitch: 0.16, dist: 165 }, cut: 1 },
     { title: 'Sheets: four sides', text: `Lay the channel down again as thin sheets and let the gate fill the gaps between them: IBM’s 2 nm test chip stacked three sheets 5 nm thick and 40 nm wide. Every sheet is held from all four sides, and a stack gives ${weff(DEVICES.sheets)} nm of width on a 44 nm footprint.`, view: { target: [0, 22, 0], yaw: 0.3, pitch: 0.2, dist: 160 }, cut: 1 },
-    { title: 'Why it matters off', text: `The same ${d.L} nm gate on all three: the swing, the gate voltage per decade of current below threshold, is about ${swing(DEVICES.planar).toFixed(0)} mV planar, ${swing(DEVICES.fin).toFixed(0)} on a fin and ${swing(DEVICES.sheets).toFixed(0)} wrapped all round (60 is the limit). At a 0.3 V threshold that is ${Math.round(1 / offRatio(DEVICES.sheets, DEVICES.planar))} times less off current than planar.`, view: FF_HOME, cut: 1, explode: 0 },
+    { title: 'Why it matters off', text: `The same ${L} nm gate on all three: the swing, the gate voltage per decade of current below threshold, is about ${swing(DEVICES.planar).toFixed(0)} mV planar, ${swing(DEVICES.fin).toFixed(0)} on a fin and ${swing(DEVICES.sheets).toFixed(0)} wrapped all round (60 is the limit). At a 0.3 V threshold that is ${Math.round(1 / offRatio(DEVICES.sheets, DEVICES.planar))} times less off current than planar.`, view: FF_HOME, cut: 1, explode: 0 },
+    { title: 'Side by side', text: `All three off, at one scale, each on its own footprint: the planar channel glows with what it still leaks, the fin far less (its sub-fin, below the gate, the rest), the sheets barely. Same gate length, same threshold: ${Math.round(1 / offRatio(DEVICES.fin, DEVICES.planar))} and ${Math.round(1 / offRatio(DEVICES.sheets, DEVICES.planar))} times less leakage than planar, from nothing but the sides the gate holds.`, view: COMPARE_VIEW, cut: 1, explode: 0 },
   ];
-  return { items, anchors, beats, floor: Y_SUB, look: { exposure: 1 }, cuts: { planes: [{ n: [0, 0, 1], d: 0 }], open: [ZS + 2] } };
 }

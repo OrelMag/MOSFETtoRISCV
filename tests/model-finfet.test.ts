@@ -2,7 +2,7 @@
 // drawn at the cited sizes with the gate wrapping 1, 3 and 4 sides.
 import { describe, expect, it } from 'vitest';
 import { DEVICES, IDEAL_SWING, SIDES, naturalLength, offRatio, swing, weff, weffDensity } from '../src/phys/gatecontrol';
-import { FIN_X, OX, ZG, finfetModel, leakGlow, partsOf } from '../src/widgets/finfet3dkit';
+import { COMPARE_X, FIN_X, OX, ZG, finfetModel, leakGlow, partsOf } from '../src/widgets/finfet3dkit';
 import type { Geo } from '../src/gl/kit/geo';
 
 const box = (gs: Geo[]) => gs.map((g) => ({ min: g.min, max: g.max }));
@@ -55,12 +55,28 @@ describe('the model', () => {
     // every dielectric piece is OX thick in one direction
     for (const g of partsOf('sheets').hik) expect(Math.min(g.max[0] - g.min[0], g.max[1] - g.min[1])).toBeCloseTo(OX, 6);
   });
-  it('builds for every device, on and off, cut across the gate, with five beats', () => {
+  it('builds for every device, on and off, cut across the gate, with six beats', () => {
     for (const k of ['planar', 'fin', 'sheets'] as const) for (const on of [true, false]) {
       const m = finfetModel(k, on);
       for (const it of m.items) for (const v of it.geo.positions) expect(Number.isFinite(v)).toBe(true);
       expect(m.cuts!.planes[0]).toEqual({ n: [0, 0, 1], d: 0 });
-      expect(m.beats).toHaveLength(5);
+      expect(m.beats).toHaveLength(6);
     }
+  });
+});
+
+describe('side by side', () => {
+  it('all three devices on their own footprints, one scale, apart', () => {
+    const m = finfetModel('all', false);
+    expect(m.beats).toHaveLength(6);
+    for (const k of ['planar', 'fin', 'sheets'] as const) {
+      const one = finfetModel(k, false), mine = m.items.filter((it) => (it.name ?? '').endsWith(`(${k})`));
+      expect(mine).toHaveLength(one.items.length);
+      // the same sizes, moved by COMPARE_X only
+      mine.forEach((it, i) => { expect(it.geo.max[0] - it.geo.min[0]).toBeCloseTo(one.items[i].geo.max[0] - one.items[i].geo.min[0], 6); expect(it.geo.min[0]).toBeCloseTo(one.items[i].geo.min[0] + COMPARE_X[k], 6); });
+    }
+    // footprints 120 nm wide do not overlap
+    expect(COMPARE_X.fin - COMPARE_X.planar).toBeGreaterThan(120);
+    expect(COMPARE_X.sheets - COMPARE_X.fin).toBeGreaterThan(120);
   });
 });
