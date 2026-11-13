@@ -17,7 +17,6 @@ import { mat4LookAt, mat4Mul, norm3, type Mat4, type Vec3 } from './math';
 import { attachOrbit } from './orbit';
 import { lathe, normalMatrix, type Geo } from './kit/geo';
 import type { Colour, DataTex, Material } from './kit/materials';
-import type { PartScene } from './kit/fromparts';
 import { boundsOf, cutsAt, explodeOffset, itemMatrix, type Item, type Knobs, type Model3, type Moves } from './kit/scene';
 
 export interface StudioFlags {
@@ -60,8 +59,6 @@ export interface Studio {
   setHidden(names: ReadonlySet<string> | null): void;
   /** A set of instances (particles): the 18-float records of gl/instances.ts on a geometry, in a material. */
   setInstances(key: string, geo: Geo, mat: Material, data: Float32Array, count?: number, casts?: boolean): void;
-  /** Today's box / cyl parts (gl/kit/fromparts.ts): phase 0, a model unchanged on this renderer. */
-  showParts(scene: PartScene, resolve: (c: Colour) => RGB): void;
   /** Names / groups lit (the rest dimmed), or null for all. */
   setFocus(names: ReadonlySet<string> | null): void;
   /** The part under the pointer: drawn with a rim. */
@@ -880,14 +877,6 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
       s.src = mat; s.mat = rm; s.data = data; s.count = count ?? data.length / INSTANCE_FLOATS; s.casts = casts;
       if (!lost && s.vao && s.buf) { gl.bindBuffer(gl.ARRAY_BUFFER, s.buf); gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW); }
       if (casts) shadowDirty = true;
-      invalidate();
-    },
-    showParts(scene, r) {
-      resolve = r;
-      for (const s of inst.values()) s.mat = resolveMat(s.src);
-      model = { ...(model ?? {}), items: scene.items };
-      if (!lost) build();
-      for (const x of scene.sets) self.setInstances(x.key, x.geo, x.mat, x.data, undefined, true);
       invalidate();
     },
     setFocus(f) { focus = f; invalidate(); },

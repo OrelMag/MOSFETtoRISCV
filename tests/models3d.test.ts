@@ -1,11 +1,11 @@
 // The 3D models' parts: the kit's geometry, and each model's drawing held to the model behind it.
 import { describe, expect, it } from 'vitest';
-import type { RGB, RGBA } from '../src/gl/instances';
+import type { RGB } from '../src/gl/instances';
 import { quatRotate, type Vec3 } from '../src/gl/math';
-import { box, cyl, flatFaces, flatView, rod } from '../src/gl/parts';
+import { flatView, rod } from '../src/gl/parts';
 import { OrbitCamera } from '../src/gl/camera';
 
-const GREY: RGB = [0.5, 0.5, 0.5], CLEAR: RGBA = [0.5, 0.5, 0.5, 0.4];
+const GREY: RGB = [0.5, 0.5, 0.5];
 
 describe('the kit', () => {
   it('a rod runs between its ends, whichever way it points', () => {
@@ -19,15 +19,6 @@ describe('the kit', () => {
     }
   });
 
-  it('the flat view shows three faces of a box, nearest last, and half a cylinder', () => {
-    expect(flatFaces([box(GREY, 0, 1, 0, 1, 0, 1)], -0.5, 0.5)).toHaveLength(3);
-    const near = box(GREY, 0, 1, 0, 1, 10, 11), far = box(GREY, 0, 1, 0, 1, -11, -10), faces = flatFaces([near, far], 0, 0.5);
-    expect(faces[0].depth).toBeLessThan(faces[faces.length - 1].depth);
-    const n = flatFaces([cyl(GREY, 0, 0, 0, 1, 1)], 0.3, 0.5).length;
-    expect(n).toBeGreaterThanOrEqual(6);
-    expect(n).toBeLessThanOrEqual(8);
-  });
-
   it('the flat view looks from where the camera’s eye is, with the same right hand', () => {
     for (const yaw of [0, 0.7, Math.PI / 2, -2.1]) for (const pitch of [0, 0.4]) {
       const cam = new OrbitCamera({ target: [0, 0, 0], yaw, pitch, dist: 10 }), eye = cam.eye(), pr = flatView(yaw, pitch);
@@ -39,7 +30,4 @@ describe('the kit', () => {
     }
   });
 
-  it('keeps a part’s alpha in the flat view', () => {
-    expect(flatFaces([box(CLEAR, 0, 1, 0, 1, 0, 1)], 0.2, 0.5)[0].color[3]).toBeCloseTo(0.4);
-  });
 });

@@ -72,7 +72,7 @@ interface Route {
   viewport?: Viewport;
   /** A page script run once the page is idle (awaited; returns the problems it found, as strings), then the page settles again. */
   drive?: string;
-  /** Added to the page's query (a flag such as studio3d). */
+  /** Added to the page's query (a flag such as flat3d). */
   query?: string;
 }
 
@@ -1425,9 +1425,9 @@ function routes(): Route[] {
   for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ` (3D model, ${phoneVp.name})`, phoneVp);
   // and on the narrowest phone, where the corner buttons (turn, save image, full screen) take the most of the stage
   for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ' (3D model, 360px phone)', { width: 360, height: 740, mobile: true, name: '360px phone' });
-  // Every model on the studio renderer (gl/studio.ts: the triode and the relay by default, the rest under ?studio3d), dark and on a phone.
-  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, themed('dark'), ' (3D model, studio, dark)', undefined, undefined, 'studio3d');
-  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ` (3D model, studio, ${phoneVp.name})`, phoneVp, undefined, 'studio3d');
+  // Every 3D model (all on the studio renderer, gl/studio.ts), dark and on a phone.
+  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, themed('dark'), ' (3D model, studio, dark)');
+  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ` (3D model, studio, ${phoneVp.name})`, phoneVp);
   for (const n of NODES) {
     add(`#/campaign/play/${n.id}`, unlocked);
     // Lessons, drills and programs open on the map instead (pages/level.ts levelRoute).

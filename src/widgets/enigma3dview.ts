@@ -48,7 +48,7 @@ const TOUR: { view: string; title: string; text: string; camera?: OrbitView }[] 
 ];
 
 const groups = (s: string) => s.replace(/(.{4})(?=.)/g, '$1 ');
-/** Below this stage width a view takes its phone camera (modelstage.ts's NARROW). */
+/** Below this stage width a view takes its phone camera (the old stage's NARROW, kept here). */
 const NARROW_PX = 480;
 
 export interface EnigmaViewOptions {

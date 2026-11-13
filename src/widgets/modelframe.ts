@@ -1,4 +1,4 @@
-// The tools every 3D model's stage carries (modelstage.ts, and the views that drive the renderer themselves: relay,
+// The tools every 3D model's stage carries (studiostage.ts, and the views that drive the renderer themselves: relay,
 // triode, the machine hall, the water kit): full screen, save image, turn by itself. A cluster of icon buttons in the
 // stage's bottom-right corner.
 // Full screen takes the model's whole panel (its controls and readouts come along: model3d.css lays the stage out to

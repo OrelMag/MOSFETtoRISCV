@@ -12,8 +12,7 @@ Everything here is in the code with tests. Nothing in this file is proposed: §8
   (the stage and the model's controls) and `<name>3dkit.ts` (DOM-free: geometry, materials, `xModel(state) → Model3`), with
   `tests/model-<name>.test.ts` holding the drawing to its numbers. A `<name>3dparts.ts` / `3dgeom.ts` beside it is the
   model's measured data and arithmetic, shared by the kit and its tests.
-- Phase 0's box-and-cylinder path (`widgets/modelstage.ts`, `?studio3d`, §6) is left only for the models not yet converted;
-  it goes with the last of them.
+- Phase 0 (`modelstage.ts`, `fromParts`, `looks.ts`, `?studio3d`) is gone: the last model on it was converted in batch 3.
 - Tests: `tests/gl-geo.test.ts`, `gl-kit-api.test.ts`, `models3d.test.ts` (the flat view against the camera), `models3dindex.test.ts`, one `model-*.test.ts` per model.
 
 ## 1. How a model is written
@@ -194,7 +193,6 @@ The flat view (`gl/parts.ts` `flatView`) looks from where `OrbitCamera.eye()` pu
 - `setModel(model, resolve)`, `setKnobs({ explode, cut })`, `knobs()`.
 - `move(moves)`, `moves()`, `setHidden(names)`.
 - `setInstances(key, geo, mat, data, count?, casts?)`.
-- `showParts(fromParts(parts, look), resolve)`.
 - `setFocus`, `setHover`, `setEnv({ sky, ground, key, dir, exposure, accent })`, `setFlags(...)`.
 - `invalidate`, `render`, `project`, `ray`, `last()` (the frame's stats), `destroy`.
 
@@ -214,11 +212,6 @@ What it draws: hand-written WebGL2.
 3. MSAA off: jagged edges at 1 device pixel per CSS pixel.
 4. Refraction off: glass stops bending what is behind it.
 5. Bloom off: the glow loses its halo; colours are unchanged.
-
-**Phase 0 (going).** `fromParts(parts, look)` maps box-and-cylinder parts to instance sets, grouped by finish (matte, satin, metal,
-chosen by `spec`); see-through parts become glass items. It is how the models not yet converted draw under `?studio3d`
-(`widgets/modelstage.ts`, a look per family from `gl/kit/looks.ts`). When the last of them is converted, `modelstage.ts`,
-`fromParts` and the flag go.
 
 ## 7. Costs (production build, gzip; batch 3, 2026-11-13, this machine)
 

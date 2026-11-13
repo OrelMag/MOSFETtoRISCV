@@ -65,7 +65,7 @@ export interface StudioAnchor extends Anchor {
   on?: string;
   /** Shown only in views from below (pins). */
   under?: boolean;
-  /** The studio stage puts a name in the gutter nearer its point (`side` is only modelStage's); this forces one. */
+  /** The studio stage puts a name in the gutter nearer its point (`side` comes from the Anchor the old stage used; the studio stage ignores it); this forces one. */
   gutter?: 'l' | 'r';
   /** true: shown only while the model is cut (a name on the section); false: only while it is not. */
   whenCut?: boolean;
