@@ -1,4 +1,4 @@
-// The DRAM array in 3D (loaded on demand, modelhost.ts). A SwitchSim of the chapter's 4 x 4 array (dram3dbench.ts) steps
+// The DRAM array in 3D on the studio renderer (dram3dkit.ts; loaded on demand, modelhost.ts). A SwitchSim of the chapter's 4 x 4 array (dram3dbench.ts) steps
 // through the panel's protocol when the learner presses a button; the heights are its `level`s, read back after each step.
 // It opens with the pattern stored and row 0 activated, so the first frame is charge sharing. Nothing runs per frame.
 // The learner can make the bit lines longer (more capacitance against the same cell) and watch the swing shrink until the
@@ -11,9 +11,9 @@ import type { OrbitView } from '../gl/camera';
 import { SENSE_OFFSET, VDD_VOLTS } from '../sim/switchsim';
 import { CELL_HALFLIFE } from '../lib/dram';
 import { DramBench, RATIO, RATIOS, safeCyclesOf, swingOf } from './dram3dbench';
-import { dramAnchors, dramParts, LINE_Z0, lineLength, Z_OF, type DramPalette } from './dram3dparts';
-import { LOOKS } from '../gl/kit/looks';
-import { modelStage } from './modelstage';
+import { LINE_Z0, lineLength, Z_OF } from './dram3dparts';
+import { DRAM_ASPECT, DRAM_HOME, DRAM_HOME_R, dramModel } from './dram3dkit';
+import { studioStage } from './studiostage';
 
 const mv = (d: number) => (Number.isFinite(d) ? `${d >= 0 ? '+' : '−'}${Math.abs(d * VDD_VOLTS * 1000).toFixed(0)} mV` : 'unknown');
 const volts = (l: number) => (Number.isFinite(l) ? `${(l * VDD_VOLTS).toFixed(2)} V` : 'unknown');
@@ -22,7 +22,7 @@ const mvOf = (frac: number) => `${(frac * VDD_VOLTS * 1000).toFixed(frac * VDD_V
 /** The whole array in view, the lines as long as the ratio makes them. */
 function viewFor(ratio: number): OrbitView {
   const zf = Z_OF(0) + 7, zb = LINE_Z0 - lineLength(ratio) - 4, depth = zf - zb;
-  return { target: [6, 2, (zf + zb) / 2 + 4], yaw: -0.45, pitch: 0.62, dist: 48 + 1.25 * depth };
+  return { target: [6, 2, (zf + zb) / 2 + 4], yaw: 2.55, pitch: 0.62, dist: 48 + 1.25 * depth };
 }
 
 export function dramView(): Widget {
@@ -30,21 +30,15 @@ export function dramView(): Widget {
   const fresh = () => { bench = new DramBench(ratio); bench.write(); bench.activate(0); };
   fresh();
   let row = 0;
-  const panel = h('div', { class: 'panel' });
-  const palette = (): DramPalette => ({
-    plate: stage.rgb('--m3-dram-plate'), line: stage.rgb('--m3-dram-line'), wl: stage.rgb('--m3-dram-wl'), charge: stage.rgb('--m3-dram-charge'),
-    open: stage.rgb('--m3-dram-open'), bl: stage.rgb('--m3-dram-bl'), blb: stage.rgb('--m3-dram-blb'), unknown: stage.rgba('--m3-dram-x', 0.45),
-    amp: stage.rgb('--m3-dram-amp'), half: stage.rgba('--m3-dram-half', 0.35), fet: stage.rgb('--m3-dram-fet'),
-  });
-  const draw = () => stage.paint(dramParts(bench.snap(), palette()), dramAnchors(bench.snap()));
-  const stage = modelStage(panel, {
-    look: LOOKS.silicon,
-    aria: 'A 4 by 4 DRAM array in 3D: a column on every cell and a trough for every bit line, each as high as its charge',
-    camera: viewFor(ratio),
-    limits: { minDist: 50, maxDist: 900 },
+  const panel = h('div', { class: 'panel dr3' });
+  const stage = studioStage({
+    aria: 'A 4 by 4 DRAM array in 3D: a well of charge on every cell and a trough for every bit line, each as high as its voltage',
+    home: DRAM_HOME, aspect: DRAM_ASPECT, homeRadius: DRAM_HOME_R,
+    limits: { minDist: 20, maxDist: 900 },
     note: `Heights are the simulator’s charge levels and footprints are proportional to capacitance, so volume is charge: a 25 fF cell is a column, a bit line a trough as long as its capacitance. The chapter’s array is 4 × 4 with bit lines 4 × a cell, and each reference line is a line with no cells (on a chip it is another bit line: its folded twin or the neighbouring mat’s); real arrays hang hundreds of cells on a line and run about 10 × (Keeth, Baker, Johnson & Lin, DRAM Circuit Design, 2nd ed., ch. 2). The grid pitch is exaggerated. Leakage is exponential with a ${CELL_HALFLIFE}-cycle half-life standing for tens of milliseconds: a real array refreshes every row within 64 ms (JEDEC DDR4 tREFW). The word line of an open row is drawn up; on a chip it is boosted above VDD + VT so the access transistor passes a full 1.`,
-    draw,
+    build: (detail) => dramModel(bench.snap(), detail),
   });
+  const draw = () => stage.refresh();
   const chip = h('span', { class: 'r3-chip' });
   stage.chips.append(chip);
   const kv = h('div', { class: 'r3-kv' }), note = h('div', { class: 'dr-note', 'aria-live': 'polite' });
@@ -85,7 +79,7 @@ export function dramView(): Widget {
     return seg;
   };
   const rowSeg = segOf('Row', [0, 1, 2, 3], String, () => row, (r) => { row = r; });
-  const ratioSeg = segOf('Bit line', RATIOS, (k) => `${k}×`, () => ratio, (k) => { ratio = k; fresh(); stage.setView(viewFor(k)); });
+  const ratioSeg = segOf('Bit line', RATIOS, (k) => `${k}×`, () => ratio, (k) => { ratio = k; fresh(); stage.goTo(viewFor(k)); });
 
   panel.append(
     h('h3', { class: 'm3-title' }, 'The array, live'),
@@ -103,9 +97,12 @@ export function dramView(): Widget {
           btn('Wait 200', 'Let 200 cycles of leakage pass', () => bench.wait(200)),
           btn('Refresh row', 'Precharge, activate, sense, close the selected row', () => bench.refresh(row)),
           btn('Refresh all', 'Refresh every row', () => bench.refreshAll())),
-        h('div', { class: 'dr-ops' }, ratioSeg),
-        stage.el, stage.hint, h('div', { class: 'r3-btns' }, stage.resetBtn)),
+        h('div', { class: 'dr-ops' }, ratioSeg)),
       h('div', { class: 'r3-side' }, h('h4', null, 'The open row ', h('span', { class: 'r3-badge' }, 'simulator')), kv, note)));
+  // the protocol's controls under the canvas, in the stage's slot; the canvas takes the main column
+  const main = panel.querySelector('.r3-main')!;
+  stage.slot.append(...main.querySelectorAll(':scope > .dr-ops'));
+  main.append(stage.el);
   repaint();
   return { el: panel, destroy() { stage.destroy(); } };
 }

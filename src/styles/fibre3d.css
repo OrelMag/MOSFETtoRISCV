@@ -1,5 +1,5 @@
 /* The cut-away fibre (widgets/fibre3dview.ts): materials, scoped under .m3d (model3d.css holds the shared ones). */
-.m3d {
+.m3d, .fb3 {
   --fb-glass: light-dark(#b9cfe0, #8fb0cc);
   --fb-coat: light-dark(#d9a441, #e0b25a);
   --fb-core: light-dark(#7fb6e6, #9cc9f0);
@@ -25,3 +25,6 @@
 .fb-seg button { min-height: 30px; }
 @media (pointer: coarse) { .fb-seg button { min-height: 40px; } }
 .m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+/* the canvas takes the whole column; the readout and the plot sit under it */
+.fb3 .r3 { grid-template-columns: minmax(0, 1fr); }
+.fb3 .r3-side .r3-kv, .fb3 .fb-plot { max-width: 560px; }

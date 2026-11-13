@@ -1,11 +1,9 @@
 // The cut-away fibre (widgets/fibre3dparts.ts) held to the chapter's model (phys/fibre.ts, the numbers of ch-comm-glass.ts).
 import { describe, expect, it } from 'vitest';
-import type { RGB, RGBA } from '../src/gl/instances';
 import { acceptanceDeg, criticalDeg, gradedDelayPsKm, MMF_50, modesLarge, n2Of, naOf, rayOf, SMF_G652, stepDelayPsKm, vNumber } from '../src/phys/fibre';
-import { endTau, facts,  fanAngles, fibreAnchors, fibreParts, FIBRES, lagFactor, pulseView, rayDelayNs, rayPath, rayPathGraded, rayDelayGradedNs, turnFraction, lagFactorGraded, UM, MFD_UM, coreR, R_CLAD, R_COAT, SIGMA_NS, X1, type FibrePalette } from '../src/widgets/fibre3dparts';
+import { endTau, facts,  fanAngles, fibreAnchors, FIBRES, lagFactor, pulseView, rayDelayNs, rayPath, rayPathGraded, rayDelayGradedNs, turnFraction, lagFactorGraded, UM, MFD_UM, coreR, R_CLAD, R_COAT, SIGMA_NS, X0, X1 } from '../src/widgets/fibre3dparts';
+import { MATS, fibreModel, packetsAt } from '../src/widgets/fibre3dkit';
 
-const G: RGB = [0.5, 0.5, 0.5], C: RGBA = [0.5, 0.5, 0.5, 0.3];
-const P: FibrePalette = { glass: C, coat: C, core: G, coreEnd: G, ray: [1, 0, 0], fan: [0, 0, 1], leak: [1, 0.5, 0], pulse: [0, 1, 0], glow: C, air: G, cut: G };
 
 describe('critical angle and guiding', () => {
   for (const kind of ['multi', 'single'] as const) {
@@ -83,15 +81,16 @@ describe('the pulse spread', () => {
 
 describe('the drawing', () => {
   it('draws a packet per fan ray in multimode and one on the axis in single-mode, none before a pulse is sent', () => {
-    const count = (kind: 'multi' | 'single', tau: number, deg = 4) => fibreParts({ kind, deg, tau }, P).filter((p) => p.color === P.pulse).length;
+    const count = (kind: 'multi' | 'single', tau: number, deg = 4) => packetsAt({ kind, deg, tau }).length;
     expect(count('multi', -1)).toBe(0); expect(count('multi', 0.5)).toBe(5);
     expect(count('single', 0.5)).toBe(1); expect(count('single', 0.5, 20)).toBe(0);
   });
   it('the slow rays are behind at the same moment, and all have arrived by the end', () => {
     const f = MMF_50, ang = fanAngles(f, 5), lag = ang.map((d) => lagFactor(rayPath(d, f).stretch));
     for (let i = 1; i < lag.length; i++) expect(lag[i]).toBeLessThan(lag[i - 1]);
-    const parts = fibreParts({ kind: 'multi', deg: 4, tau: endTau('multi') }, P).filter((p) => p.color === P.pulse);
-    for (const q of parts) expect(q.pos[0]).toBeGreaterThan(X1 - 1.5);
+    const ps = packetsAt({ kind: 'multi', deg: 4, tau: endTau('multi') });
+    expect(ps).toHaveLength(5);
+    for (const q of ps) expect(q[0]).toBeGreaterThan(X1 - 1.5);
   });
   it('labels the three layers with the true sizes and says what the ray does', () => {
     const t = fibreAnchors({ kind: 'multi', deg: 4, tau: -1, profile: 'step' }).map((a) => a.text).join('|');
@@ -149,11 +148,29 @@ describe('graded index (what every 50/125 fibre has: ITU-T G.651.1)', () => {
     expect(lagFactorGraded(0, f)).toBe(1);
     expect(endTau('multi', 'graded')).toBeLessThan(1.05);
   });
-  it('draws the sinusoids as short rods and a cone of 8 in air; a step core is unchanged', () => {
-    const graded = fibreParts({ kind: 'multi', deg: 6, tau: 0.5 }, P), step = fibreParts({ kind: 'multi', deg: 6, tau: 0.5, profile: 'step' }, P);
-    expect(graded.length).toBeLessThan(220);
-    expect(graded.length).toBeGreaterThan(step.length);
-    expect(fibreParts({ kind: 'multi', deg: 6, tau: 0.5, cone: false }, P).length).toBe(graded.length - 8);
+  it('draws the rays as light in the ray plane, the cone only when asked, and the packets as one item', () => {
+    const m = fibreModel({ kind: 'multi', deg: 6, tau: 0.5 }), names = m.items.map((i) => i.name);
+    for (const n of ['core', 'cladding', 'coating', 'this ray', 'guided rays', 'acceptance cone', 'pulse']) expect(names, n).toContain(n);
+    for (const i of m.items.filter((x) => x.group === 'light')) { expect(i.mat.beam).toBe(true); expect(i.cut).toBe('none'); }
+    const ray = m.items.find((i) => i.name === 'this ray')!;
+    expect(Math.max(Math.abs(ray.geo.min[2]), Math.abs(ray.geo.max[2]))).toBeLessThan(0.21);
+    expect(fibreModel({ kind: 'multi', deg: 6, tau: 0.5, cone: false }).items.map((i) => i.name)).not.toContain('acceptance cone');
+    expect(fibreModel({ kind: 'multi', deg: 20, tau: -1, profile: 'step' }).items.map((i) => i.name)).toContain('this ray, leaking');
+    expect(fibreModel({ kind: 'single', deg: 4, tau: -1 }).items.filter((i) => i.name === 'mode field')).toHaveLength(3);
+  });
+  it('the layers are in true ratio: core, cladding and coating radii', () => {
+    const m = fibreModel({ kind: 'multi', deg: 4, tau: -1 }), rOf = (n: string) => m.items.find((i) => i.name === n)!.geo.max[1];
+    expect(rOf('core')).toBeCloseTo(coreR(MMF_50), 3);
+    expect(rOf('cladding')).toBeCloseTo(R_CLAD, 3);
+    expect(rOf('coating')).toBeCloseTo(R_COAT, 3);
+    expect(R_COAT * UM * 2).toBe(250); expect(R_CLAD * UM * 2).toBe(125);
+    const core = m.items.find((i) => i.name === 'core')!;
+    expect(core.geo.min[0]).toBeLessThan(X0); expect(core.geo.max[0]).toBeGreaterThan(X1);
+    expect(MATS.core.transmit).toBeGreaterThan(0);
+  });
+  it('every beat names groups the model has', () => {
+    const m = fibreModel({ kind: 'multi', deg: 6, tau: 0.5 }), g = new Set(m.items.flatMap((i) => [i.group, i.name]));
+    for (const b of m.beats ?? []) for (const x of [...(b.frame ?? []), ...(b.show ?? []), ...(b.hide ?? [])]) expect(g.has(x), x).toBe(true);
   });
 });
 

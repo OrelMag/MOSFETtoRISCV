@@ -92,15 +92,21 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./package3d').then((m) => m.package3d()),
   },
   {
+    id: 'flipchip', title: 'A flip-chip package, cut open', category: 'devices', chapter: 'wire', step: 8,
+    summary: 'A lidded BGA to scale: the die face down on solder bumps in underfill, the substrate fanning out to 1 560 balls, a lid on the thermal paste.',
+    files: ['flipchip3d', 'flipchip3dview', 'flipchip3dkit'], factory: 'flipchip3d',
+    open: () => import('./flipchip3d').then((m) => m.flipchip3d()),
+  },
+  {
     id: 'dram', title: 'The DRAM array', category: 'memory', chapter: 'dram', step: 4,
     summary: 'The chapter\'s 4 × 4 array on the switch-level simulator: every cell\'s charge as a height, step by step through the protocol.',
-    files: ['dram3d', 'dram3dview', 'dram3dparts', 'dram3dbench'], factory: 'dram3d', codex: ['senseamp', 'dramtiming'],
+    files: ['dram3d', 'dram3dview', 'dram3dkit', 'dram3dparts', 'dram3dbench'], factory: 'dram3d', codex: ['senseamp', 'dramtiming'],
     open: () => import('./dram3d').then((m) => m.dram3d()),
   },
   {
     id: 'fgate', title: 'The floating gate', category: 'memory', chapter: 'flash', step: 1,
     summary: 'A NAND string of four flash cells: program a cell pulse by pulse, erase the block, read with the others at the pass voltage.',
-    files: ['fgate3d', 'fgate3dview', 'fgate3dparts'], factory: 'fgate3d', codex: ['ftl', 'boot'],
+    files: ['fgate3d', 'fgate3dview', 'fgate3dkit', 'fgate3dparts'], factory: 'fgate3d', codex: ['ftl', 'boot'],
     open: () => import('./fgate3d').then((m) => m.fgate3d()),
   },
   {
@@ -142,7 +148,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'fibre', title: 'An optical fibre, cut open', category: 'comms', chapter: 'glass', step: 1,
     summary: 'Core, cladding and coating to scale: rays held by total internal reflection, and a pulse spread by the modes.',
-    files: ['fibre3d', 'fibre3dview', 'fibre3dparts'], factory: 'fibre3d', codex: ['dispersion'],
+    files: ['fibre3d', 'fibre3dview', 'fibre3dkit', 'fibre3dparts'], factory: 'fibre3d', codex: ['dispersion'],
     open: () => import('./fibre3d').then((m) => m.fibre3d()),
   },
   {
@@ -202,7 +208,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'disk', title: 'A hard disk', category: 'memory', chapter: 'flash', step: 4,
     summary: 'Platters at 7200 rpm and a swinging arm: a sector read as seek, rotational latency and transfer, against a flash page read.',
-    files: ['disk3d', 'disk3dview', 'disk3dparts'], factory: 'disk3d', codex: ['ftl', 'wearlevel'],
+    files: ['disk3d', 'disk3dview', 'disk3dkit', 'disk3dparts'], factory: 'disk3d', codex: ['ftl', 'wearlevel'],
     open: () => import('./disk3d').then((m) => m.disk3d()),
   },
   {
