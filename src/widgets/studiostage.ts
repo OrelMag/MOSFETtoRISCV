@@ -50,6 +50,8 @@ export interface StudioStageOptions {
   onKnobs?: (k: { cut: number; explode: number }) => void;
   limits?: Partial<OrbitLimits>;
   note?: string;
+  /** The note's longer part (sources, every simplification): plain text in a folded "Sources and simplifications" after the hint. */
+  noteMore?: string;
   /** The model now, at a detail: 'flat' for the SVG fallback (fewer facets). */
   build: (detail: 'full' | 'flat') => Model3;
 }
@@ -120,7 +122,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     h('label', { class: 'r3-sl' }, h('span', null, 'Explode'), exIn),
     h('div', { class: 'r3-btns' }, prev, next, resetBtn));
   const hint = h('div', { class: 'r3-hint' });
-  const el = h('div', { class: 'st' }, stage, list, cap, slot, bar, hint);
+  const more = o.noteMore ? h('details', { class: 'deeper st-more' }, h('summary', null, 'Sources and simplifications'), h('p', null, o.noteMore)) : null;
+  const el = h('div', { class: 'st' }, stage, list, cap, slot, bar, hint, ...(more ? [more] : []));
 
   const colors = new CssColors(el); // in the stage: its --st-* tokens apply, and the host's (a model's palette) are inherited
   const resolve = (c: Colour): RGB => (typeof c === 'string' ? colors.rgb(c) : c);
@@ -252,7 +255,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
       // the right column stops above the corner buttons, the left above the scale bar
       // on a phone the left badges start below the status chips (top left, over the canvas)
       const top = narrow && side === 'l' && chips.childElementCount ? Math.max(12, chips.offsetTop + chips.offsetHeight + 18) : 12;
-      const ys = spread(col.map((q) => q.y), narrow ? 24 : 22, top, side === 'r' ? H - 56 : o.scaleBar ? H - (narrow ? 58 : 40) : H - 12);
+      const ys = spread(col.map((q) => q.y), narrow ? 24 : 22, top, side === 'r' ? H - (narrow ? 70 : 56) : o.scaleBar ? H - (narrow ? 58 : 40) : H - 12);
       col.forEach((q, i) => {
         const y = ys[i];
         let gx: number, elbow: number;

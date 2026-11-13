@@ -151,13 +151,14 @@ Other functions: `boundsOf`, `boundsOfNamed`, `pick(m, o, d, knobs, { moves, hid
 
 ## 5. The stage: `widgets/studiostage.ts`
 
-`studioStage({ aria, home, build, fit?, homeFrame?, homeRadius?, homeRadiusNarrow?, aspect?, hidden?, scaleBar?, onBeat?, knobs?, onKnobs?, limits?, note? })`
+`studioStage({ aria, home, build, fit?, homeFrame?, homeRadius?, homeRadiusNarrow?, noteMore?, aspect?, hidden?, scaleBar?, onBeat?, knobs?, onKnobs?, limits?, note? })`
 returns `{ el, slot, chips, hint, refresh, goTo, look, instances, endTour, move, studio, isFlat, rgb, knobs, setKnobs, destroy }`.
 
 Options beyond the freeze, each for a case the conversions met:
 - `homeFrame` fits home to some parts (the subject, not its wiring); `homeRadius` to a sphere (a round model).
   `homeRadiusNarrow`: that radius when the names are badges (a phone), further out so no anchor sits under a badge at the edge.
 - `aspect` fixes the canvas's shape (a model whose own aspect would mislead, or a host that moves the camera with `goTo`).
+- `noteMore`: the note's long part (sources, simplifications), folded under the hint as "Sources and simplifications"; keep `note` to the essentials.
 - `hidden`: parts hidden outside the tour and in beats that do not say.
 - `scaleBar(len)`: a 1-2-5 scale bar under the canvas following the zoom, labelled in the model's units.
 - `onBeat(i)` is called before the beat is read, so a host can set its state for the beat (−1: the tour ended).
