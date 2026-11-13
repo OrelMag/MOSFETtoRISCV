@@ -39,7 +39,7 @@ export function micView(): Widget {
     aria: 'An Infineon IM69D130 MEMS microphone in 3D, cut open: the substrate with its sound port, the MEMS die with a membrane between two perforated backplates, the ASIC and its bond wires, under a metal lid',
     home: MIC_HOME,
     // the can fitted as a sphere round its middle: it fills the width
-    homeRadius: 1.9,
+    homeRadius: 1.4,
     aspect: 1.6,
     knobs: { cut: 1 },
     scaleBar: (len) => `${len} mm`,
