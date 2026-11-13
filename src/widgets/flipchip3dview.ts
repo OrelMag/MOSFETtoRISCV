@@ -41,7 +41,7 @@ export function flipchipView(): Widget {
   function readout(): void {
     const i = padSwing(), lb = bondNh(), lu = bumpNh();
     const vb = groundBounce(n, i, RISE_NS, lb), vu = groundBounce(n, i, RISE_NS, lu), r = stackR(STACK, area);
-    chip.textContent = `${n} outputs: ${f2(vb)} V through one bond wire, ${(vu * 1000).toFixed(0)} mV through one bump`;
+    chip.textContent = `${n} outputs: ${f2(vb)} V on a wire, ${(vu * 1000).toFixed(0)} mV on a bump`;
     chip.className = `r3-chip ${vb >= VIL ? 'bad' : ''}`;
     const rows: [string, string][] = [
       ['Bond wire', `${BOND.l} mm of ${BOND.r * 2000} µm gold: ${f2(lb)} nH`],

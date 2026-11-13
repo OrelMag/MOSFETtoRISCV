@@ -37,6 +37,8 @@ export const MATS = {
   cone: (bad: boolean) => M.beam(bad ? '--euv-bad' : '--euv-light', 0.35, bad ? 'cones overlapping: the light in and out of the mask share angles' : 'the cone of light'),
 };
 
+/** The flat drawing skips additive light: there a beam is a solid lit line (as the fibre's). */
+const solid = (q: Material): Material => M.make({ base: q.emit!, metal: 0, rough: 1, emit: q.emit, glow: 1, label: q.label });
 const tr = (p: Vec3, s: Vec3 = [1, 1, 1]): Mat4 => { const m = new Float32Array(16); m[0] = s[0]; m[5] = s[1]; m[10] = s[2]; m[15] = 1; m[12] = p[0]; m[13] = p[1]; m[14] = p[2]; return m; };
 /** A lathe (profile [r, along]) laid along +x from x0 (the lathe's axis y → x). */
 const alongX = (g: Geo, x0: number): Geo => { const m = new Float32Array(16); m[1] = -1; m[4] = 1; m[10] = 1; m[15] = 1; m[12] = x0; return transform(g, m); };
@@ -131,7 +133,7 @@ export const RAY_PSI = [16, 32, 48, 64, 76];
 
 export function sourceModel(s: SrcState, detail: 'full' | 'flat' = 'full'): Model3 {
   const S = srcStatics(), items: Item[] = [], m = mainAt(s), since = s.tau - m;
-  const on = since >= 0 && since < FLASH, fade = on ? 1 - since / FLASH : 0, flat = detail === 'flat';
+  const on = since >= 0 && since < FLASH, fade = on ? 1 - since / FLASH : 0, flat = detail === 'flat', L = (q: Material) => (flat ? solid(q) : q);
   items.push({ geo: S.coll, mat: MATS.ml, name: 'collector', group: 'collector', info: { note: `an ellipsoid: the plasma at one focus, the intermediate focus at the other; it subtends ${COLLECT_SR} sr (to ${RIM_DEG.toFixed(0)}° from its axis). Size schematic`, source: 'Fomenkov et al. 2017; Laser Focus World 2017' } });
   items.push({ geo: S.collBack, mat: MATS.back, name: 'collector', group: 'collector' });
   items.push({ geo: S.vessel, mat: MATS.vessel, name: 'vessel', group: 'vessel', cut: 'open', shadow: false, order: 5, info: { note: 'hydrogen inside slows the tin ions and etches tin off the mirror; it absorbs 20–30 % of the light on the way' } });
@@ -141,9 +143,9 @@ export function sourceModel(s: SrcState, detail: 'full' | 'flat' = 'full'): Mode
   const ds = dropletsAt(s);
   if (!flat && ds.length) items.push({ geo: merge(ds.map((d) => transform(S.drop, tr(d.p, d.r))), 'droplets'), mat: MATS.tin, name: 'tin droplet', group: 'droplets', cut: 'none', shadow: false,
     info: { dim: `${DROP.dUm} µm`, note: 'liquid tin; the one at the focus has been flattened by the pre-pulse into a thin target' } });
-  if (s.tau < 0.04) items.push({ geo: tube([[-600, preY(s) + 0.4, 0], [0, preY(s), 0]], 0.08, { sides: 8 }), mat: MATS.pre, name: 'pre-pulse', group: 'laser', cut: 'none', shadow: false });
+  if (s.tau < 0.04) items.push({ geo: tube([[-600, preY(s) + 0.4, 0], [0, preY(s), 0]], 0.08, { sides: 8 }), mat: L(MATS.pre), name: 'pre-pulse', group: 'laser', cut: 'none', shadow: false });
   if (on) {
-    items.push({ geo: S.laser, mat: MATS.laser, name: 'main pulse', group: 'laser', cut: 'none', shadow: false, info: { note: 'more than 20 kW on average, through the hole in the collector' } });
+    items.push({ geo: S.laser, mat: L(MATS.laser), name: 'main pulse', group: 'laser', cut: 'none', shadow: false, info: { note: 'more than 20 kW on average, through the hole in the collector' } });
     items.push({ geo: transform(sphere(1, 16, 10), tr([0, 0, 0], [0.25, 0.25, 0.25])), mat: MATS.plasma, name: 'plasma', group: 'plasma', cut: 'none', shadow: false, info: { note: 'the target heated to a plasma that radiates at 13.5 nm; its 5 % or so (in band, into the half space) is the conversion efficiency' } });
     const rays: Geo[] = [];
     for (const ps of RAY_PSI) for (const sg of [1, -1]) {
@@ -151,7 +153,7 @@ export function sourceModel(s: SrcState, detail: 'full' | 'flat' = 'full'): Mode
       // from 8 mm out: at the droplet's scale the rays leave the frame instead of filling it
       rays.push(tube([scl(unit(p), 8), p, [IF_X, 0, 0], add([IF_X, 0, 0], scl(unit(sub([IF_X, 0, 0], p)), 260))], 1.6, { sides: 6 }));
     }
-    items.push({ geo: merge(rays, 'rays'), mat: MATS.euv(1.4 * fade + 0.1), name: '13.5 nm light', group: 'light', cut: 'none', shadow: false, info: { note: 'from the plasma to the collector and back through the intermediate focus: each ray drawn obeys the ellipse’s focal property' } });
+    items.push({ geo: merge(rays, 'rays'), mat: L(MATS.euv(1.4 * fade + 0.1)), name: '13.5 nm light', group: 'light', cut: 'none', shadow: false, info: { note: 'from the plasma to the collector and back through the intermediate focus: each ray drawn obeys the ellipse’s focal property' } });
   }
   const up: Vec3 = [0, 1, 0], front: Vec3 = [0, 0.2, 1];
   const anchors: StudioAnchor[] = [
@@ -216,7 +218,7 @@ export const beamR = (f: number): number => 1 + 6 * Math.sqrt(f);
 export interface ScanState { optics: Optics; r: number }
 
 export function scannerModel(s: ScanState, detail: 'full' | 'flat' = 'full'): Model3 {
-  const items: Item[] = [], o = s.optics, mh = maskHalfDeg(o.na, o.mScan), wh = waferHalfDeg(o.na), bad = mh >= CRA_DEG, flat = detail === 'flat';
+  const items: Item[] = [], o = s.optics, mh = maskHalfDeg(o.na, o.mScan), wh = waferHalfDeg(o.na), bad = mh >= CRA_DEG, flat = detail === 'flat', L = (q: Material) => (flat ? solid(q) : q);
   // mirrors: discs turned to their normals; the last one sized to the wafer's cone; the facet mirrors as tiles
   for (let i = 1; i < PATH.length - 1; i++) {
     const st = PATH[i];
@@ -247,7 +249,7 @@ export function scannerModel(s: ScanState, detail: 'full' | 'flat' = 'full'): Mo
   // the chief ray, each segment as bright as the power left on it
   for (let i = 0; i < PATH.length - 1; i++) {
     const f = leftAfter(i, s.r);
-    items.push({ geo: tube([PATH[i].p, PATH[i + 1].p], beamR(f), { sides: 10 }), mat: MATS.euv(glowOf(f)), name: 'light', group: 'light', cut: 'none', shadow: false,
+    items.push({ geo: tube([PATH[i].p, PATH[i + 1].p], beamR(f), { sides: 10 }), mat: L(MATS.euv(glowOf(f))), name: 'light', group: 'light', cut: 'none', shadow: false,
       info: { note: `${(f * 100).toFixed(f < 0.1 ? 1 : 0)} % of the light at the intermediate focus is left here (${i} reflection${i === 1 ? '' : 's'})` } });
   }
   // the cones: in and out of the mask about the chief ray at ±6°, and onto the wafer
@@ -263,7 +265,7 @@ export function scannerModel(s: ScanState, detail: 'full' | 'flat' = 'full'): Mo
   }
   const front: Vec3 = [0, 0.1, 1];
   const anchors: StudioAnchor[] = [
-    { text: 'intermediate focus', p: PATH[0].p, side: 'l', n: front },
+    { text: 'intermediate focus', p: add(PATH[0].p, [140, 0, 0]), side: 'l', n: front },
     { text: 'illuminator', p: PATH[1].p, side: 'l', n: front, on: 'ill' },
     { text: 'mask', p: add(MASK_AT, [0, MASK.t, 0]), side: 'r', n: front, on: 'mask' },
     { text: 'projection optics', p: PATH[7].p, side: 'r', n: front, on: 'pob' },
