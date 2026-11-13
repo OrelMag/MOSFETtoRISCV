@@ -20,12 +20,30 @@ in the page into chips that open down to the transistors like everything else.
 The default look draws **working gates**: every NAND shows its four CMOS transistors inside its outline,
 switching on and off with the live values, so even a CPU-sized drawing still says what each gate is made of.
 The View options menu turns it off, and sets the palette, wire thickness, grid, labels and flowing bits.
+Two more are on by default: **Open blocks as you zoom** (zoom into a block and its inside opens in place, live; zoom
+further to step in, out to close it) and **Opened blocks without colour** (an opened block's inside reads on the plain board).
+
+The 3D models (transistors, relays, valves, memories, chips, a picture tube, the Enigma and more) share one stage: drag to
+turn, Cutaway and Explode to open them, a Tour through their views, names on every part (**N** hides them), a card per part
+with its size and source, full screen and a saved image. Each says what is to scale and what is exaggerated, and a printed
+chapter keeps them as figures.
 
 Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journey-->94<!--/n--> chapters,
 <!--n:onramps-->2<!--/n--> on-ramps for newcomers, <!--n:prologue-->3<!--/n--> prologue chapters and <!--n:appendices-->6<!--/n--> appendices), the **[campaign](https://switchtocpu.com/#/campaign)**
 (<!--n:levels-->182<!--/n--> levels: build it to unlock it, or fix it), the **[workbench](https://switchtocpu.com/#/workbench/rca4)**
 (any component on its own, with statistics, benchmarks and the out-of-order lab) and the
 **[sandbox](https://switchtocpu.com/#/sandbox)** (your own circuits, up to whole computers).
+
+## Manual
+
+New to the site? The **[instruction manual](docs/manual/README.md)** has a quick start with screenshots for each of the
+four sections, then where every control is and how to do each task:
+
+- [The journey](docs/manual/journey.md#quick-start): read a step, set an input, open a gate down to its transistors, answer its question.
+- [The campaign](docs/manual/campaign.md#quick-start-your-first-level): open the map and pass your first build level.
+- [The workbench](docs/manual/workbench.md#quick-start): pick a part, set its size, read its cost and truth table, open it.
+- [The sandbox](docs/manual/sandbox.md#quick-start-a-nand-gate-as-your-own-chip): place two gates, wire them, try them and package them as a chip.
+- [What works everywhere](docs/manual/everywhere.md): search, view options, keys, My path, notes and review, backup, print, phone and offline.
 
 ## The journey
 
@@ -163,7 +181,7 @@ review queue; one backup file carries all progress; the site installs as an app 
 
 Every CPU has a **CPU panel**: the program with the current instruction (click a line to light up
 the hardware it uses), registers, memory, Run to halt / Step / Slow (one gate delay, cycle or
-instruction at a time), Back to undo, and a lock-step comparison with the golden model. The
+instruction at a time), Step back to undo, and a lock-step comparison with the golden model. The
 pipelines add a pipeline diagram, the out-of-order core its reorder buffer, the GPU its warps and
 frames.
 
