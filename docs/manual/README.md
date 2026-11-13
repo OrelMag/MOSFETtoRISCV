@@ -6,6 +6,8 @@ Every box on the screen is transparent: open it and keep going down until you re
 gate count and delay you see is computed by simulating the circuit, not drawn by hand. It runs in your browser at
 <https://switchtocpu.com/>, or as a desktop program, and needs no account.
 
+The whole manual is also one PDF: [From-Switch-to-CPU-manual.pdf](https://github.com/OrelMag/MOSFETtoRISCV/releases/download/v2.0.0/From-Switch-to-CPU-manual.pdf) (18 MB), linked as **Manual (PDF)** at the bottom of the site's home page.
+
 ![The home page](img/index/01-home.png)
 
 ## The four sections
