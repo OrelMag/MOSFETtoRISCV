@@ -213,7 +213,7 @@ export const MODELS_3D: readonly Model3d[] = [
   },
   {
     id: 'agcmodule', title: 'AGC logic module', category: 'machines', chapter: 'appendix-agc', step: 8,
-    summary: 'The Apollo computer\'s one part: a dual NOR flatpack, 120 of them on two boards a module, the module in its tray, and one gate on the die down to its three transistors.',
+    summary: 'The Apollo computer\'s one part: a dual NOR flatpack, 120 to a module, the module in its tray, one gate on the die down to its transistors.',
     files: ['agcmodule3d', 'agcmodule3dview', 'agcmodule3dkit', 'agcmodule3dgeom'], factory: 'agcModule3d', codex: ['agc', 'nor'],
     open: () => import('./agcmodule3d').then((m) => m.agcModule3d()),
   },

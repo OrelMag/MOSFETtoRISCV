@@ -67,7 +67,7 @@ function packGeos(d: Detail): PackGeos {
     lid: at3(box(FP.l, lidH, FP.w, 0.1), 0, FP.h / 2 - lidH / 2, 0),
     leads: merge(leadCentres().map((c) => at3(lead, c.x, -FP.h / 2 + FP.leadT / 2, c.z)), 'leads'),
     stripe: at3(box(FP.stripe, 0.04, FP.w * 0.9, 0.01), FP.l / 2 - FP.stripe / 2 - 0.25, FP.h / 2 + 0.02, 0),
-    tile: box(FP.l, FP.h, FP.w + 2 * FP.leadL, 0.05),
+    tile: box(FP.l * 0.9, FP.h, FP.w, 0.05),
   };
   packs.set(d, g);
   return g;
@@ -186,6 +186,8 @@ export const AGC_HOME: Record<AgcView, OrbitView> = {
   package: { target: zoomAt(), yaw: 0.45, pitch: 0.7, dist: 24 },
   gate: { target: [GX[0], GX[1] + 2, GX[2]], yaw: 0.0, pitch: 1.05, dist: 82 },
 };
+/** What each view shows in the flat drawing (it has no camera: it frames whatever it draws). */
+export const FLAT_GROUPS: Record<AgcView, string[]> = { tray: ['tray', 'lifted'], module: ['module', 'adder', 'package', 'lid'], package: ['package', 'lid'], gate: ['die'] };
 /** The potting's cut: everything above the top board's face, on the module laid flat. */
 export const POT_CUT = BOARD_TOP + 0.05;
 
@@ -242,8 +244,10 @@ export function agcModel(p: AgcPose, detail: Detail = 'full'): Model3 {
   }
   items.push({ geo: D.padAt([0, 17]), mat: alMat, at: GX, name: 'GND pad (pin 5)', group: 'die', cut: 'none' });
   items.push({ geo: D.padAt([0, -17]), mat: alMat, at: GX, name: 'VCC pad (pin 10)', group: 'die', cut: 'none' });
+  // the flat (SVG) drawing fits everything it is given: give it the current view's subject only
+  const keep = detail === 'flat' ? new Set(FLAT_GROUPS[p.view]) : null;
   return {
-    items, anchors: anchors(p), beats: beats(), floor: Y0,
+    items: keep ? items.filter((i) => keep.has(i.group ?? '')) : items, anchors: anchors(p), beats: beats(), floor: Y0,
     cuts: { planes: [{ n: [0, 1, 0], d: POT_CUT }], open: [MOD.t / 2 + 1] },
     flatOrder: 'items',
   };
