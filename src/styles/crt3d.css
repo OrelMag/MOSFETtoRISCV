@@ -23,7 +23,7 @@
 .crt-plot text { font: 10.5px var(--font-mono); fill: var(--muted); }
 .m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .crt-retrace { margin-top: 8px; }
-@media (pointer: coarse) { .crt-sel { min-height: 40px; } .crt-chk input { width: 20px; height: 20px; } }
+@media (pointer: coarse) { .crt-sel { min-height: 40px; } .crt-chk { min-height: 40px; align-items: center; } .crt-chk input { width: 20px; height: 20px; } }
 .m3d .crt3d .r3, .crt3d .r3 { grid-template-columns: minmax(0, 1fr); }
 .crt3d .r3-stage { aspect-ratio: 16 / 9; max-height: 580px; }
 .crt3d .r3-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 24px; align-items: start; }
