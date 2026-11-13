@@ -302,8 +302,12 @@ Under **Info**:
 ### Read or copy its HDL
 
 1. Click **HDL** in the inspector.
-2. Choose **Exact structure** (gate for gate, as drawn) or **Synthesizable**, and **Verilog** or **VHDL**.
-3. Click **Copy** to put it on the clipboard.
+2. **Structural source (generated from this schematic)** is the part's netlist as Verilog, or click **VHDL**. Click a
+   line to light its part on the circuit, or select a part to find its lines. **Copy** puts it on the clipboard.
+3. Under it, some parts also have a hand-written **SystemVerilog** version, with its own **Copy**.
+4. To save the part with every module under it in one file, use the buttons under **Download the whole hierarchy**:
+   **Exact structure** (gate for gate, as drawn), **Synthesizable** (for synthesis tools) or **VHDL**. With
+   **testbench** ticked (it is, to begin with), a self-checking testbench comes with it.
 
 ![The HDL tab](img/workbench/19-hdl.png)
 
