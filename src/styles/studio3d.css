@@ -46,7 +46,7 @@
 .st-slot:empty { display: none; }
 .st-list { display: none; margin: 0; padding: 0; list-style: none; font-size: 13.5px; line-height: 1.5; color: var(--text-2); }
 .st-list b { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font: 700 10.5px var(--font-ui); color: #fff; background: var(--st-accent); }
-.st.narrow .st-list { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.st.narrow .st-list:not([hidden]) { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .st-list li { flex: 0 0 auto; }
 .st-list li.off { opacity: 0.45; }
 .st.narrow .st-gutter { display: none; }

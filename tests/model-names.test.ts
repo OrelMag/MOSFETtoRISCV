@@ -1,18 +1,25 @@
 // The 3D models' names switch: what the studio stage shows with names on or off (gl/kit/names.ts), and the setting
 // behind it (settings.modelNames: on by default, saved, a damaged value falls back, Reset view brings it back).
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { badgeForm, gutterOf, namesShown } from '../src/gl/kit/names';
+import { badgeForm, framing, namesShown } from '../src/gl/kit/names';
 
 describe('names on or off', () => {
-  it('off: no gutters, the canvas takes their width back', () => {
-    expect(gutterOf(true, 132)).toBe(132);
-    expect(gutterOf(false, 132)).toBe(0);
+  it('the canvas box is sized the same with names on or off (the page never moves); off, the model takes the gutters', () => {
+    for (const w of [390, 520, 1200]) {
+      const on = framing(true, w, 140, 6, 260), off = framing(false, w, 140, 6, 260);
+      expect(off.size).toBe(on.size);
+      expect(off.form).toBe(on.form);
+      expect(off.fit).toBe(0);
+      expect(on.fit).toBe(on.size);
+    }
+    expect(framing(true, 1200, 140, 6, 260).fit).toBe(140);
   });
-  it('off: never the badge form, whatever the width; on: badges only below the measured minimum', () => {
-    for (const w of [300, 560, 1200]) expect(badgeForm(false, w, 140, 6, 260)).toBe(false);
-    expect(badgeForm(true, 520, 140, 6, 260)).toBe(true); // 520 - 280 < 260
-    expect(badgeForm(true, 1200, 140, 6, 260)).toBe(false);
-    expect(badgeForm(true, 1200, 140, 0, 260)).toBe(true); // nothing to flank with
+  it('badges only with names on and below the measured minimum', () => {
+    for (const w of [300, 560, 1200]) expect(framing(false, w, 140, 6, 260).badges).toBe(false);
+    expect(badgeForm(520, 140, 6, 260)).toBe(true); // 520 - 280 < 260
+    expect(framing(true, 520, 140, 6, 260).badges).toBe(true);
+    expect(badgeForm(1200, 140, 6, 260)).toBe(false);
+    expect(badgeForm(1200, 140, 0, 260)).toBe(true); // nothing to flank with
   });
   it('a beat that sets labels does not bring names back while the switch is off', () => {
     expect(namesShown(true, undefined)).toBe(true);

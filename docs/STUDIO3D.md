@@ -182,11 +182,11 @@ Methods beyond the freeze:
 **Names switch (every model, nothing to author):** a fourth corner tool (a tag; `aria-pressed`, "Hide names" / "Show names";
 key N while the stage has focus) and the view menu's "3D model names" row drive one remembered setting for all models,
 `settings.modelNames` (default on; in VIEW_KEYS, so Reset view turns it back on). Off: no gutter names, leaders, dots,
-phone badges or list, and the canvas takes the gutters' width back (the home view refits if the camera is still home; a
+phone badges or list, and the canvas box keeps exactly its size and place (the page never moves) while the model is fitted to its whole width (home refits if the camera is still home; a
 moved camera stays). Pointing at a part still opens its card; the status chips, scale bar and tour caption stay; a beat's
 `labels` cannot turn names on while the switch is off. Save image, full screen and the flat fallback follow it. The
-DOM-free rules are `gl/kit/names.ts` (gutterOf, badgeForm, namesShown; tests/model-names.test.ts); the smoke's
-"(3D model, names off …)" routes check nothing is named and N brings them back.
+DOM-free rules are `gl/kit/names.ts` (framing, badgeForm, namesShown; tests/model-names.test.ts); the smoke's
+"(3D model, names off …)" routes check nothing is named, N brings them back and the canvas box stays put.
 
 **Hover and pick:**
 - Hovering a part rims it and shows a card with its name, material, size, note and source. A click keeps the card.

@@ -627,7 +627,7 @@ const mapDrive = (k: number, of: number) => `(async () => {
 })()`;
 
 /** A 3D model with settings.modelNames off: no name, leader or badge drawn, the list under the canvas hidden, the Names
- *  button saying "Show names"; then N turns them back on (and off again). */
+ *  button saying "Show names"; then N turns them back on (and off again), the canvas keeping its box exactly. */
 const NAMES_OFF_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   let view = null;
@@ -641,12 +641,15 @@ const NAMES_OFF_DRIVE = `(async () => {
   if (names) bad.push(names + ' names or badges drawn with names off');
   if (st.querySelector('.st-leaders')?.childElementCount) bad.push('leaders drawn with names off');
   const list = st.querySelector('.st-list');
-  if (list && !list.hidden) bad.push('the list of names is shown with names off');
+  if (list && (!list.hidden || list.getClientRects().length)) bad.push('the list of names is shown with names off');
   const btn = st.querySelector('.st-names') ?? st.closest('.m3d, .widget')?.querySelector('.st-names');
   if (!btn) return [...bad, 'no Names button'];
   if (btn.getAttribute('aria-label') !== 'Show names' || btn.getAttribute('aria-pressed') !== 'false') bad.push('the Names button does not say Show names');
+  const box = () => { const r = view.getBoundingClientRect(); return [r.x, r.y + scrollY, r.width, r.height].map((v) => Math.round(v)).join(','); };
+  const before = box();
   st.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));
   await wait(600);
+  if (box() !== before) bad.push('turning names on moved or resized the canvas: ' + before + ' -> ' + box());
   if (btn.getAttribute('aria-pressed') !== 'true') bad.push('N did not turn names on');
   else if (![...st.querySelectorAll('.st-lbl, .st-badge')].some(shown)) bad.push('N turned names on but none is drawn');
   st.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));

@@ -21,7 +21,7 @@ import { anchorAt, applyMat, aspectOf, boundsOf, boundsOfNamed, cutsAt, fitView,
 import type { Studio } from '../gl/studio';
 import { h, icon, s } from '../ui/dom';
 import { settings } from '../ui/settings';
-import { badgeForm, gutterOf, namesShown } from '../gl/kit/names';
+import { framing, namesShown } from '../gl/kit/names';
 import { reducedMotion } from '../ui/motion';
 import { modelFrame } from './modelframe';
 
@@ -186,19 +186,21 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     aspect = o.aspect ?? Math.max(ASPECT_MIN, Math.min(ASPECT_MAX, aspectOf(box, o.home.yaw, o.home.pitch) * 1.15));
     layout();
   };
-  const isNarrow = () => badgeForm(namesOn, el.clientWidth, gutterW, rows.length, MIN_CANVAS);
+  // the canvas box is sized as with names on (turning them off never moves the page); off, the model takes the gutters' width
+  const frameNow = () => framing(namesOn, el.clientWidth, gutterW, rows.length, MIN_CANVAS);
+  const isNarrow = () => frameNow().form;
   const layout = () => {
     const C = el.clientWidth;
     if (!C) return;
-    const narrow = isNarrow(), g = narrow ? 0 : gutterOf(namesOn, gutterW), maxH = Math.max(MIN_CANVAS_H, Math.min(window.innerHeight * 0.78, 760));
+    const fr = frameNow(), narrow = fr.form, g = fr.size, maxH = Math.max(MIN_CANVAS_H, Math.min(window.innerHeight * 0.78, 760));
     let wc = C - 2 * g, hh = Math.max(MIN_CANVAS_H, wc / aspect);
     if (hh > maxH) { hh = maxH; wc = Math.min(wc, hh * aspect); }
-    const W = Math.round(wc + 2 * g), H = Math.round(hh), key = `${W}x${H}x${g}`;
-    gutNow = g;
+    const W = Math.round(wc + 2 * g), H = Math.round(hh), key = `${W}x${H}x${fr.fit}`;
+    gutNow = fr.fit;
     if (el.classList.contains('narrow') !== narrow) el.classList.toggle('narrow', narrow);
     if (key === shownSize) return;
     shownSize = key;
-    view.style.setProperty('--st-gw', `${g}px`);
+    view.style.setProperty('--st-gw', `${fr.fit}px`);
     view.style.aspectRatio = (W / H).toFixed(4);
     view.style.maxWidth = `${W}px`;
     st?.invalidate();
@@ -222,7 +224,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   let fitFor = '';
   const refit = () => {
     if (!st) return;
-    const key = `${canvas.clientWidth}x${canvas.clientHeight}`;
+    const key = `${canvas.clientWidth}x${canvas.clientHeight}x${gutNow}`;
     if (key === fitFor || !st.camera.atHome() || !canvas.clientWidth) return;
     fitFor = key;
     const v = homeView();
