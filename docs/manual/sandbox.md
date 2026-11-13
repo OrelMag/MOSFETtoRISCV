@@ -104,8 +104,8 @@ inside (see [Look inside a part](#look-inside-a-part)).
 1. Press on a pin's knob (on the side its wire leaves from) or on a part's port, and drag to another port. Release on
    the target.
 2. To make corners, click on empty canvas while drawing; **Backspace** removes the last corner, **Esc** cancels.
-3. To branch, end a new wire on an existing wire.
-4. Drag a wire to reshape it.
+3. To branch, end a new wire on an existing wire, or hold **Ctrl** (or **Alt**) and drag from a wire.
+4. Drag a wire to reshape it; double-click a corner to take it out.
 5. **Cut** (**K**) lets you drag a line across wires to cut them.
 
 ### Use pointers (named wires)
@@ -115,6 +115,7 @@ without drawing a long wire.
 
 1. Press **L** (or click **Pointer** in **Basics**) and place it on a port.
 2. Give it a name (**F2**), and place another pointer with the same name where the signal should arrive.
+3. Click a pointer's name flag to jump to the next pointer with that name.
 
 ### Rename, undo and redo
 
@@ -349,7 +350,7 @@ Both are optional, and every one has an answer you can look at.
 
    ![The Challenges list](img/sandbox/30-challenges-drawer.png)
 
-2. Click one, for example **NOT from NAND**. A new chip opens with its pins already placed (**a** and **y**), the parts
+2. Click **Start** beside one, for example **NOT from NAND**. A new chip opens with its pins already placed (**a** and **y**), the parts
    list limited to what the rule allows (**Purist** is ticked), and a strip under the canvas with the task, **Check**,
    **Show answer** and **Do it for me**.
 3. Build something, and click **Check**. If it is wrong you see **Not yet**, the input combinations that fail, and the
@@ -370,9 +371,10 @@ Both are optional, and every one has an answer you can look at.
 
    ![The Puzzles list](img/sandbox/34-puzzles-drawer.png)
 
-2. Click one, for example **Echo**, choose the CPU that will run it (a ready-wired 4-bit, RV16 or RV32I computer) and click **Start**.
+2. Click **Start** beside one, for example **Echo**, choose the CPU that will run it (a ready-wired 4-bit, RV16 or RV32I
+   computer) and click **Start**.
 3. The puzzle opens as a chip with its computer, and a strip under the canvas: the task, how the program reads input and
-   writes output, the tests, **Check**, **Show answer**, **Do it for me**, and a chart of cycles against NAND gates with
+   writes output, the tests, **Check**, **Show answer**, **Do it for me**, **Start over…**, and a chart of cycles against NAND gates with
    the reference CPUs on it.
 
    ![A puzzle open: the computer, the CPU drawer and the puzzle strip](img/sandbox/36-puzzle-strip.png)
