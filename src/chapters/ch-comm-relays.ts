@@ -11,6 +11,7 @@ import { VDD, energyFj } from '../sim/power';
 import { stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
 import { strowger3d } from '../widgets/strowger3d';
+import { crossbar3d } from '../widgets/crossbar3d';
 import { telegraph3d } from '../widgets/telegraph3d';
 import { teletype3d } from '../widgets/teletype3d';
 import { withModel } from '../widgets/modelhost';
@@ -485,6 +486,15 @@ export const chExchange: Chapter = {
           for (const [rs, cs] of [[1, 2], [4, 1]]) { st.setInputs({ rs, cs }); st.sim?.settle(); st.setInputs({ rs: 0, cs: 0 }); st.sim?.settle(); }
         },
       },
+    },
+    {
+      title: 'The crossbar itself',
+      body: `
+        <p>The grid of the previous step pays a relay for every crosspoint. The machine the Bell System built from 1938 does not: its crosspoints are only contact springs, and the bars that close them are shared. A Type B switch has ten levels and twenty verticals, 200 crosspoints, each a set of three contact pairs (tip, ring and sleeve). Across its front run five <strong>select bars</strong>; each tilts up or down under one of its two select magnets, so the five bars choose one of ten levels. Every vertical has a <strong>holding bar</strong> the height of the switch, worked by its own <strong>hold magnet</strong>. That is 30 magnets for 200 crosspoints, where the relay grid needed ${XB.relays} relays for nine.</p>
+        <p>A call takes two motions in order. The select magnet tilts its bar, and the bar's flexible fingers, one per vertical, swing in front of the chosen level's contact cards. Then the caller's hold magnet pulls its holding bar in: it traps the one finger in front of it against the card, and the three pairs close. Only then does the select magnet let go: the other nineteen fingers spring back, the trapped one stays bent, and the bar is free for the next call. A hang-up drops the hold magnet, and that crosspoint alone opens.</p>
+        <p>The chapter's grid holds a call on the caller's row; this machine holds it on the caller's vertical. With callers on verticals and called lines on levels the two are the same rule, and a test holds the model to the relay grid of the previous step, call for call. What the steel adds is a rule of its own: two select magnets up at once would swing two fingers in front of one vertical, and its holding bar would trap both. So the marker, the shared controller, serves one request at a time.</p>
+        <div class="try">Call from vertical 4 to level 2, then from vertical 9 to level 2: the second is refused, the level is busy. Hang up vertical 4 and call again.</div>`,
+      widget: () => crossbar3d(),
     },
     {
       title: 'What a switching network costs',

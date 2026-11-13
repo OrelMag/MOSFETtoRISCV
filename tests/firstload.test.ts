@@ -86,7 +86,9 @@ describe('the first-load path', () => {
     //   damaged settings value can no longer stop every page loading
     // 379 000 (2026-11-12, release batch 2): the six missing steps' stepmoves batch (44 rows, ~4.3 KB: saved progress is moved at
     //   load, so stepmoves.ts is on this path) and their outline lines
-    expect(bytes).toBeLessThan(379_000);
+    // 380 000 (2026-11-13, studio models): flash "The string stood up" and exchange "The crossbar itself" outline lines, and the
+    //   crossbar's stepmoves batch (exchange 5-7 move up one)
+    expect(bytes).toBeLessThan(380_000);
   });
 
   it('loads the route pages and the chapters by import(), not by import', () => {

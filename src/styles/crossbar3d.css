@@ -1,0 +1,5 @@
+/* ---------- The crossbar switch (widgets/crossbar3dview.ts) ---------- */
+.xb-below { margin-top: 8px; max-width: 620px; }
+.xb3 select { font: inherit; min-height: 28px; }
+.xb-note:empty { display: none; }
+@media (pointer: coarse) { .xb3 select { min-height: 40px; } }

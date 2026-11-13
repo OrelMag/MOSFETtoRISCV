@@ -164,7 +164,7 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./dipole3d').then((m) => m.dipole3d()),
   },
   {
-    id: 'teletype', title: 'The Teletype Model 33 selector', category: 'comms', chapter: 'exchange', step: 7,
+    id: 'teletype', title: 'The Teletype Model 33 selector', category: 'comms', chapter: 'exchange', step: 8,
     summary: 'A start-stop receiver made of cams: the start edge releases a clutch and eight notched cams read the line mid-unit.',
     files: ['teletype3d', 'teletype3dview', 'teletype3dkit'], factory: 'teletype3d', codex: ['uart'],
     open: () => import('./teletype3d').then((m) => m.teletype3d()),
@@ -174,6 +174,12 @@ export const MODELS_3D: readonly Model3d[] = [
     summary: 'The stepping switch behind the exchange: dial a level, mark lines busy, hang up.',
     files: ['strowger3d', 'strowger3dview', 'strowger3dkit'], factory: 'strowger3d', codex: ['relay'],
     open: () => import('./strowger3d').then((m) => m.strowger3d()),
+  },
+  {
+    id: 'crossbar', title: 'The crossbar switch', category: 'comms', chapter: 'exchange', step: 5,
+    summary: 'A Bell System Type B: 200 crosspoints on 30 magnets. Select bars swing fingers to a level, a holding bar traps one, the select lets go.',
+    files: ['crossbar3d', 'crossbar3dview', 'crossbar3dkit'], factory: 'crossbar3d', codex: ['relay'],
+    open: () => import('./crossbar3d').then((m) => m.crossbar3d()),
   },
   {
     id: 'speaker', title: 'Loudspeaker and microphone', category: 'dsp', chapter: 'speech', step: 0,
