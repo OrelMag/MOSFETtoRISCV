@@ -113,7 +113,11 @@ inside (see [Look inside a part](#look-inside-a-part)).
 A pointer is a wire by name: every pointer with the same name is the same wire, so you can connect distant places
 without drawing a long wire.
 
-1. Press **L** (or click **Pointer** in **Basics**), then click on the canvas where it goes. A box asks for its name   (*Every pointer with this name is the same wire*): type it and press **Enter**.2. Place another pointer with the same name where the signal should arrive, and wire each one to its port.3. Click a pointer to select it: its properties list every pointer of that name (for example **2 named "net"**). Click   it again, or **Next**, to jump to the next one.
+1. Press **L** (or click **Pointer** in **Basics**), then click on the canvas where it goes. A box asks for its name
+   (*Every pointer with this name is the same wire*): type it and press **Enter**.
+2. Place another pointer with the same name where the signal should arrive, and wire each one to its port.
+3. Click a pointer to select it: its properties list every pointer of that name (for example **2 named "net"**). Click
+   it again, or **Next**, to jump to the next one.
 
 ### Rename, undo and redo
 
