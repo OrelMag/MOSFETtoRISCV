@@ -214,7 +214,7 @@ Steps with a processor have a CPU panel on the right of the circuit.
    **Breakpoint** button) to stop a run when that instruction is reached.
 5. Under the program, **FIELDS** shows the selected instruction's bits split into its fields (point at a field to
    light its wires), and **NARRATE** tells the last instruction unit by unit.
-6. Under the circuit, the clock bar has **Pulse** (one clock cycle), **Run** (runs the clock), **Step back**, **Step**
+6. Under the circuit, the clock bar has **Pulse** (one clock cycle), **Run the clock** (it reads **Pause the clock** while it runs), **Step back**, **Step**
    and **Reset**.
 
 ### Watch a memory's contents
@@ -300,8 +300,8 @@ Press **?** on any page for its keys. On a chapter step:
 | **Home** · **End** | cursor to the first input · the first output |
 | **Enter** | on an input: toggle it (a bus: edit its value); on a part: open it; on an output: read it out |
 | **Space** | toggle the input under the cursor |
-| **Ctrl Enter** | run / pause the clock |
 | **.** | one clock cycle (Pulse) |
+| **Ctrl Enter** | run / pause the clock |
 | **>** · **,** | one gate delay forward · back one step |
 | **+** · **−** · **0** | zoom in (opens the part under the cursor) · zoom out · fit |
 | **Menu** · **Shift F10** | the menu of the selected wire or part, else of this level |
@@ -319,8 +319,9 @@ to zoom; drag a part or a wire to move it; right-click for its menu.
   (at the right end of the bar above the circuit), or press **F** if you used focus mode.
 - **I moved a part by accident.** **Ctrl Z** undoes it; **Layout** can reset this level; the padlock (**Lock the
   layout**) stops parts moving.
-- **The circuit keeps changing by itself.** A step with a clock starts running at two cycles a second. **Pulse** or
-  **Step** in the bar under the circuit pauses it, and so does **Ctrl Enter**.
+- **The circuit keeps changing by itself.** A step with a clock starts running at two cycles a second. Click
+  **Pause the clock** in the bar under the circuit (it then reads **Run the clock**); **Pulse** and **Step** pause it
+  too, and so does **Ctrl Enter** once the circuit has focus (click it or press **S**).
 - **Scrolling over a 3D model scrolls the page.** Click the model once first; then the wheel zooms it.
 - **A part opened when I only wanted to zoom.** That is **Open blocks as you zoom**: zoom back out and it closes. Turn
   it off in **View options** › **Behaviour** if you prefer to open parts only by double-clicking.
