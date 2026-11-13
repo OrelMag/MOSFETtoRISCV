@@ -641,7 +641,9 @@ const NAMES_OFF_DRIVE = `(async () => {
   if (names) bad.push(names + ' names or badges drawn with names off');
   if (st.querySelector('.st-leaders')?.childElementCount) bad.push('leaders drawn with names off');
   const list = st.querySelector('.st-list');
-  if (list && (!list.hidden || list.getClientRects().length)) bad.push('the list of names is shown with names off');
+  // the list stays in the accessibility tree with names off (screen readers, Enter on the canvas): only drawn is wrong
+  if (list && list.getBoundingClientRect().width > 2) bad.push('the list of names is shown with names off');
+  if (list && !list.querySelector('button.st-pick')) bad.push('the list of parts has no buttons for a keyboard or a screen reader');
   const btn = st.querySelector('.st-names') ?? st.closest('.m3d, .widget')?.querySelector('.st-names');
   if (!btn) return [...bad, 'no Names button'];
   if (btn.getAttribute('aria-label') !== 'Show names' || btn.getAttribute('aria-pressed') !== 'false') bad.push('the Names button does not say Show names');

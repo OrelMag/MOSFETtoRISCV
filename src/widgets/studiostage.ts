@@ -86,6 +86,7 @@ export interface StudioStage {
 }
 
 const FW = 640, FH = 520;
+let stageSeq = 0;
 /** The narrowest canvas the names may flank: below it, numbered badges and the list (measured, not by device). */
 const MIN_CANVAS = 260, MIN_CANVAS_H = 240, GUTTER_MIN = 56, GUTTER_MAX = 150;
 /** The canvas's aspect (w / h) is the model's, held within these. */
@@ -93,7 +94,10 @@ const ASPECT_MIN = 0.62, ASPECT_MAX = 1.9;
 const ease = (t: number) => t * t * (3 - 2 * t);
 
 export function studioStage(o: StudioStageOptions): StudioStage {
-  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': `${o.aria}: drag to turn, wheel or pinch to zoom; point at a part for its name` }) as HTMLCanvasElement;
+  const listId = `st-parts-${++stageSeq}`;
+  // role application: a screen reader in browse mode would take the arrows the canvas turns the model with
+  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, role: 'application', 'aria-roledescription': '3D model', 'aria-describedby': listId,
+    'aria-label': `${o.aria}: drag or arrows to turn, wheel, pinch or + and − to zoom; point at a part, or press Enter for the list of parts` }) as HTMLCanvasElement;
   const flat = s('svg', { class: 'r3-flat', viewBox: `0 0 ${FW} ${FH}`, role: 'img', 'aria-label': o.aria }) as SVGSVGElement;
   flat.style.display = 'none';
   const leaders = s('svg', { class: 'st-leaders', 'aria-hidden': 'true' }) as SVGSVGElement;
@@ -109,7 +113,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   // the gutters lie over the canvas's side bands: the canvas takes the column's width and the model is fitted between them
   const view = h('div', { class: 'st-view r3-stage' }, canvas, flat, gutL, gutR, leaders, badges, card, chips, stats, scaleBar);
   const stage = h('div', { class: 'st-stage' }, view);
-  const list = h('ol', { class: 'st-list' });
+  const list = h('ol', { class: 'st-list', id: listId, 'aria-label': 'Parts' });
 
   const exIn = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: 0, 'aria-label': 'Exploded view' }) as HTMLInputElement;
   const cutIn = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: o.knobs?.cut ?? 0, 'aria-label': 'Cutaway' }) as HTMLInputElement;
@@ -134,6 +138,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   let model: Model3 = o.build('full');
   /** The parts the physics moved last (kept here so the flat drawing, the labels and a rebuilt renderer follow). */
   let curMoves: Moves = new Map();
+  let pinnedRow: { btn: HTMLButtonElement } | null = null;
   let beat = -1, tween = 0, pinned: Item | null = null, hoverRaf = 0, hiddenNow: ReadonlySet<string> | null = null;
   const defHidden: ReadonlySet<string> | null = o.hidden?.length ? new Set(o.hidden) : null;
   hiddenNow = defHidden;
@@ -163,14 +168,12 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   function applyNames(): void {
     namesOn = settings.modelNames;
     showNamesBtn();
-    list.hidden = !namesOn;
     el.classList.toggle('st-nonames', !namesOn);
     layout();
     if (mode === 'flat') drawFlat(); else { placeLabels(); st?.invalidate(); }
   }
   const frame = modelFrame({ stage: view, name: o.aria, renderer: () => (mode === 'gl' ? (st as unknown as Renderer) : null), root: () => el.closest<HTMLElement>('.m3d, .widget') ?? el });
   frame.el.prepend(namesBtn);
-  list.hidden = !namesOn;
   el.classList.toggle('st-nonames', !namesOn);
 
   // ---------------------------------------------------------------- framing
@@ -244,14 +247,24 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     probe.remove();
     gutterW = Math.round(Math.max(GUTTER_MIN, Math.min(GUTTER_MAX, w + 4)));
   };
-  let rows: { a: StudioAnchor; el: HTMLElement; badge: HTMLElement; li: HTMLElement }[] = [];
+  type Row = { a: StudioAnchor; el: HTMLElement; badge: HTMLElement; li: HTMLElement; btn: HTMLButtonElement };
+  let rows: Row[] = [];
   const makeLabels = () => {
     const anchors = (model.anchors ?? []).filter((a) => !a.minor);
     const key = anchors.map((a) => a.text).join('|');
     if (key === lblKey) return;
     lblKey = key;
     gutL.replaceChildren(); gutR.replaceChildren(); // the old names, or they stay where they were last placed
-    rows = anchors.map((a, i) => ({ a, el: h('span', { class: 'st-lbl' }, a.text), badge: h('span', { class: 'st-badge' }, String(i + 1)), li: h('li', null, h('b', null, String(i + 1)), ' ', a.text) }));
+    pinnedRow = null;
+    rows = anchors.map((a, i) => {
+      // a badge is a button for a finger (the list's button is the one for the keyboard and screen readers: badges stay aria-hidden)
+      const badge = h('button', { type: 'button', class: 'st-badge', tabindex: -1 }, String(i + 1)) as HTMLButtonElement;
+      const btn = h('button', { type: 'button', class: 'st-pick', 'aria-pressed': 'false' }, h('b', { 'aria-hidden': 'true' }, String(i + 1)), ' ', a.text) as HTMLButtonElement;
+      const r: Row = { a, el: h('span', { class: 'st-lbl' }, a.text), badge, btn, li: h('li', null, btn) };
+      badge.addEventListener('click', () => pinRow(r));
+      btn.addEventListener('click', () => pinRow(r));
+      return r;
+    });
     badges.replaceChildren(...rows.map((r) => r.badge));
     list.replaceChildren(...rows.map((r) => r.li));
     measureGutter();
@@ -335,25 +348,56 @@ export function studioStage(o: StudioStageOptions): StudioStage {
 
   // ---------------------------------------------------------------- the card
 
-  const showCard = (it: Item | null, x = 0, y = 0) => {
-    if (!it) { card.style.display = 'none'; return; }
-    const i = it.info ?? model.items.find((m) => m.name === it.name && m.info)?.info ?? {};
+  const showCard = (it: Item | null, x = 0, y = 0, title?: string) => {
+    if (!it && !title) { card.style.display = 'none'; return; }
+    const i = (it && (it.info ?? model.items.find((m) => m.name === it.name && m.info)?.info)) ?? {};
     card.replaceChildren(
-      h('b', null, it.name ?? ''),
-      h('span', { class: 'st-mat' }, it.mat.label ?? ''),
+      h('b', null, title ?? it?.name ?? ''),
+      ...(it?.mat.label ? [h('span', { class: 'st-mat' }, it.mat.label)] : []),
       ...(i.dim ? [h('span', null, i.dim)] : []),
       ...(i.note ? [h('span', { class: 'st-note' }, i.note)] : []),
       ...(i.source ? [h('span', { class: 'st-src' }, `Source: ${i.source}`)] : []));
     card.style.display = '';
-    const W = canvas.clientWidth, cw = Math.min(260, W - 16);
+    const W = canvas.clientWidth || view.clientWidth, cw = Math.max(120, Math.min(260, W - 16));
     card.style.maxWidth = `${cw}px`;
-    card.style.transform = `translate(${Math.max(8, Math.min(W - cw - 8, x + 14)).toFixed(0)}px, ${Math.max(8, Math.min(canvas.clientHeight - 120, y + 14)).toFixed(0)}px)`;
+    card.style.transform = `translate(${Math.max(8, Math.min(W - cw - 8, x + 14)).toFixed(0)}px, ${Math.max(8, Math.min((canvas.clientHeight || view.clientHeight) - 120, y + 14)).toFixed(0)}px)`;
   };
   const hitAt = (x: number, y: number) => {
     if (!st) return null;
     const r = st.ray(x, y);
     return pick(model, r.o, r.d, st.knobs(), { moves: st.moves(), hidden: hiddenNow ?? undefined })?.item ?? null;
   };
+  /** The part a label names: its `on` part, else what is under its point on screen. */
+  const itemOf = (a: StudioAnchor): Item | null => {
+    const named = a.on ? (model.items.find((i) => i.name === a.on) ?? model.items.find((i) => i.group === a.on && !!i.name)) : null;
+    if (named || !st) return named ?? null;
+    const p = st.project(anchorAt(model, a, st.knobs().explode, curMoves));
+    return p ? hitAt(p[0], p[1]) : null;
+  };
+  const markPinned = (r: Row | null) => { pinnedRow = r; for (const q of rows) q.btn.setAttribute('aria-pressed', String(q === r)); };
+  /** A list item or badge pins its part (lit, its card shown at its label's point); again lets it go. */
+  function pinRow(r: Row): void {
+    if (pinnedRow === r) { markPinned(null); pinned = null; st?.setHover(null); showCard(null); return; }
+    const it = itemOf(r.a), p = st?.project(anchorAt(model, r.a, st.knobs().explode, curMoves));
+    markPinned(r); pinned = it;
+    st?.setHover(it?.name ?? null);
+    showCard(it, p ? p[0] : 8, p ? p[1] : 8, r.a.text);
+  }
+  // Esc in the list lets the part go and gives the focus back to the canvas
+  list.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault(); e.stopPropagation();
+    if (pinnedRow) { markPinned(null); pinned = null; st?.setHover(null); showCard(null); }
+    canvas.focus();
+  });
+  // Enter or Space on the canvas: into the list of parts (a keyboard's way to a part's name, size and source)
+  canvas.addEventListener('keydown', (e) => {
+    if ((e.key !== 'Enter' && e.key !== ' ') || e.ctrlKey || e.metaKey || e.altKey) return;
+    const first = rows.find((r) => !r.li.hidden)?.btn;
+    if (!first) return;
+    e.preventDefault();
+    first.focus();
+  });
   canvas.addEventListener('pointermove', (e) => {
     if (e.buttons || mode !== 'gl' || e.pointerType === 'touch') return;
     const rc = canvas.getBoundingClientRect(), x = e.clientX - rc.left, y = e.clientY - rc.top;
@@ -372,6 +416,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
     const rc = canvas.getBoundingClientRect(), x = e.clientX - rc.left, y = e.clientY - rc.top, it = hitAt(x, y);
     pinned = it && pinned?.name !== it.name ? it : null;
+    markPinned(null);
     st?.setHover(pinned?.name ?? it?.name ?? null);
     showCard(pinned ?? (e.pointerType === 'touch' ? null : it), x, y);
   });
@@ -391,6 +436,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     o.onBeat?.(beat);
     const b = (model.beats ?? beats)[beat] ?? beats[beat];
     cap.replaceChildren(h('b', null, `${beat + 1} / ${beats.length} · ${b.title}. `), b.text);
+    if (beat === 0 && document.activeElement === prev) next.focus();
     prev.disabled = beat === 0;
     next.textContent = beat === beats.length - 1 ? 'Done' : 'Next ›';
     st?.setFocus(b.show ? new Set(b.show) : null);
