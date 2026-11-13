@@ -13,7 +13,7 @@ import { frameLoop } from './mosfet';
 import { packInstances } from '../gl/instances';
 import { M } from '../gl/kit/materials';
 import { STATIONS, kindOfWord, palletsAt, flushText, outcomeOf, type Outcome } from './assembly3dparts';
-import { BEAT_EVENTS, RIDER, armAngle, armMove, asmModel, clockOf, palletMove, riders, type AsmLook, type AsmRgb } from './assembly3dkit';
+import { BEAT_EVENTS, HOME_PITCH, HOME_YAW, RIDER, armAngle, armMove, asmModel, clockOf, palletMove, riders, type AsmLook, type AsmRgb } from './assembly3dkit';
 import { studioStage, type StudioStage } from './studiostage';
 import { numOf } from '../chapters/order';
 
@@ -60,10 +60,10 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
   const panel = h('div', { class: 'panel' });
   const stage = studioStage({
     aria: 'The five-stage pipeline as an assembly line in 3D: Fetch, Decode, Execute, Memory and Writeback stations on a belt, a pallet for every instruction in flight, an empty pallet for a bubble, chutes that carry a forwarded value back to Execute',
-    home: { target: [0, 0, 0], yaw: 0.35, pitch: 0.42, dist: 200 },
+    home: { target: [0, 0, 0], yaw: HOME_YAW, pitch: HOME_PITCH, dist: 200 },
     homeFrame: ['homebox'],
     // one shape for every clock (a rebuild would otherwise resize the canvas and refit home)
-    aspect: 1.5,
+    aspect: 2.1,
     hidden: ['homebox', 'chutebox', 'stallbox', 'flushbox'],
     limits: { minDist: 20, maxDist: 600 },
     // each beat goes to the first clock of this program where its event happens
