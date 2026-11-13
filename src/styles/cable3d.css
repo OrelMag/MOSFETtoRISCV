@@ -20,3 +20,13 @@
 .cb-coax { display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .cb-seg .btn[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, #fff); border-color: var(--accent); }
 @media (max-width: 600px) { .cb3 .r3-stage { aspect-ratio: 1 / 1; } }
+.m3d {
+  --cb-nbr-a: light-dark(#3d8a4e, #7fd08f);
+  --cb-nbr-b: light-dark(#7a5a3a, #c49a6c);
+  --cb-push: light-dark(#1f9d55, #4ee08a);
+  --cb-load: light-dark(#6b7280, #8a92a3);
+  --cb-hot: light-dark(#e8590c, #ffa94d);
+  --cb-ruler: light-dark(#c9ccd3, #9aa1af);
+  --cb-tick: light-dark(#1f2430, #11141b);
+  --cb-pvc: light-dark(#30343c, #454b57);
+}

@@ -160,7 +160,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'cable', title: 'Twisted pair and coax', category: 'comms', chapter: 'wire', step: 6,
     summary: 'Why a pair is twisted: each half twist flips a loop\'s EMF so the pickup cancels; or swap in a coax.',
-    files: ['cable3d', 'cable3dview', 'cable3dparts'], factory: 'cable3d',
+    files: ['cable3d', 'cable3dview', 'cable3dparts', 'cable3dkit'], factory: 'cable3d',
     open: () => import('./cable3d').then((m) => m.cable3d()),
   },
   {
