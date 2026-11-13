@@ -1022,7 +1022,7 @@ export const chMemory: Chapter = {
         <div class="try">Set addr = 7: data = 0x31 = 49. Open the decoder, then one of the OR gates, and count its inputs.</div>`,
       tour: {
         beats: [
-          { title: 'Address 3', set: { addr: 3 }, show: ['u0'], expect: { data: 9 },
+          { title: 'Address 3', set: { addr: 3 }, show: ['dec'], expect: { data: 9 },
             say: '<p>addr = 3: the decoder raises word line 3, and each output bit ORs the lines of the words that have it set. data = {v:data} = {b:data}: 3² = 9.</p>' },
           { title: 'Address 7', set: { addr: 7 }, expect: { data: 49 },
             say: '<p>addr = 7: data = {v:data} = {b:data}. Seven squared, from wiring alone.</p>' },
