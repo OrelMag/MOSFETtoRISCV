@@ -181,7 +181,7 @@ review queue; one backup file carries all progress; the site installs as an app 
 
 Every CPU has a **CPU panel**: the program with the current instruction (click a line to light up
 the hardware it uses), registers, memory, Run to halt / Step / Slow (one gate delay, cycle or
-instruction at a time), Back to undo, and a lock-step comparison with the golden model. The
+instruction at a time), Step back to undo, and a lock-step comparison with the golden model. The
 pipelines add a pipeline diagram, the out-of-order core its reorder buffer, the GPU its warps and
 frames.
 
