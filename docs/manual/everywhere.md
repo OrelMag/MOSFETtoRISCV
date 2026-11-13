@@ -1,5 +1,7 @@
 # What works everywhere
 
+[← Back to the manual](README.md)
+
 These tools are in every section of **From Switch to CPU**: the chapters, the campaign, the workbench and the sandbox. Most of
 them start from the top bar, which is the same on every page. Use this page to find a control you have seen but not tried,
 or to find out whether something you want to do is possible.
@@ -216,8 +218,8 @@ visited are asked.
 
 ## Use a 3D model
 
-Many chapters have a 3D model of a real part: a transistor, a vacuum tube, a relay, a disk, a sensor. Every model sits on
-the same stage, with the same controls.
+Many chapters have a 3D model of a real part: a transistor, a vacuum tube, a relay, a disk, a sensor. Every model has
+the same controls.
 
 ![The ENIAC decade ring on the 3D stage: names in the margins, corner buttons, the model's own controls and the tour](img/everywhere/13-model-stage.png)
 
@@ -387,25 +389,27 @@ and **Ctrl Z** / **Ctrl Y** undo and redo moving parts.
 
 ## If something looks wrong
 
-**The mouse wheel scrolls the page instead of zooming a 3D model.** That is on purpose, so a model never traps your
-scrolling. Click the model first, then scroll; or hold **Ctrl** while scrolling. **Esc** gives the wheel back to the page.
+- **The mouse wheel scrolls the page instead of zooming a 3D model.** That is on purpose, so a model never traps your
+  scrolling. Click the model first, then scroll; or hold **Ctrl** while scrolling. **Esc** gives the wheel back to the page.
 
-**Dragging moves the view, not the part.** **Move parts by dragging** is off (it starts off on touch screens), or the lock in
-the circuit's toolbar is closed. Click the lock, or turn the option on under **View options** › **Behaviour**.
+- **Dragging moves the view, not the part.** **Move parts by dragging** is off (it starts off on touch screens), or the lock in
+  the circuit's toolbar is closed. Click the lock, or turn the option on under **View options** › **Behaviour**.
 
-**A block opened when I only meant to zoom.** **Open blocks as you zoom** is on by default. Zoom back out to close it, press
-**Esc** to go up a level, or turn the option off under **View options** › **Behaviour** to open blocks only by
-double-clicking.
+- **A block opened when I only meant to zoom.** **Open blocks as you zoom** is on by default. Zoom back out to close it, press
+  **Esc** to go up a level, or turn the option off under **View options** › **Behaviour** to open blocks only by
+  double-clicking.
 
-**Letter keys do things while I type or dictate.** Turn off **Single-key shortcuts** under **View options** ›
-**Behaviour**. Keys never act while you type in a text field.
+- **Letter keys do things while I type or dictate.** Turn off **Single-key shortcuts** under **View options** ›
+  **Behaviour**. Keys never act while you type in a text field.
 
-**My progress is gone.** Progress lives in one browser. A private window, another browser or another computer starts
-empty, and clearing the browser's site data deletes it. If you exported a backup, use **Import progress…** at the bottom of
-the home page. Export one now and then.
+- **My progress is gone.** Progress lives in one browser. A private window, another browser or another computer starts
+  empty, and clearing the browser's site data deletes it. If you exported a backup, use **Import progress…** at the bottom of
+  the home page. Export one now and then.
 
-**The colours are hard to tell apart.** Open **View options** and pick **Colour-blind safe** or **High contrast** under
-**Wire colours**, or the **Monochrome** palette, which uses line styles instead of hue.
+- **The colours are hard to tell apart.** Open **View options** and pick **Colour-blind safe** or **High contrast** under
+  **Wire colours**, or the **Monochrome** palette, which uses line styles instead of hue.
 
-**Everything moves too much.** Turn on **Reduce motion** under **View options** › **Look**, or pick the **Plain** preset.
-**Slow motion** still plays when you ask for it.
+- **Everything moves too much.** Turn on **Reduce motion** under **View options** › **Look**, or pick the **Plain** preset.
+  **Slow motion** still plays when you ask for it.
+
+Back to [the manual](README.md)
