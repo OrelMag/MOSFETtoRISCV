@@ -251,7 +251,7 @@ folds the editor away.
 ### Find a part in the parts list
 
 The groups are **Basics**, **My chips** (once you package one), **Inputs & outputs** (pins, buttons, clocks, switches,
-keys, keyboard, and under **Special I/O** the puzzle ports, card reader, counters, random source and timer), **Sources**,
+and under **Special I/O** the key, the keyboard, the puzzle ports and the card reader), **Sources**,
 **Transistors**, **Switch level** (strong and weak transistors, resistors, pull-ups, capacitors, transmission gates,
 tri-state parts), **Relays and tubes**, **Constants**, **Displays** (with the console and the screen), **Wiring**, **Memory**, **Processor
 cores**, **Communication** and **Library** (every gate, adder, register and larger block of the site). Type in **Search…**
@@ -274,8 +274,8 @@ to find a part by name. Tick **Purist** to see only NAND and what you have built
 - **Displays** has **LED**, **LED bank**, **7-segment**, **Hex digit**, **Value**, **Buzzer**, **Halt** (stops
   **Run** when its input is 1), **Console** (prints a character at each clock edge) and **Screen** (a pixel screen you
   write by x, y and colour).
-- **Inputs & outputs** has **Switches** (a bank of toggles), **Key** (1 while a chosen key is held) and **Keyboard** (typed
-  keys wait in order).
+- **Inputs & outputs** has **Switches** (a bank of toggles), and under **Special I/O** **Key** (1 while a chosen key is
+  held) and **Keyboard** (typed keys wait in order).
 - When a chip has a console, screen or switch bank, even deep inside, the **Screens** drawer shows them all live, with
   **Clear** and **PNG**.
 
