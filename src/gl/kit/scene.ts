@@ -78,6 +78,9 @@ export interface Model3 {
   lights?: GlowLight[];
   /** The model's look on the studio (phase 0's per-model data, and any model's): exposure, key-light direction. */
   look?: { exposure?: number; keyDir?: Vec3; haze?: { colour: Colour; dist: number } };
+  /** The flat (SVG) drawing's painter's order: per triangle (default), or whole items back to front by their farthest point,
+   *  then the triangles within each: for a model of separate layers (stacked platters, thin overlays on a face). */
+  flatOrder?: 'faces' | 'items';
 }
 
 export interface Knobs { explode: number; cut: number }
