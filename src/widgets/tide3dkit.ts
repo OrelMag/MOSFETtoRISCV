@@ -15,7 +15,7 @@ import { M, type DataTex, type Material } from '../gl/kit/materials';
 import type { Beat, Item, Model3, StudioAnchor } from '../gl/kit/scene';
 import type { Mat4, Quat, Vec3 } from '../gl/math';
 import {
-  A_ARC, BASE_T, BASE_X0, BASE_X1, C0, DEPTH, GEAR_Z, HUB_Y, N_CRANKS, PAPER_L, PAPER_Y0, PAPER_Y1, PAPER_Z, PEN_DROP, PEN_X, PITCH, RAIL_Y, R_CORD,
+  A_ARC, BASE_T, BASE_X0, BASE_X1, C0, DEPTH, GEAR_Z, HUB_Y, N_CRANKS, PAPER_L, PAPER_Y0, PAPER_Y1, PAPER_Z, PEN_DROP, PEN_X, PITCH, RAIL_Y,
   R_FIX, R_MOV, Y0, YF, angleOf, cordPath, crankX, handAngle, hubY, mainY, offsetsAt, paperSpeed, penTip, sidewaysAt, throwOf, traceOf, type Mech, type Tide,
 } from './tide3dparts';
 
@@ -141,13 +141,13 @@ const crankMemo = new Map<string, { disc: Geo; slot: Geo; scale: Geo; pin: Geo; 
 export function crankGeo(i: number, r: number, m: Mech, detail: 'full' | 'flat') {
   const key = `${i}:${r.toFixed(4)}:${m}:${detail}`, hit = crankMemo.get(key);
   if (hit) return hit;
-  const x = crankX(i), HY = hubY(m), MY = mainY(m), zc = discZOf(m), seg = detail === 'flat' ? 16 : 36, f = m === 'pins' ? -1 : 1;
+  const x = crankX(i), HY = hubY(m), MY = mainY(m), zc = discZOf(m), seg = detail === 'flat' ? 16 : 36, f = 1, pd = m === 'pins' ? 1 : -1;
   const disc = merge([discZ(x, HY, zc - DISC_T / 2, zc + DISC_T / 2, DISC_R, seg), discZ(x, HY, GEAR_Z - 1, zc, 0.7, 12)], 'crank disc');
   const zs = zc + f * (DISC_T / 2 + 0.05);
   const slot = bx(x - 0.45, x + 0.45, HY - DISC_R + 0.6, HY - 0.5, Math.min(zs, zs + f * 0.1), Math.max(zs, zs + f * 0.1));
   const scale = merge([bx(x + 0.6, x + 1.0, HY - DISC_R + 0.6, HY - 0.5, Math.min(zs, zs + f * 0.12), Math.max(zs, zs + f * 0.12)),
     ...[1, 2, 3, 4].map((k) => bx(x + 0.5, x + 1.3, HY - k - 0.06, HY - k + 0.06, Math.min(zs, zs + f * 0.2), Math.max(zs, zs + f * 0.2)))], 'scale');
-  const pin = discZ(x, HY - r, Math.min(zc, zc + f * 1.6), Math.max(zc, zc + f * 1.6), PIN_R, 14);
+  const pin = discZ(x, HY - r, Math.min(zc, zc + pd * 1.6), Math.max(zc, zc + pd * 1.6), PIN_R, 14);
   const wr = WHEEL_R(HY, MY);
   const wheel = discZ(x, HY, GEAR_Z - 0.6, GEAR_Z + 0.6, wr, seg);
   const marker = merge([bx(x - 0.2, x + 0.2, HY - wr + 0.3, HY - 0.6, GEAR_Z + 0.6, GEAR_Z + 0.75), discZ(x, HY - DISC_R + 0.35, zs, zs + f * 0.15, 0.32, 10)], 'marker');
@@ -158,7 +158,9 @@ export function crankGeo(i: number, r: number, m: Mech, detail: 'full' | 'flat')
 
 /** The cord: one tube, refreshed in place each pose (cordPath's point count is the same for every pose). */
 const cords = new Map<string, Geo>();
-export const cordGeo = (detail: 'full' | 'flat', path: Vec3[]): Geo => tube(path, R_CORD, { sides: detail === 'flat' ? 4 : 6 });
+export const cordGeo = (detail: 'full' | 'flat', path: Vec3[]): Geo => tube(path, CORD_DRAWN, { sides: detail === 'flat' ? 4 : 8 });
+/** The cord as drawn: about twice the radius it is routed at (R_CORD), so it reads at home; the note says so. */
+export const CORD_DRAWN = 0.5;
 export function cordOf(detail: 'full' | 'flat'): Geo | undefined { return cords.get(detail); }
 export function setCord(detail: 'full' | 'flat', g: Geo): void { cords.set(detail, g); }
 
@@ -221,11 +223,13 @@ export function paintPaper(tex: DataTex, td: Tide, on: readonly boolean[], t: nu
 const SMG = 'Science Museum Group, object 1876-1129 (Thomson’s 1872 machine by A. Légé & Co.)';
 const WOOD = 'Woodworth, An inventory of tide prediction machines (NOC Report 56, 2016), p. 15';
 export const MATS = {
-  wood: M.oak,
+  wood: M.make({ base: [0.2, 0.13, 0.09], metal: 0, rough: 0.7, coat: 0.2, label: 'wood base (dark; drawn)' }),
+  mahogany: M.make({ base: [0.3, 0.13, 0.08], metal: 0, rough: 0.4, coat: 0.6, label: 'mahogany, polished' }),
   iron: M.make({ base: [0.33, 0.35, 0.36], metal: 0.55, rough: 0.5, label: 'cast iron, painted' }),
-  brass: M.brass, steel: M.steel, silver: M.silver,
+  // brass partly diffuse: a fully metallic one only mirrors the dark board at home
+  brass: M.make({ base: [0.86, 0.66, 0.32], metal: 0.7, rough: 0.26, label: 'brass' }), steel: M.make({ base: [0.78, 0.8, 0.84], metal: 0.7, rough: 0.28, label: 'steel' }), silver: M.make({ base: [0.95, 0.95, 0.97], metal: 0.4, rough: 0.2, label: 'silver-plated scale' }),
   off: M.make({ base: [0.42, 0.42, 0.44], metal: 0.6, rough: 0.5, label: 'disengaged' }),
-  cord: M.make({ base: [0.86, 0.78, 0.58], metal: 0, rough: 0.75, label: 'catgut line (drawn many times thicker)' }),
+  cord: M.make({ base: [0.98, 0.94, 0.82], metal: 0, rough: 0.55, emit: [0.98, 0.94, 0.82], glow: 0.18, label: 'catgut line, drawn light and many times thicker than it was' }),
   paper: (tex: DataTex): Material => M.make({ base: [1, 1, 1], metal: 0, rough: 0.9, data: tex, label: 'paper' }),
   bottle: M.make({ ...M.glass, transmit: 0.8, label: 'glass ink bottle' }),
   ink: M.make({ base: [0.08, 0.1, 0.25], metal: 0, rough: 0.2, label: 'ink' }),
@@ -242,8 +246,8 @@ const UPRIGHT: Quat = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
 export function tideModel(s: TideState, detail: 'full' | 'flat' = 'full'): Model3 {
   const { td, on, mech } = s, S = statics(detail, mech), items: Item[] = [];
   items.push({ geo: S.base, mat: MATS.wood, name: 'base', group: 'base', info: { dim: '1820 × 770 mm (the machine overall: 1820 × 1000 × 770 mm)', source: SMG } });
-  items.push({ geo: S.frame, mat: MATS.iron, name: 'frame and top rail', group: 'frame', info: { note: 'carries the fixed pulleys and the cord’s clamp (layout drawn)' } });
-  items.push({ geo: S.table, mat: MATS.wood, name: 'paper table', group: 'paper' });
+  items.push({ geo: S.frame, mat: MATS.mahogany, name: 'frame and top rail', group: 'frame', info: { note: 'carries the fixed pulleys and the cord’s clamp (layout drawn)' } });
+  items.push({ geo: S.table, mat: MATS.mahogany, name: 'paper table', group: 'paper' });
   if (detail === 'flat') items.push({ geo: S.paper, mat: M.make({ base: [0.95, 0.92, 0.84], metal: 0, rough: 0.9, label: 'paper' }), name: 'paper band', group: 'paper' });
   // and the pen's line as a tube on it (the flat view is rebuilt every frame, so it is made fresh)
   if (detail === 'flat') { const tr0 = traceOf(td, on, s.t, mech); if (tr0.length > 1) items.push({ geo: tube(tr0.map((p): Vec3 => [p.x, p.y, PAPER_Z + 0.25]), 0.35, { sides: 3 }), mat: MATS.ink, name: 'paper band', group: 'paper' }); }
@@ -274,12 +278,12 @@ export function tideModel(s: TideState, detail: 'full' | 'flat' = 'full'): Model
 
   const front: Vec3 = [0, 0.15, 1], HY = hubY(mech);
   const anchors: StudioAnchor[] = [
-    { text: td.kind === 'tide' ? 'cranks, one a constituent' : 'cranks, one a harmonic', p: [crankX(3), HY - DISC_R, discZOf(mech)], side: 'b', n: front, on: 'crank3' },
-    { text: mech === 'pins' ? 'pulley on its crank pin' : 'pulley on its yoke', p: [crankX(6), C0 + R_MOV, 1], side: 't', n: front, on: 'pulley6' },
-    { text: 'cord', p: [crankX(8) + PITCH / 4, (C0 + YF) / 2, 0], side: 'r', n: front, on: 'cord' },
+    { text: 'cranks', p: [crankX(3), HY - DISC_R, discZOf(mech)], side: 'b', n: front, on: 'crank3' },
+    { text: mech === 'pins' ? 'pulley on a pin' : 'pulley on a yoke', p: [crankX(6), C0 + R_MOV, 1], side: 'l', n: front, on: 'pulley6' },
+    { text: 'cord', p: [crankX(8) + PITCH / 4, (C0 + YF) / 2, 0], side: 'l', n: front, on: 'cord' },
     { text: 'pen', p: [PEN_X, Y0 + 2, 0], side: 'r', n: front, on: 'pen' },
     { text: 'paper', p: [PEN_X + 40, PAPER_Y1, PAPER_Z], side: 't', n: front, on: 'paper' },
-    { text: 'hand crank, flywheel', p: [FLY_X(), mainY(mech) + FLY_R, GEAR_Z], side: 'l', n: front, on: 'shaft' },
+    { text: 'hand crank', p: [FLY_X(), mainY(mech) + FLY_R, GEAR_Z], side: 'l', n: front, on: 'shaft' },
   ];
   const all = { yaw: 0.16, pitch: 0.24, target: [31, 46, 0] as Vec3, dist: 242 };
   const beats: Beat[] = [
@@ -289,7 +293,7 @@ export function tideModel(s: TideState, detail: 'full' | 'flat' = 'full'): Model
     { title: 'The sum on the paper', text: 'The faint lines are each crank’s own term, in its colour; the pen’s ink is their sum. Switch cranks off and the sum loses those terms.', view: { yaw: 0.02, pitch: 0.04, target: [PEN_X + PAPER_L / 2, (PAPER_Y0 + PAPER_Y1) / 2, 0], dist: 90 }, frame: ['paper band'] },
     { title: '1872: pulleys on crank pins', text: 'On this machine each pulley turned on its crank’s pin, so it moved sideways too: the cord’s legs tilt and the sum is out by a little. Every later machine moved its pulleys straight up and down on a slotted yoke (Woodworth 2016, after Cartwright 1999). The Mechanism switch shows both.', view: { yaw: 0.3, pitch: 0.15, target: [crankX(4), C0, 0], dist: 90 }, frame: ['crank4', 'pulley4', 'crank5', 'pulley5'] },
   ];
-  return { items, anchors, beats, floor: 0, look: { exposure: 1.0 } };
+  return { items, anchors, beats, floor: 0, look: { exposure: 1.3, keyDir: [-0.35, 0.8, 0.55] } };
 }
 
 /** Every moving part's motion at time t, and the cord refreshed in place. */
