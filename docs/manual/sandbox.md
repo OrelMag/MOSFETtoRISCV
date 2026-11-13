@@ -418,8 +418,7 @@ view. Drag its frame to pan, or click to jump.
 
 #### Send a circuit as a link
 
-1. Open the chip, then **File ▾** › **Share link…**. The link is made and copied to the clipboard (**Copied to the
-   clipboard.**); **Copy** copies it again.
+1. Open the chip, then **File ▾** › **Share link…**. A dialog shows the link; **Copy** copies it to the clipboard.
 2. Send it. Whoever opens it gets a copy of the chip and the chips inside it, and chooses whether to import it. The
    circuit travels inside the link itself: nothing is uploaded.
 
