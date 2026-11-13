@@ -80,7 +80,7 @@ export function gfInvGates(): ComponentDef {
       summary: 'Every non-zero element has a²⁵⁵ = 1, so a⁻¹ = a²⁵⁴. Squarings cost only XORs, so an addition chain reaches it with four multiplications. 0 maps to 0.',
       ports: [bus('a', 8, 'in'), bus('y', 8, 'out')], symbol: { kind: 'box', label: 'x⁻¹' },
       spec: ([a]) => [gfInvChain(a)],
-      netlist: () => ({ pins: { a: [0, 6], y: [b.right, 6] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { aspect: 2.2, avoid: true, room: true }), // the addition chain in two bands, not a strip 232 × 8
     });
   });
 }
@@ -402,7 +402,7 @@ export function rsBuffer(n: number): ComponentDef {
       id: `rsbuf${n}`, name: `Byte shift register, ${n} bytes`, category: 'sequential',
       summary: 'Holds the word while the decoder works out what is wrong with it. Most of a shortened decoder\'s flip-flops are here.',
       ports: [bus('d', 8, 'in'), bit('en', 'in'), clk(), bus('q', 8, 'out')], symbol: { kind: 'box', label: `${n} BYTES` },
-      netlist: () => ({ pins: { ...pinsOf(ins, [], b.right), q: [b.right, 6] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { aspect: 1.6, avoid: true, room: true }), // a row of 26 registers set out in bands: it was a strip 432 × 9
     });
   });
 }

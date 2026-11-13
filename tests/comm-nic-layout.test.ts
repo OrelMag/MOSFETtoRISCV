@@ -25,8 +25,9 @@ const subs = (d: ComponentDef, seen = new Map<string, ComponentDef>()): Componen
 describe('the NIC, block by block', () => {
   const parts = subs(nic()).filter((d) => d.id === 'nic' || d.id.startsWith('nic_'));
   it('is made of boxes named for what they do', () => {
-    // each block's next state / state / outputs (lib/rtl.ts) are drawings of that block, not blocks of the NIC
-    expect(parts.map((d) => d.id).filter((id) => !/_(next|state|out)\d*$/.test(id)).sort()).toEqual(['nic', 'nic_dma', 'nic_regs', 'nic_rx', 'nic_tx']);
+    // each block's next state / state / outputs (lib/rtl.ts), and a large next state's per-register blocks, are drawings of
+    // that block, not blocks of the NIC
+    expect(parts.map((d) => d.id).filter((id) => !/_(next|state|out)\d*(_(n_\w+|shared\d*))?$/.test(id)).sort()).toEqual(['nic', 'nic_dma', 'nic_regs', 'nic_rx', 'nic_tx']);
   });
   it.each(parts.map((d) => [d.id, d] as const))('%s: labels, symbols, wires', (_, d) => {
     const nl = netlistOf(d)!;

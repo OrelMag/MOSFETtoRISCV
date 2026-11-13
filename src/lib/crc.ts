@@ -69,8 +69,35 @@ export function crcNext(n = 32, poly = CRC32_REFLECTED, w = 8, share = true): Co
       ports: [bus('q', n, 'in'), bus('d', w, 'in'), bus('next', n, 'out')],
       symbol: { kind: 'box', label: `CRC${n}+${w}` },
       spec: ([q, d]) => [stepBits(q, d, w, poly, n)],
-      netlist: () => ({ pins: { q: [0, 2 + n], d: [0, 6 + n + w], next: [b.right, 2 + n] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { q: [0, 2 + n], d: [0, 6 + n + w], next: [b.right, 2 + n] }, instances: b.instances, nets: unblocked(b, share ? Infinity : LONG) }),
     });
+  });
+}
+
+/** The separate-terms block: 23 shared lines without this, none with it, 87 of 263 nets labels (63 before). */
+const LONG = 250;
+
+/**
+ * The Builder's nets, with every wire that would cut through a gate drawn as labels instead: a single-sink net jumping a column
+ * of XORs runs level with its ends, so a gate of a column between them standing across that band would sit on it. Also one whose
+ * ends are more than `long` units apart (the separate-terms block, LONG): its tall XOR trees ran 200-300-unit wires down one channel, two on one line.
+ * (Wires-first, view/wirefirst.ts, draws any of them as a wire again where one runs clear.)
+ */
+function unblocked(b: Builder, long = Infinity): NetDef[] {
+  const at = new Map(b.instances.map((i) => [i.name, i]));
+  const where = (end: string): [number, number] | null => {
+    const k = end.indexOf('.');
+    if (k < 0) return null;
+    const i = at.get(end.slice(0, k))!, g = symbolGeom(i.def);
+    return [i.at![0], i.at![1] + g.ports[end.slice(k + 1)].pos[1]];
+  };
+  return b.nets().map((n) => {
+    if (n.tags || n.ends.length !== 2) return n;
+    const a = where(n.ends[0]), s = where(n.ends[1]);
+    if (!a || !s) return n;
+    const y0 = Math.min(a[1], s[1]) - 0.5, y1 = Math.max(a[1], s[1]) + 0.5;
+    const hit = b.instances.some((i) => { const [x, y] = i.at!, h = symbolGeom(i.def).h; return x > a[0] && x < s[0] && y < y1 && y + h > y0; });
+    return hit || y1 - y0 > long ? { ...n, tags: true as const } : n;
   });
 }
 
@@ -95,6 +122,7 @@ export function crcUnit(n = 32, poly = CRC32_REFLECTED, w = 1, share = true): Co
       { name: 'ld', def: OR, at: [xr - 12, y0 + 24], label: 'load' },
       { name: 'fc', def: FC, at: [xf, y0 + rg.h + 4], label: 'FCS = ~q' },
     ];
+    const yc = Math.max(y0 + 32, ...instances.map((i) => i.at![1] + symbolGeom(i.def).h)) + 3;
     const nets: NetDef[] = [
       { name: 'd', ends: ['d', 'step.d'] },
       { name: 'next', ends: ['step.next', 'init.a'] },
@@ -103,7 +131,8 @@ export function crcUnit(n = 32, poly = CRC32_REFLECTED, w = 1, share = true): Co
       { name: 'dnext', ends: ['init.y', 'reg.d'] },
       { name: 'en', ends: ['en', 'ld.a'] },
       { name: 'load', ends: ['ld.y', 'reg.en'] },
-      { name: 'clk', ends: ['clk', 'reg.clk'] },
+      // under every part: from its pin below the drawing straight across, then up into the register's clock
+      { name: 'clk', ends: ['clk', 'reg.clk'], via: { 'reg.clk': [[xr + rg.ports.clk.pos[0], yc]] } },
       { name: 'q', ends: ['reg.q', 'step.q', 'fc.a', 'q'], tags: true },
       { name: 'fcs', ends: ['fc.y', 'fcs'] },
     ];
@@ -112,7 +141,7 @@ export function crcUnit(n = 32, poly = CRC32_REFLECTED, w = 1, share = true): Co
       summary: `A ${n}-bit register holding the running CRC (reflected generator 0x${hex(poly, n)}), initialised to all ones, taking ${w} bit${w > 1 ? 's' : ''} per enabled clock edge through a network of XOR gates. fcs is the complement of q: the check sequence to append; after a received frame that ends with its own FCS, q is a constant that says it arrived whole.`,
       ports: [bus('d', w, 'in'), bit('en', 'in'), bit('init', 'in'), bit('clk', 'in', 'bottom', true), bus('q', n, 'out'), bus('fcs', n, 'out')],
       symbol: { kind: 'box', label: `CRC${n}` },
-      netlist: () => ({ pins: { d: [0, y0 + 6 + ng.ports.d.pos[1]], en: [0, y0 + 24], init: [0, y0 + 28], clk: [0, y0 + 32], q: [R, y0 + rg.ports.q.pos[1]], fcs: [R, y0 + rg.h + 4 + fg.ports.y.pos[1]] }, instances, nets }),
+      netlist: () => ({ pins: { d: [0, y0 + 6 + ng.ports.d.pos[1]], en: [0, y0 + 24], init: [0, y0 + 28], clk: [0, yc], q: [R, y0 + rg.ports.q.pos[1]], fcs: [R, y0 + rg.h + 4 + fg.ports.y.pos[1]] }, instances, nets }),
     });
   });
 }
