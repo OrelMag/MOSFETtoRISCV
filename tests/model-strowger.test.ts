@@ -1,12 +1,16 @@
 // The Strowger selector: the state machine held to chapter 40's gate-level DIAL_SELECTOR, and the drawing held to the machine.
 import { describe, expect, it } from 'vitest';
 import { DIAL_SELECTOR } from '../src/lib/telegraph';
-import { BREAK_MS, call, DROP_MS, hunt, HOME, LEVELS, LINES, OVERFLOW, PULSE_MS, pulsesOf, release, stateAt, TURN_HOME_MS, vertical, verticalPulling } from '../src/phys/strowger';
-import { flatFaces, flatView } from '../src/gl/parts';
+import { BREAK_MS, call, DROP_MS, HUNT_MS, hunt, HOME, LEVELS, LINES, motionAt, OVERFLOW, PULSE_MS, pulsesOf, release, stateAt, TURN_HOME_MS, vertical, verticalPulling, type Frame } from '../src/phys/strowger';
 import { flatten } from '../src/sim/flatten';
 import { SwitchSim } from '../src/sim/switchsim';
 import { B1 } from '../src/sim/types';
-import { contactAt, lineAngle, levelY, swParts, wiperTip, type SwPalette } from '../src/widgets/strowger3dparts';
+import {
+  BANK_ARC, contactAt, contactInstances, ENVELOPE, LEVEL_PITCH, lineAngle, levelY, PAWL_Y, R_BETA, R_PAWL_TIP, R_PIVOT, R_TIP, ROT_HOLD_Y, ROT_PAWL_Y, ROT_R, ROT_Y, SHAFT_Y,
+  swModel, toothFace, V_ALPHA, V_PAWL_TIP_Z, V_PIVOT, wiperTip, type SwPalette,
+} from '../src/widgets/strowger3dkit';
+import { itemMatrix } from '../src/gl/kit/scene';
+import { quatAxisAngle, quatRotate } from '../src/gl/math';
 
 const none = (): boolean[][] => Array.from({ length: LEVELS }, () => Array<boolean>(LINES).fill(false));
 const yOf = (sim: SwitchSim) => sim.getBits(sim.design.root.ports.y).reduce<number>((v, x, i) => v | ((x === B1 ? 1 : 0) << i), 0);
@@ -101,41 +105,129 @@ describe('the release', () => {
   });
 });
 
-describe('the drawing', () => {
-  const c = (n: number): [number, number, number] => [n, n, n];
-  const P: SwPalette = { frame: c(0.1), shaft: c(0.2), brass: c(0.3), free: c(0.4), busy: c(0.5), live: c(0.6), coil: c(0.7), lit: c(0.8), probe: c(0.9) };
-  it('at rest on a line the wiper tip is on that contact, at that level', () => {
-    for (const [l, j] of [[1, 1], [4, 5], [10, 10]]) {
-      const tip = wiperTip({ level: l, line: j }), k = contactAt(l, j);
-      for (let i = 0; i < 3; i++) expect(tip[i]).toBeCloseTo(k[i], 0);
-      expect(tip[1]).toBeCloseTo(levelY(l), 6);
+describe('the mechanism between frames (motionAt)', () => {
+  const b = none();
+  for (const j of [0, 1, 2]) b[3][j] = true;
+  const full = none();
+  full[6].fill(true);
+  const calls: Frame[][] = [call(4, b), call(7, full), call(2, b, { level: 5, line: 3, mode: 'connected' }), release({ level: 6, line: 8, mode: 'connected' })];
+  it('lands exactly on every frame: the drawing never disagrees with the state', () => {
+    for (const f of calls) for (const x of f) {
+      const m = motionAt(f, x.t);
+      expect(m.level, `t ${x.t}`).toBe(x.s.level);
+      expect(m.line, `t ${x.t}`).toBe(x.s.line);
     }
   });
-  it('the 11th step lies past the last contact, on the same arc', () => {
-    expect(lineAngle(OVERFLOW) - lineAngle(LINES)).toBeCloseTo(lineAngle(LINES) - lineAngle(LINES - 1), 6);
-    const tip = wiperTip({ level: 3, line: OVERFLOW });
-    expect(tip[1]).toBeCloseTo(levelY(3), 6);
+  it('a pulse: the vertical coil is on exactly while verticalPulling says so, and the tooth completes as the level steps', () => {
+    const f = calls[0];
+    for (let t = 0; t <= f.at(-1)!.t; t += 1) {
+      const m = motionAt(f, t), s = stateAt(f, t);
+      expect(m.vOn, `t ${t}`).toBe(verticalPulling(f, t));
+      expect(m.level).toBeGreaterThanOrEqual(s.level);
+      expect(m.level).toBeLessThanOrEqual(s.level + 1);
+    }
+    // half-way through the second pulse's break the shaft is half-way up its tooth
+    expect(motionAt(f, 2 * PULSE_MS - BREAK_MS / 2).level).toBeCloseTo(1.5, 6);
   });
-  it('a contact for every line of every level, busy ones coloured as busy', () => {
+  it('a hunt step falls inside the HUNT_MS before its frame, the rotary coil on for the pull only', () => {
+    const f = calls[0], steps = f.filter((x, k) => k > 0 && x.s.line === f[k - 1].s.line + 1);
+    expect(steps.length).toBe(4);
+    for (const x of steps) {
+      expect(motionAt(f, x.t - HUNT_MS).line).toBe(x.s.line - 1);
+      const mid = motionAt(f, x.t - HUNT_MS / 2);
+      expect(mid.line).toBeGreaterThan(x.s.line - 1);
+      expect(mid.line).toBeLessThanOrEqual(x.s.line);
+      expect(motionAt(f, x.t - HUNT_MS + 1).rOn).toBe(true);
+      expect(motionAt(f, x.t - 1).rOn).toBe(false);
+    }
+  });
+  it('release: the pawls lifted throughout, the line home before the level falls, never a drop while turned', () => {
+    for (const f of [calls[2], calls[3]]) for (let t = 0; t <= f.at(-1)!.t; t += 1) {
+      const m = motionAt(f, t), s = stateAt(f, t);
+      if (s.mode !== 'release') continue;
+      expect(m.relOn).toBe(true);
+      expect(m.held).toBe(false);
+      if (m.line > 1e-9) expect(m.level).toBe(s.level);
+    }
+    const r = calls[3];
+    expect(motionAt(r, TURN_HOME_MS / 2).line).toBeCloseTo(4, 6);
+    expect(motionAt(r, TURN_HOME_MS + DROP_MS / 2).level).toBeCloseTo(6 * 0.75, 6);
+  });
+});
+
+describe('the selector in true geometry', () => {
+  const c = (n: number): [number, number, number] => [n, n, n];
+  const P: SwPalette = { busy: c(0.5), live: c(0.6) };
+  const still = (level: number, line: number) => ({ level, line, vArm: 0, rArm: 0, relArm: 0, vOn: false, rOn: false, relOn: false, held: level > 0 });
+  const xf = (m: Float32Array, p: ArrayLike<number>, k: number): [number, number, number] => [0, 1, 2].map((a) => m[a] * p[k] + m[4 + a] * p[k + 1] + m[8 + a] * p[k + 2] + m[12 + a]) as [number, number, number];
+  it('fits the Science Museum’s selector: 422 mm tall, 170 wide, 200 deep', () => {
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    for (const it of swModel(still(0, 0)).items) {
+      const m = itemMatrix(it, 0), g = it.geo.positions;
+      for (let k = 0; k < g.length; k += 3) { const v = xf(m, g, k); for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], v[a]); hi[a] = Math.max(hi[a], v[a]); } }
+    }
+    expect(hi[1] - lo[1]).toBeLessThanOrEqual(ENVELOPE.h + 1);
+    expect(hi[1] - lo[1]).toBeGreaterThan(ENVELOPE.h - 2);
+    expect(hi[0] - lo[0]).toBeLessThanOrEqual(ENVELOPE.w + 1);
+    expect(hi[2] - lo[2]).toBeLessThanOrEqual(ENVELOPE.d + 1);
+  });
+  it('at rest on a line each wiper reaches its own contact of that level (the carrier turned and lifted by the shaft)', () => {
+    for (const [l, j] of [[1, 1], [4, 5], [10, 10]] as const) for (let k = 0; k < 3; k++) {
+      const tip = wiperTip(l, j, k), con = contactAt(l, j, k);
+      expect(Math.abs(tip[1] - con[1])).toBeLessThan(1e-9);
+      expect(Math.hypot(tip[0], tip[2])).toBeCloseTo(R_TIP, 9);
+      const blade = swModel(still(l, j)).items.find((x) => x.name === ['tip', 'ring', 'sleeve'][k] + ' wiper')!, m = itemMatrix(blade, 0), g = blade.geo.positions;
+      let far = 0, farP: [number, number, number] = [0, 0, 0];
+      for (let q = 0; q < g.length; q += 3) { const v = xf(m, g, q), r = Math.hypot(v[0], v[2]); if (r > far) { far = r; farP = v; } }
+      expect(far).toBeGreaterThan(R_TIP);
+      expect(far).toBeLessThan(R_TIP + 2);
+      // the blade's end is at the contact's angle and within the wiper's leaves of its height
+      expect(Math.abs(Math.atan2(farP[0], -farP[2]) - Math.atan2(con[0], -con[2]))).toBeLessThan(0.05);
+      expect(Math.abs(farP[1] - con[1])).toBeLessThan(1);
+    }
+  });
+  it('the rest angle lies off the bank, so the wipers climb clear; the 11th step one step past line 10', () => {
+    expect(lineAngle(0)).toBeLessThan(BANK_ARC[0]);
+    expect(lineAngle(LINES)).toBeLessThan(BANK_ARC[1]);
+    expect(lineAngle(OVERFLOW) - lineAngle(LINES)).toBeCloseTo(lineAngle(LINES) - lineAngle(LINES - 1), 9);
+    expect(levelY(1) - levelY(0)).toBe(LEVEL_PITCH);
+  });
+  it('the vertical pawl: a full pull lifts its tip one level, and at every level a tooth’s face waits at it', () => {
+    const tip0: [number, number, number] = [0, PAWL_Y - V_PIVOT[1], V_PAWL_TIP_Z - V_PIVOT[2]];
+    const pulled = quatRotate(quatAxisAngle([1, 0, 0], V_ALPHA), tip0);
+    expect(pulled[1] - tip0[1]).toBeCloseTo(LEVEL_PITCH, 0);
+    for (let l = 0; l < LEVELS; l++) expect(toothFace(LEVELS - 1 - l, l)).toBe(PAWL_Y);
+  });
+  it('the rotary pawl moves one tooth a stroke, and both rotary pawls meet the ratchet at every level', () => {
+    const arm = Math.hypot(R_PIVOT[0] - R_PAWL_TIP[0], R_PIVOT[2] - R_PAWL_TIP[2]);
+    expect(arm * R_BETA).toBeCloseTo(ROT_R[1] * (Math.PI / 12), 6);
+    for (let l = 0; l <= LEVELS; l++) for (const y of [ROT_PAWL_Y, ROT_HOLD_Y]) {
+      expect(y).toBeGreaterThan(ROT_Y[0] + LEVEL_PITCH * l);
+      expect(y).toBeLessThan(ROT_Y[1] + LEVEL_PITCH * l);
+    }
+    expect(SHAFT_Y[1]).toBeLessThan(ENVELOPE.h);
+  });
+  it('the shaft and the wipers move as one with the level', () => {
+    const at = (level: number) => itemMatrix(swModel(still(level, 3)).items.find((x) => x.name === 'wiper carrier')!, 0)[13];
+    expect(at(7) - at(2)).toBeCloseTo(5 * LEVEL_PITCH, 6);
+  });
+  it('the bank: 10 × 10 × 3 contacts, a busy line’s sleeve coloured, the held line live', () => {
     const b = none();
     b[2][4] = true;
-    const parts = swParts({ level: 3, line: 5, vmag: false, rmag: false }, { level: 3, line: 5, mode: 'hunt' }, b, P);
-    expect(parts.filter((p) => p.color === P.free)).toHaveLength(LEVELS * LINES - 1);
-    expect(parts.filter((p) => p.color === P.busy)).toHaveLength(1);
+    const inst = contactInstances({ level: 3, line: 6, mode: 'connected' }, b, P);
+    expect(inst).toHaveLength(LEVELS * LINES * 3);
+    expect(inst.filter((x) => x.color === P.busy)).toHaveLength(1);
+    expect(inst.filter((x) => x.color === P.live)).toHaveLength(3);
+    expect(inst.filter((x) => x.color === P.live).map((x) => x.pos)).toContainEqual(contactAt(3, 6, 2));
   });
-  it('the shaft rises with the level, and the connected contact is marked live', () => {
-    const shaft = (level: number) => swParts({ level, line: 0, vmag: false, rmag: false }, HOME, none(), P).find((p) => p.color === P.shaft && p.scale![1] === 28)!;
-    // Level 4 up: below that the shaft is cut off at the base.
-    expect(shaft(9).pos[1] - shaft(4).pos[1]).toBeCloseTo(5 * 5, 6);
-    const live = swParts({ level: 4, line: 4, vmag: false, rmag: false }, { level: 4, line: 4, mode: 'connected' }, none(), P).filter((p) => p.color === P.live);
-    expect(live.map((p) => p.pos)).toContainEqual(contactAt(4, 4));
-  });
-  it('a magnet glows only while it pulls, and the flat view draws it', () => {
-    const glow = (v: boolean, rel = false) => swParts({ level: 1, line: 0, vmag: v, rmag: false, rel }, HOME, none(), P).filter((p) => p.color === P.lit).length;
-    expect(glow(true)).toBe(1);
-    expect(glow(false)).toBe(0);
-    expect(glow(false, true)).toBe(1);
-    expect(flatFaces(swParts({ level: 1, line: 0, vmag: false, rmag: false }, HOME, none(), P), 0.5, 0.3).length).toBeGreaterThan(100);
-    expect(flatView(0, 0)([1, 2, 3])).toHaveLength(3);
+  it('a coil glows only while it pulls; the holding pawls swing off only on release', () => {
+    const lit = (o: Partial<ReturnType<typeof still>>) => [...new Set(swModel({ ...still(3, 0), ...o }).items.filter((x) => x.mat.emit).map((x) => x.name))];
+    expect(lit({})).toEqual([]);
+    expect(lit({ vOn: true })).toEqual(['vertical magnet']);
+    expect(lit({ rOn: true })).toEqual(['rotary magnet']);
+    expect(lit({ relOn: true })).toEqual(['release magnet']);
+    const hold = (held: boolean) => swModel({ ...still(3, 0), held }).items.find((x) => x.name === 'holding pawl')!.rot!;
+    expect(hold(true)[3]).toBeCloseTo(1, 9);
+    expect(hold(false)[3]).toBeLessThan(1);
   });
 });
