@@ -47,6 +47,8 @@ export function cableView(): Widget {
     aria: 'A twisted pair in 3D: two insulated copper wires twisted between a sender and a receiver, each loop between them tinted by the voltage a changing magnetic field drives round it, alternating in sign; or a stock coax to scale, stripped back to its centre conductor, dielectric, braid and jacket',
     home,
     homeFrame: ['homebox'],
+    // a fixed shape: a rebuild after a layer or mode change would otherwise resize the canvas and refit home over the new view
+    aspect: 1.6,
     hidden: [...FRAME_GROUPS],
     knobs: { cut: 0, explode: 0 },
     onKnobs: () => put(),
@@ -81,6 +83,10 @@ export function cableView(): Widget {
 
   /** Fit a mode's or a layer's frame from home's direction, and make it home. */
   function frameOn(groups: string[]): void {
+    // after the new labels have set the gutters (a resize at home would re-home the camera under the tween)
+    requestAnimationFrame(() => requestAnimationFrame(() => frameNow(groups)));
+  }
+  function frameNow(groups: string[]): void {
     const s = stage.studio(), cv = stage.el.querySelector('canvas');
     if (!s || !cv) return;
     const f = fitView(boundsOfNamed(cableModel(look('full')), groups), home.yaw, home.pitch, s.camera.fov, cv.clientWidth / Math.max(1, cv.clientHeight), 0.08);

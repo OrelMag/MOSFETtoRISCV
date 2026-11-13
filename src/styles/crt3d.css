@@ -2,8 +2,9 @@
 .m3d {
   --crt-glass: light-dark(#b9cfd0, #8fb0b4);
   --crt-aquadag: light-dark(#17181b, #0b0c0e);
+  --crt-dag: light-dark(#2c2f34, #2f3238);
   --crt-copper: light-dark(#b8692e, #d07f40);
-  --crt-ferrite: light-dark(#4a4c52, #5c5f67);
+  --crt-ferrite: light-dark(#5a4f45, #74675a);
   --crt-metal: light-dark(#8f98a8, #a3acbd);
   --crt-pin: light-dark(#a9a38c, #c9c3a8);
   --crt-off: light-dark(#26292e, #17191d);

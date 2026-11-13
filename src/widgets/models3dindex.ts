@@ -190,7 +190,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'crt', title: 'The beam on a picture tube', category: 'machines', chapter: 'pixels', step: 6,
     summary: 'Gun, yoke and phosphor driven by the scan-out\'s own counter: the beam lights each pixel the circuit sends, then retraces.',
-    files: ['crt3d', 'crt3dview', 'crt3dparts'], factory: 'crt3d', codex: ['doublebuffer'],
+    files: ['crt3d', 'crt3dview', 'crt3dparts', 'crt3dkit'], factory: 'crt3d', codex: ['doublebuffer'],
     open: () => import('./crt3d').then((m) => m.crt3d()),
   },
   {
