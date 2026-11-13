@@ -148,7 +148,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'strowger', title: 'The Strowger selector', category: 'comms', chapter: 'exchange', step: 3,
     summary: 'The stepping switch behind the exchange: dial a level, mark lines busy, hang up.',
-    files: ['strowger3d', 'strowger3dview', 'strowger3dparts'], factory: 'strowger3d', codex: ['relay'],
+    files: ['strowger3d', 'strowger3dview', 'strowger3dkit'], factory: 'strowger3d', codex: ['relay'],
     open: () => import('./strowger3d').then((m) => m.strowger3d()),
   },
   {
