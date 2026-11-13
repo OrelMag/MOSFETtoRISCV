@@ -5,7 +5,7 @@
 
 import { outlineOf } from '../../chapters/outline';
 import { analogiesOf } from '../../chapters/analogies';
-import { planChapter, truthTable, type ChapterPlan, type StepPlan } from '../../chapters/printplan';
+import { planChapter, truthTable, type ChapterPlan, type ModelFigure, type StepPlan } from '../../chapters/printplan';
 import { chapterNo, type Chapter, type Layers, type Quiz, type Reading, type Step } from '../../chapters/types';
 import { nextTask } from '../../sim/tasks';
 import { h } from '../dom';
@@ -62,6 +62,8 @@ export class PrintPage implements Page {
   private readonly cancel = h('button', { class: 'btn sm', type: 'button', onclick: () => { this.cancelled = true; } }, 'Cancel');
   private readonly printBtn = h('button', { class: 'btn primary sm', type: 'button', hidden: true, onclick: () => window.print() }, 'Print again');
   private readonly slots = new Map<number, HTMLElement>();
+  /** A 3D model's figure body, by model id. */
+  private readonly modelSlots = new Map<string, HTMLElement>();
   private cancelled = false;
   private dead = false;
   private maker: FigureMaker | null = null;
@@ -101,13 +103,19 @@ export class PrintPage implements Page {
 
   private stepEl(st: Step, p: StepPlan, i: number): HTMLElement {
     const c = this.chapter;
+    const prose = proseEl(st.body);
+    // a step with a 3D model: its Try lines ask for the model's buttons, which paper has not got; they follow the figure, for the site
+    const tries = p.models.length ? [...prose.querySelectorAll<HTMLElement>('.try')] : [];
+    for (const t of tries) t.remove();
     const sec = h('section', { class: 'pd-step' },
       h('h2', null, st.title),
       h('div', { class: 'pd-addr' }, `Step ${i + 1} of ${c.steps.length} · ${stepUrl(c.id, i)}`),
-      proseEl(st.body));
+      prose);
     if (p.mode === 'sim' || p.mode === 'top') sec.append(this.figureSlot(p, st));
     else if (p.mode === 'link') sec.append(this.linkNote(i, `Not drawn: ${p.reason}.`));
     else if (p.mode === 'live') sec.append(this.linkNote(i, 'A live explainer; it does not print.'));
+    for (const m of p.models) sec.append(this.modelSlot(m, i));
+    for (const t of tries) sec.append(h('p', { class: 'pd-note pd-onsite' }, h('b', null, 'On the site: '), rich('span', t.innerHTML)));
     for (const a of analogiesOf(c.id, st.title)) {
       const box = h('aside', { class: 'pd-aside' }, h('b', null, 'Analogy: '), h('b', null, a.title));
       if (a.figure) box.append(h('p', null, 'This analogy has a live figure; open the step on the site to see it.'));
@@ -166,6 +174,14 @@ export class PrintPage implements Page {
     return frag;
   }
 
+  private modelSlot(m: ModelFigure, step: number): HTMLElement {
+    const body = h('div', { class: 'pd-fig-body' }, h('span', { class: 'pd-wait' }, 'Waiting to be drawn…'));
+    const url = stepUrl(this.chapter.id, step);
+    const cap = h('figcaption', null, h('b', null, `${m.label}. `), m.title, '. The live model, to turn, cut open and take apart: ', h('a', { href: url }, url));
+    this.modelSlots.set(m.id, body);
+    return h('div', { class: 'pd-figwrap' }, h('figure', { class: 'pd-fig pd-fig-model' }, body, cap));
+  }
+
   private linkNote(step: number, text: string): HTMLElement {
     return h('p', { class: 'pd-note' }, `${text} Open this step on the site: `, h('a', { href: stepUrl(this.chapter.id, step) }, stepUrl(this.chapter.id, step)));
   }
@@ -174,20 +190,36 @@ export class PrintPage implements Page {
 
   private async build(): Promise<void> {
     const todo = this.plan.steps.filter((p) => p.mode === 'sim' || p.mode === 'top');
+    // every figure in reading order: a step's scene, then its models (one model at a time: each releases its WebGL context)
+    const jobs: ({ scene: StepPlan } | { model: ModelFigure; step: number })[] = this.plan.steps.flatMap((p) => [
+      ...(p.mode === 'sim' || p.mode === 'top' ? [{ scene: p }] : []),
+      ...p.models.map((model) => ({ model, step: p.step })),
+    ]);
+    const stop = () => this.cancelled || this.dead;
     try {
       if (todo.length) this.maker = new FigureMaker();
       let done = 0;
-      for (const p of todo) {
-        if (this.cancelled || this.dead) break;
-        this.progress(done, todo.length);
+      for (const job of jobs) {
+        if (stop()) break;
+        this.progress(done, jobs.length);
         await paint();
-        if (this.cancelled || this.dead) break;
-        const slot = this.slots.get(p.step)!;
-        try {
-          slot.replaceChildren(this.maker!.svg(p.scene!, p.mode === 'top'));
-          if (p.truth) slot.parentElement!.after(this.truthEl(p));
-        } catch (e) {
-          this.fail(p, e);
+        if (stop()) break;
+        if ('scene' in job) {
+          const p = job.scene, slot = this.slots.get(p.step)!;
+          try {
+            slot.replaceChildren(this.maker!.svg(p.scene!, p.mode === 'top'));
+            if (p.truth) slot.parentElement!.after(this.truthEl(p));
+          } catch (e) {
+            this.fail(p, e);
+          }
+        } else {
+          const slot = this.modelSlots.get(job.model.id)!;
+          try {
+            const { modelFigure } = await import('./printmodel');
+            slot.replaceChildren(await modelFigure(job.model.id, stop));
+          } catch (e) {
+            if (!stop()) slot.replaceChildren(this.linkNote(job.step, `This model could not be drawn (${e instanceof Error ? e.message : String(e)}).`));
+          }
         }
         done++;
         await nextTask();
@@ -196,6 +228,11 @@ export class PrintPage implements Page {
       for (const p of todo) {
         const slot = this.slots.get(p.step)!;
         if (!slot.querySelector('svg') && slot.querySelector('.pd-wait')) this.fail(p, null);
+      }
+      for (const job of jobs) {
+        if (!('model' in job)) continue;
+        const slot = this.modelSlots.get(job.model.id)!;
+        if (slot.querySelector('.pd-wait')) slot.replaceChildren(this.linkNote(job.step, 'This model was not drawn.'));
       }
     } finally {
       this.maker?.destroy();

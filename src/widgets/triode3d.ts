@@ -3,6 +3,7 @@
 // renderer (gl/studio.ts) as their own chunks, so a chapter that lists the step does not grow the main bundle.
 
 import type { Widget } from '../view/stage';
+import { whenAsked } from './modelshot';
 
 export function triodeCloseup(): Widget {
   const el = document.createElement('div');
@@ -11,14 +12,14 @@ export function triodeCloseup(): Widget {
   el.style.minHeight = '520px';
   el.textContent = 'Loading the triode…';
   let inner: Widget | null = null, dead = false;
-  import('./triode3dnext')
+  whenAsked(el, 'the triode', () => import('./triode3dnext')
     .then((m) => {
       if (dead) return;
       inner = m.triodeNextView();
       el.style.minHeight = '';
       el.replaceChildren(inner.el);
     })
-    .catch((e: unknown) => { if (!dead) el.textContent = `The triode close-up did not load (${String(e)}).`; });
+    .catch((e: unknown) => { if (!dead) el.textContent = `The triode close-up did not load (${String(e)}).`; }));
   return {
     el,
     update: () => inner?.update?.(),

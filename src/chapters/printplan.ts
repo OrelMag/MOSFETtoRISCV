@@ -7,6 +7,7 @@ import { evalOnce, forEachInput, inputBits, needsSwitchLevel, simulate } from '.
 import { hasFeedback } from '../sim/stats';
 import { type ComponentDef, inPorts, netlistOf, outPorts } from '../sim/types';
 import type { Scene } from '../view/stage';
+import { MODELS_3D } from '../widgets/models3dindex';
 import { chapterNo, type Chapter, type Quiz } from './types';
 
 /** A scene up to this many instances (flatten's own estimate) is simulated for its figure, as the stage does: tens of ms. */
@@ -19,9 +20,20 @@ export const TRUTH_MAX_IN = 4;
 /**
  * sim: the scene simulated at its initial inputs; top: a design too large to simulate, drawn at its top level only (the caption says so);
  * link: not drawn (too large even for that, or a transistor-level engine), a line with the step's address; live: a widget, a note and the
- * address; none: the step has no scene or widget of its own.
+ * address; model: a widget whose 3D model (widgets/models3dindex.ts) prints as a figure (StepPlan.models), the rest of it a note;
+ * none: the step has no scene or widget of its own. A step with a scene keeps its mode and gets its models' figures after it.
  */
-export type FigureMode = 'sim' | 'top' | 'link' | 'live' | 'none';
+export type FigureMode = 'sim' | 'top' | 'link' | 'live' | 'model' | 'none';
+
+/** A 3D model printed as a figure: the studio's picture at home, names on, in paper's look (ui/pages/printmodel.ts). */
+export interface ModelFigure {
+  /** The index entry (MODELS_3D id). */
+  id: string;
+  title: string;
+  figure: number;
+  /** "Figure 4.3". */
+  label: string;
+}
 
 export interface StepPlan {
   step: number;
@@ -36,6 +48,8 @@ export interface StepPlan {
   scene?: Scene;
   /** The scene is combinational with few inputs: a truth table goes under the figure. */
   truth: boolean;
+  /** The step's 3D models, each a figure of its own (after the scene's, when it has one). */
+  models: ModelFigure[];
 }
 
 export interface QuestionPlan {
@@ -119,7 +133,7 @@ export function planChapter(c: Chapter): ChapterPlan {
   let figures = 0;
   const ask = (step: number, quiz: Quiz) => questions.push({ n: questions.length + 1, step, quiz });
   c.steps.forEach((st, i) => {
-    const p: StepPlan = { step: i, mode: 'none', truth: false };
+    const p: StepPlan = { step: i, mode: 'none', truth: false, models: [] };
     if (st.scene) {
       try {
         const scene = st.scene();
@@ -139,6 +153,12 @@ export function planChapter(c: Chapter): ChapterPlan {
     } else if (st.widget) {
       p.mode = 'live';
       p.reason = 'a live explainer';
+    }
+    // the step's 3D models (the index names the steps that mount them), numbered after its scene's figure
+    for (const m of MODELS_3D) {
+      if (m.chapter !== c.id || m.step !== i) continue;
+      p.models.push({ id: m.id, title: m.title, figure: ++figures, label: `Figure ${figureNo(c, figures)}` });
+      if (p.mode === 'live') { p.mode = 'model'; p.reason = undefined; }
     }
     steps.push(p);
     if (st.challenge?.kind === 'quiz') ask(i, st.challenge);

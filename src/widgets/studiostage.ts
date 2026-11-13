@@ -24,6 +24,8 @@ import { settings } from '../ui/settings';
 import { framing, namesShown } from '../gl/kit/names';
 import { reducedMotion } from '../ui/motion';
 import { ZOOM_HOW, modelFrame } from './modelframe';
+import { printing, registerShot } from './modelshot';
+import { onPaper } from '../ui/paper';
 
 export interface StudioStageOptions {
   aria: string;
@@ -151,7 +153,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   const shownModel = (): Model3 => (defHidden ? { ...model, items: model.items.filter((it) => !((it.group && defHidden.has(it.group)) || (it.name && defHidden.has(it.name)))) } : model);
   const homeBox = () => (o.homeFrame ? boundsOfNamed(model, o.homeFrame) : boundsOf(shownModel()));
   // ---- names: the corner tag button, N, settings.modelNames ----
-  let namesOn = settings.modelNames;
+  // the print view's figures show the names whatever the setting (modelshot.ts printing)
+  let namesOn = printing.on || settings.modelNames;
   // a tag (the icon set is on the first-load path; this one lives with the only button that uses it)
   const tag = icon('plus', 16);
   tag.innerHTML = '<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>';
@@ -171,13 +174,13 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   });
   /** The switch moved: names, list and gutters follow; the canvas widens or narrows (home refits only if the view is home). */
   function applyNames(): void {
-    namesOn = settings.modelNames;
+    namesOn = printing.on || settings.modelNames;
     showNamesBtn();
     el.classList.toggle('st-nonames', !namesOn);
     layout();
     if (mode === 'flat') drawFlat(); else { placeLabels(); st?.invalidate(); }
   }
-  const frame = modelFrame({ stage: view, name: o.aria, renderer: () => (mode === 'gl' ? (st as unknown as Renderer) : null), root: () => el.closest<HTMLElement>('.m3d, .widget') ?? el });
+  const frame = modelFrame({ stage: view, name: o.aria, renderer: () => (mode === 'gl' ? (st as unknown as Renderer) : null), root: () => el.closest<HTMLElement>('.m3d, .widget') ?? el, image: () => composeImage() });
   frame.el.prepend(namesBtn);
   el.classList.toggle('st-nonames', !namesOn);
 
@@ -443,6 +446,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     cap.replaceChildren(h('b', null, `${beat + 1} / ${beats.length} · ${b.title}. `), b.text);
     if (beat === 0 && document.activeElement === prev) next.focus();
     prev.disabled = beat === 0;
+    prev.hidden = false;
     next.textContent = beat === beats.length - 1 ? 'Done' : 'Next ›';
     st?.setFocus(b.show ? new Set(b.show) : null);
     hiddenNow = b.hide ? new Set(b.hide) : defHidden;
@@ -494,10 +498,12 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     };
     tween = requestAnimationFrame(step);
   };
-  const endTour = () => { beat = -1; cap.replaceChildren(); next.textContent = 'Tour ›'; prev.disabled = true; st?.setFocus(null); hiddenNow = defHidden; st?.setHidden(defHidden); o.onBeat?.(-1); if (mode === 'flat') drawFlat(); };
+  const endTour = () => { beat = -1; cap.replaceChildren(); next.textContent = 'Tour ›'; if (document.activeElement === prev) next.focus(); prev.disabled = true; prev.hidden = true; st?.setFocus(null); hiddenNow = defHidden; st?.setHidden(defHidden); o.onBeat?.(-1); if (mode === 'flat') drawFlat(); };
   next.addEventListener('click', () => { if (beat === (model.beats ?? []).length - 1) endTour(); else goBeat(beat + 1); });
   prev.addEventListener('click', () => goBeat(beat - 1));
+  // Back only once the tour has started (greyed beside Tour it was a puzzle)
   prev.disabled = true;
+  prev.hidden = true;
   resetBtn.addEventListener('click', () => { st?.camera.reset(); st?.invalidate(); });
 
   // ---------------------------------------------------------------- the flat drawing
@@ -579,10 +585,97 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     if (dead) return;
     model = o.build(mode === 'flat' ? 'flat' : 'full');
     shape();
-    if (mode === 'flat') { drawFlat(); return; }
+    if (mode === 'flat') { drawFlat(); readyDone(); return; }
     st?.setModel(model, resolve);
     st?.setKnobs(knobs());
   };
+  // ---------------------------------------------------------------- the picture (Save image, the print view)
+
+  /** The canvas as drawn, on the stage's backdrop, with the names in the gutters, their leaders and the scale bar drawn on it. */
+  function composeImage(): HTMLCanvasElement | null {
+    if (mode !== 'gl' || !st) return null;
+    const c = canvas, out = document.createElement('canvas');
+    out.width = c.width; out.height = c.height;
+    const g = out.getContext('2d');
+    if (!g) return null;
+    const cr = c.getBoundingClientRect(), k = c.width / Math.max(1, cr.width);
+    const css = (rgb: RGB) => `rgb(${rgb.map((v) => Math.round(v * 255)).join(' ')})`;
+    const back = g.createRadialGradient(out.width / 2, out.height * 0.38, 0, out.width / 2, out.height * 0.38, Math.max(out.width, out.height) * 0.75);
+    back.addColorStop(0, css(colors.rgb('--st-back-1'))); back.addColorStop(1, css(colors.rgb('--st-back-2')));
+    g.fillStyle = back; g.fillRect(0, 0, out.width, out.height);
+    st.render(); // the drawing buffer is only valid in the task that drew it; the render also places the names
+    g.drawImage(c, 0, 0);
+    // leaders: the SVG's own lines and dots, in its coordinates (its origin is the canvas's)
+    for (const e of leaders.querySelectorAll<SVGElement>('polyline, circle')) {
+      const cs = getComputedStyle(e);
+      g.globalAlpha = Number(cs.opacity) || 1;
+      g.lineWidth = (parseFloat(cs.strokeWidth) || 1) * k;
+      g.strokeStyle = cs.stroke;
+      g.beginPath();
+      if (e.tagName === 'circle') {
+        g.arc(+e.getAttribute('cx')! * k, +e.getAttribute('cy')! * k, +e.getAttribute('r')! * k, 0, 2 * Math.PI);
+        g.fillStyle = cs.fill; g.fill(); g.stroke();
+      } else {
+        (e.getAttribute('points') ?? '').trim().split(/\s+/).forEach((p, i) => { const [x, y] = p.split(',').map(Number); if (i) g.lineTo(x * k, y * k); else g.moveTo(x * k, y * k); });
+        g.stroke();
+      }
+    }
+    // the names: from their own transforms (a label still easing would measure mid-way), aligned as their gutter aligns them
+    for (const gut of [gutL, gutR]) {
+      const gr = gut.getBoundingClientRect(), right = gut === gutL;
+      for (const lb of gut.querySelectorAll<HTMLElement>('.st-lbl')) {
+        if (lb.style.display === 'none') continue;
+        const cs = getComputedStyle(lb), y = Number(/translateY\(([-\d.]+)px\)/.exec(lb.style.transform)?.[1] ?? NaN);
+        if (!Number.isFinite(y)) continue;
+        const pad = parseFloat(cs.paddingLeft) || 0, mid = y + (parseFloat(cs.lineHeight) || 18) / 2;
+        g.globalAlpha = Number(cs.opacity) || 1;
+        g.font = `${cs.fontWeight} ${parseFloat(cs.fontSize) * k}px ${cs.fontFamily}`;
+        g.textBaseline = 'middle'; g.textAlign = right ? 'right' : 'left';
+        const x = right ? gr.right - cr.left - pad : gr.left - cr.left + pad;
+        // the halo the text-shadow gives it on screen
+        g.lineWidth = 3 * k; g.strokeStyle = css(colors.rgb('--st-back-1')); g.lineJoin = 'round';
+        g.strokeText(lb.textContent ?? '', x * k, mid * k, (gr.width - 2 * pad) * k);
+        g.fillStyle = cs.color;
+        g.fillText(lb.textContent ?? '', x * k, mid * k, (gr.width - 2 * pad) * k);
+      }
+    }
+    // the scale bar: its bracket and its length
+    if (o.scaleBar && scaleBar.style.display !== 'none') {
+      const bar = scaleBar.firstChild as HTMLElement, br = bar.getBoundingClientRect(), cs = getComputedStyle(scaleBar);
+      g.globalAlpha = 1; g.strokeStyle = cs.color; g.lineWidth = 2 * k;
+      const x0 = (br.left - cr.left + 1) * k, x1 = (br.right - cr.left - 1) * k, y0 = (br.top - cr.top) * k, y1 = (br.bottom - cr.top - 1) * k;
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x0, y1); g.lineTo(x1, y1); g.lineTo(x1, y0); g.stroke();
+      const lr = scaleLbl.getBoundingClientRect();
+      g.fillStyle = cs.color; g.font = `${cs.fontWeight} ${parseFloat(cs.fontSize) * k}px ${cs.fontFamily}`;
+      g.textBaseline = 'middle'; g.textAlign = 'left';
+      g.fillText(scaleLbl.textContent ?? '', (lr.left - cr.left) * k, (lr.top + lr.height / 2 - cr.top) * k);
+    }
+    g.globalAlpha = 1;
+    return out;
+  }
+  let readyDone = () => {};
+  const ready = new Promise<void>((r) => { readyDone = r; });
+  registerShot(view, {
+    ready: () => ready,
+    snapshot(paper) {
+      const draw = (): HTMLCanvasElement | SVGSVGElement | null => {
+        // paper: the colours read again under paper's attributes (the theme watcher puts the learner's back afterwards)
+        if (paper) { colors.invalidate(); lights(); refresh(); }
+        if (mode === 'flat') {
+          const svg = flat.cloneNode(true) as SVGSVGElement, own = flat.querySelectorAll('text'), copies = svg.querySelectorAll('text');
+          svg.style.display = '';
+          // the names take their colours from tokens: resolved now (under paper's look) and written in, so the copy keeps them anywhere
+          own.forEach((t, i) => {
+            const cs = getComputedStyle(t);
+            copies[i]?.setAttribute('style', `font-weight:${cs.fontWeight};font-size:${cs.fontSize};font-family:${cs.fontFamily};fill:${cs.fill};stroke:${cs.stroke};stroke-width:${cs.strokeWidth};paint-order:stroke`);
+          });
+          return svg;
+        }
+        return composeImage();
+      };
+      return paper ? onPaper(draw) : draw();
+    },
+  });
   const unwatch = watchTheme(() => { colors.invalidate(); lights(); refresh(); });
   // one setting for every model (the menu's "3D model names", another model's button): follow it live
   const unnames = settings.onChange(() => { if (settings.modelNames !== namesOn) applyNames(); });
@@ -601,6 +694,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
         onRender: () => {
           placeLabels();
           if (o.scaleBar) placeScale();
+          readyDone();
           const f = st!.last();
           stats.textContent = `${f.cpuMs.toFixed(1)} ms cpu${f.gpuMs !== null ? ` · ${f.gpuMs.toFixed(1)} ms gpu` : ''} · ${f.draws} draws · ${(f.tris / 1000).toFixed(0)}k tris · ${(f.px / 1e6).toFixed(2)} Mpx · ${f.tier}${f.shadowRedrawn ? ' · shadow' : ''}`;
         },

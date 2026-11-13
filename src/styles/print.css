@@ -44,6 +44,9 @@
 .pd-fig { margin: 0; break-inside: avoid; }
 .pd-fig-body { border: 1px solid var(--border); background: #fff; padding: 6px; text-align: center; }
 .pd-fig-body svg { display: block; width: 100%; height: auto; margin: 0 auto; }
+/* a 3D model's picture (ui/pages/printmodel.ts): the stage at home, names on, in paper's look */
+.pd-fig-body .pd-model { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+.pd-onsite { margin-top: 6px; }
 .pd-wait { color: var(--muted); font-size: 12px; }
 .pd-fig figcaption { font-size: 12px; color: var(--text-2); margin-top: 4px; }
 .pd-truth { border-collapse: collapse; margin: 8px 0; font: 500 13px var(--font-mono); break-inside: avoid; }
