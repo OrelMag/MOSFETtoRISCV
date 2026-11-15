@@ -700,7 +700,9 @@ export class Lens {
     // two fingers are the canvas's pinch (the constructor's), wherever they land: this pan is one finger's, its own
     let endPan: ((u: PointerEvent | true) => void) | null = null, panId = -1, pinched = false;
     el.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0 || (e.target as Element).closest('.inst')) return;
+      // a press on an inner part pans too: left to the inside's own view it would move only the inside's camera, and its stubs and the
+      // box's ports (which stay with the box) would pull apart; the click that follows still selects the part
+      if (e.button !== 0) return;
       e.stopPropagation();
       endPan?.(true);
       let x = e.clientX, y = e.clientY;
