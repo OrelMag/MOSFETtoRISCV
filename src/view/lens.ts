@@ -176,7 +176,7 @@ export class Lens {
     };
     v.el.addEventListener('wheel', wheel, { passive: true });
     this.off.push(() => v.el.removeEventListener('wheel', wheel));
-    v.onCamera(() => this.schedule());
+    v.onCamera(() => { this.follow(); this.schedule(); });
     this.off.push(v.onPinch((mid, done, k) => this.pinched(mid, done, k)));
     // the hint: hovering a closed block that can open says how much more zoom it needs
     const move = (e: PointerEvent) => {
@@ -278,6 +278,17 @@ export class Lens {
     });
     this.levelChanged(host.ctx()?.path ?? []);
     this.started = true;
+  }
+
+  /** The camera moved: every shown inside is laid on its box now, in the same frame as the board (the rule waits for the next
+   *  one, which left the inside a frame behind its box while panning: its stubs and the box's port names pulled apart). */
+  private follow(): void {
+    const c = this.canvasRect();
+    for (const b of this.boxes.values()) {
+      if (!b.shown || !b.view) continue;
+      const r = this.boxPx(b.name, c);
+      if (r) this.place(b, r);
+    }
   }
 
   /** Torn down (the setting turned off, the stage gone). */
