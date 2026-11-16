@@ -11,7 +11,8 @@
 import type { Sim } from '../sim/sim';
 import { netlistOf } from '../sim/types';
 import { h, hintBadge, icon, s } from '../ui/dom';
-import { isMenuKey } from '../ui/menu';
+import { isMenuKey, type MenuEntry } from '../ui/menu';
+import { isConstantDef } from '../sim/constant';
 import { settings } from '../ui/settings';
 import type { Lens } from '../view/lens';
 import type { Rect } from '../view/lensplan';
@@ -197,6 +198,7 @@ class InsideView {
         const def = c ? this.ctx?.node.children?.get(c)?.def : this.ctx?.def;
         return def ? { def, host: explainHostOn(this.ed, this.gated() ? null : (at) => this.inspectPart(c, at)) } : null;
       },
+      insideRows: (c) => this.insideRows(c),
     });
     this.view.radix = ed.view.radix;
     this.view.pickable = true;
@@ -209,25 +211,35 @@ class InsideView {
 
   // ---- the zoom lens (view/lens.ts), as on the stage ------------------------------------------
 
-  /** Load the lens while Open blocks as you zoom is on; off, it is torn down and nothing of it runs. */
+  /** The setting the lens was built for: a change builds it again (its blocks opened from the menu let go). */
+  private lensAuto = settings.zoomOpen;
+  /** The menu's View inside asked for the lens while the setting is off: loaded until the setting changes. */
+  private lensManual = false;
+  /** A View inside waiting for the lens's chunk: the block, and the level it was asked on. */
+  private lensPending: { name: string; at: string } | null = null;
+
+  /** Load the lens while Open blocks as you zoom is on, or once a block was opened from the menu; else nothing of it runs. */
   private syncLens(): void {
-    if (!settings.zoomOpen) {
+    if (settings.zoomOpen !== this.lensAuto) {
+      this.lensAuto = settings.zoomOpen;
+      this.lensManual = false;
       this.lens?.dispose();
       this.lens = null;
       this.showCue(null);
-      return;
     }
+    if (!settings.zoomOpen && !this.lensManual) return;
     if (this.lens || this.lensLoading) return;
     this.lensLoading = true;
     void import('../view/lens').then(({ Lens }) => {
       this.lensLoading = false;
-      if (!settings.zoomOpen || this.lens || !this.el.isConnected) return;
+      if ((!settings.zoomOpen && !this.lensManual) || this.lens || !this.el.isConnected) return;
       this.lens = new Lens({
+        auto: settings.zoomOpen,
         view: this.view,
         canvas: this.canvas,
         ctx: () => this.ctx,
         covers: () => this.covers(),
-        allowed: () => settings.zoomOpen && !this.leaf && !(this.sim instanceof NmosSim),
+        allowed: () => this.insideAllowed(),
         // the out-of-order core's levels are too large for one task yet (DESIGN.md phase 2f): the core, or a level in it
         tooLarge: (ctx, name) => {
           const c = ctx.node.children?.get(name);
@@ -261,7 +273,32 @@ class InsideView {
         cue: (p) => this.showCue(p),
         say: (t) => this.ed.announce(t),
       });
+      const p = this.lensPending;
+      this.lensPending = null;
+      if (p && p.at === (this.ctx?.path.join('.') ?? '')) this.lens.setPin(p.name, true);
     });
+  }
+
+  /** May a block's inside be drawn in its box here (not on a leaf's widget, an NMOS level)? */
+  private insideAllowed(): boolean {
+    return !this.leaf && !(this.sim instanceof NmosSim);
+  }
+
+  /** The part menu's View inside / Hide inside (under Look inside), for a block with an inside. */
+  private insideRows(name: string | null): MenuEntry[] {
+    const def = name ? this.ctx?.node.children?.get(name)?.def : null;
+    if (!name || !def || isConstantDef(def) || !this.ctx?.canOpen(name) || !this.insideAllowed()) return [];
+    return this.lens?.insideOpen(name)
+      ? [{ label: 'Hide inside', hint: 'Back to the closed block', run: () => this.lens?.setPin(name, false) }]
+      : [{ label: 'View inside', hint: 'Its inside drawn in the block, live', run: () => this.viewInside(name) }];
+  }
+
+  /** View inside: drawn in its box now, loading the lens first when Open blocks as you zoom is off. */
+  private viewInside(name: string): void {
+    if (this.lens) return void this.lens.setPin(name, true);
+    this.lensManual = true;
+    this.lensPending = { name, at: this.ctx?.path.join('.') ?? '' };
+    this.syncLens();
   }
 
   /**
