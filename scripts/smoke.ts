@@ -1102,6 +1102,86 @@ const lensPanDrive = (part: string) => `(async () => {
 })()`;
 
 /**
+ * The stubs stay on the box's ports whatever pans the stage: each stub's first point, on screen, measured against the box's own
+ * outline after a drag on the board, a drag on the inside's empty space, a drag from an inner part, a horizontal / vertical
+ * scroll (a trackpad's two-finger pan) and the arrow keys.
+ */
+const lensAlignDrive = (part: string) => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const svg = document.querySelector('.canvas > svg.schematic');
+  const g = () => svg?.querySelector('[data-inst="${part}"]');
+  if (!svg || !g()) return ['no ${part} on the stage'];
+  const wheelOn = (t, dy, dx = 0, mods = {}) => { const r = g().getBoundingClientRect(); t.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, deltaX: dx, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true, ...mods })); };
+  const hash = location.hash;
+  for (let k = 0; k < 60 && !g().classList.contains('inside-on') && location.hash === hash; k++) { wheelOn(svg, -100); await wait(450); }
+  if (!g().classList.contains('inside-on')) return ['${part} never opened'];
+  await wait(600);
+  const el = document.querySelector('.lens-layer .inside.on[data-inst="${part}"]');
+  const inner = el?.querySelector('svg.schematic');
+  if (!el || !inner) return ['no drawn inside'];
+  // each stub's first point on screen, as a fraction of the box's outline (the body's own rect)
+  const ends = () => {
+    const m = inner.getScreenCTM(), body = (g().querySelector('.sym-box, .sym-body') ?? g()).getBoundingClientRect();
+    return [...inner.querySelectorAll('.inside-stubs path')].map((p) => {
+      const s = p.getPointAtLength(0), q = new DOMPoint(s.x, s.y).matrixTransform(m);
+      return [(q.x - body.x) / body.width, (q.y - body.y) / body.height, q.x - body.x, q.y - body.y];
+    });
+  };
+  const e0 = ends();
+  if (!e0.length) return ['the opened ${part} has no stubs'];
+  const off = (e) => e.some(([fx, fy]) => fx < -0.02 || fx > 1.02 || fy < -0.02 || fy > 1.02);
+  const bad = [];
+  if (off(e0)) bad.push('before any pan a stub starts off the box edge: ' + JSON.stringify(e0.map((v) => v.slice(0, 2).map((n) => n.toFixed(3)))));
+  let was = g().getBoundingClientRect();
+  const moves = [];
+  const check = async (what) => {
+    await wait(80); await frames();
+    const now = g().getBoundingClientRect();
+    moves.push(what + ' ' + Math.round(now.x - was.x) + ',' + Math.round(now.y - was.y) + ' w' + Math.round(now.width));
+    was = now;
+    const e = ends();
+    if (!g().classList.contains('inside-on')) return void bad.push(what + ': the box closed');
+    const body = (g().querySelector('.sym-box, .sym-body') ?? g()).getBoundingClientRect();
+    // in screen px at the current zoom (a scroll may zoom): where each stub starts against where it started on the box
+    const drift = Math.max(...e.map((v, i) => Math.hypot((v[0] - e0[i][0]) * body.width, (v[1] - e0[i][1]) * body.height)));
+    if (drift > 2) bad.push(what + ': stubs moved ' + drift.toFixed(1) + ' px off the box ports');
+  };
+  const drag = async (target, x, y, id) => {
+    // synthetic pointers have no capture to take: the board's pan asks for it
+    for (const k of ['setPointerCapture', 'releasePointerCapture']) Element.prototype[k] = function () {};
+    const ev = (type, d) => new PointerEvent(type, { pointerId: id, pointerType: 'mouse', button: 0, buttons: 1, clientX: x + d, clientY: y + d / 2, bubbles: true, cancelable: true, isPrimary: true });
+    target.dispatchEvent(ev('pointerdown', 0));
+    for (const d of [10, 30, 60]) { target.dispatchEvent(ev('pointermove', d)); window.dispatchEvent(ev('pointermove', d)); await wait(30); }
+    target.dispatchEvent(ev('pointerup', 60)); window.dispatchEvent(ev('pointerup', 60));
+  };
+  // the board: a point of the stage's svg off every part
+  const c = svg.getBoundingClientRect();
+  let bx = 0, by = 0;
+  for (let i = 0; i < 400 && !bx; i++) {
+    const x = c.x + 10 + Math.random() * (c.width - 20), y = c.y + 10 + Math.random() * (c.height - 20), t = document.elementFromPoint(x, y);
+    if (t && svg.contains(t) && !t.closest('g.inst') && !t.closest('[data-net]') && !el.contains(t)) { bx = x; by = y; }
+  }
+  if (bx) { await drag(document.elementFromPoint(bx, by), bx, by, 11); await check('drag on the board'); } else bad.push('no empty board to drag');
+  const grid = inner.querySelector('.grid-bg');
+  if (grid) {
+    const r = el.getBoundingClientRect();
+    let hit = null;
+    for (let i = 0; i < 200 && !hit; i++) { const x = r.x + 3 + Math.random() * (r.width - 6), y = r.y + 3 + Math.random() * (r.height - 6), t = document.elementFromPoint(x, y); if (t === grid) hit = [x, y]; }
+    if (hit) { await drag(grid, hit[0], hit[1], 12); await check('drag on the inside empty space'); }
+  }
+  const p0 = inner.querySelector('g.inst');
+  if (p0) { const r = p0.getBoundingClientRect(); await drag(p0, r.x + r.width / 2, r.y + r.height / 2, 13); await check('drag from an inner part'); }
+  wheelOn(el, 0, 40); await check('horizontal scroll over the inside');
+  wheelOn(svg, 0, 40); await check('horizontal scroll over the board');
+  wheelOn(svg, 30, 0, { shiftKey: true }); await check('shift-scroll over the board');
+  for (const key of ['ArrowLeft', 'ArrowUp']) { svg.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })); document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })); }
+  await check('arrow keys');
+  if (window.__lensMoves) bad.push('moves: ' + moves.join('; '));
+  return bad;
+})()`;
+
+/**
  * An opened gate (view/lens.ts, lens.css): with Opened blocks without colour its body takes the board's colour (--canvas), and
  * the gate's own working-gates drawing (.cmos) is hidden, so its inside is not drawn twice. Closed, the body keeps the gate's blue.
  */
@@ -1767,6 +1847,7 @@ function routes(): Route[] {
   add('#/c/pipeline/1', lensOn('dark'), ' (lens hone, pipeline register FD, dark)', undefined, honeDrive('FD'));
   add('#/c/ooo/11', lensOn('dark'), ' (lens hone, out of order, dark)', undefined, honeDrive('div'));
   add('#/c/cpu/0', lensOn('dark'), ' (lens pan from an inner part, alu, dark)', undefined, lensPanDrive('alu'));
+  for (const part of ['alu', 'npc']) add('#/c/cpu/0', lensOn('dark'), ` (lens stubs stay on the ports, ${part}, dark)`, undefined, lensAlignDrive(part));
   add('#/workbench/zero8', lensOn('dark'), ' (lens gate opened, or, dark)', undefined, lensGateDrive('or'));
   // View options ▸ Opened blocks without colour: the opened alu on the board's colour, closed boxes keep theirs; the dark board
   // and the light canvas; off, the opened alu keeps its hue
