@@ -1090,11 +1090,42 @@ const lensPanDrive = (part: string) => `(async () => {
   part0.dispatchEvent(ev('pointerdown', 0, 0));
   for (const d of [10, 30, 60]) { window.dispatchEvent(ev('pointermove', d, d / 2)); part0.dispatchEvent(ev('pointermove', d, d / 2)); await wait(40); }
   window.dispatchEvent(ev('pointerup', 60, 30));
+  // the click the browser sends on lifting over the part it was pressed on must not select it (a pan, not a tap)
+  part0.dispatchEvent(new MouseEvent('click', { clientX: x + 60, clientY: y + 30, bubbles: true, cancelable: true }));
   await wait(300);
   const bad = [];
+  if (inner.querySelector('g.inst.selected')) bad.push('a drag-pan from an inner part selected it');
   if (vb() !== before) bad.push('a drag from an inner part moved the inside own view: ' + before + ' to ' + vb());
   const now = el.getBoundingClientRect();
   if (Math.abs(now.x - at.x) + Math.abs(now.y - at.y) < 20) bad.push('the drag did not pan the stage (the inside stayed at ' + Math.round(now.x) + ',' + Math.round(now.y) + ')');
+  return bad;
+})()`;
+
+/**
+ * An opened gate (view/lens.ts, lens.css): with Opened blocks without colour its body takes the board's colour (--canvas), and
+ * the gate's own working-gates drawing (.cmos) is hidden, so its inside is not drawn twice. Closed, the body keeps the gate's blue.
+ */
+const lensGateDrive = (part: string) => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const svg = document.querySelector('.canvas > svg.schematic');
+  const g = () => svg?.querySelector('[data-inst="${part}"]');
+  if (!svg || !g()) return ['no ${part} on the stage'];
+  const ctx = document.createElement('canvas').getContext('2d');
+  const norm = (c) => { ctx.fillStyle = '#010203'; ctx.fillStyle = c; return ctx.fillStyle; };
+  const board = norm(getComputedStyle(svg).getPropertyValue('--canvas').trim());
+  const body = () => g().querySelector('.sym > g > .sym-body, .sym-body');
+  const closed = norm(getComputedStyle(body()).fill);
+  if (closed === board) return ['the closed gate is already board-coloured'];
+  const wheel = (dy) => { const r = g().getBoundingClientRect(); svg.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); };
+  const hash = location.hash;
+  for (let k = 0; k < 60 && !g().classList.contains('inside-on') && location.hash === hash; k++) { wheel(-100); await wait(450); }
+  if (!g().classList.contains('inside-on')) return ['${part} never opened'];
+  const t = performance.now() + 10000;
+  while (norm(getComputedStyle(body()).fill) !== board && performance.now() < t) await wait(50);
+  const bad = [];
+  const open = norm(getComputedStyle(body()).fill);
+  if (open !== board) bad.push('the opened gate keeps ' + open + ', not the board ' + board);
+  for (const c of g().querySelectorAll('.cmos')) if (getComputedStyle(c).display !== 'none') bad.push('the gate own working-gates drawing shows under its inside');
   return bad;
 })()`;
 
@@ -1736,6 +1767,7 @@ function routes(): Route[] {
   add('#/c/pipeline/1', lensOn('dark'), ' (lens hone, pipeline register FD, dark)', undefined, honeDrive('FD'));
   add('#/c/ooo/11', lensOn('dark'), ' (lens hone, out of order, dark)', undefined, honeDrive('div'));
   add('#/c/cpu/0', lensOn('dark'), ' (lens pan from an inner part, alu, dark)', undefined, lensPanDrive('alu'));
+  add('#/workbench/zero8', lensOn('dark'), ' (lens gate opened, or, dark)', undefined, lensGateDrive('or'));
   // View options ▸ Opened blocks without colour: the opened alu on the board's colour, closed boxes keep theirs; the dark board
   // and the light canvas; off, the opened alu keeps its hue
   const plainOn = (theme: 'light' | 'dark', board: boolean, lensPlain: boolean) =>

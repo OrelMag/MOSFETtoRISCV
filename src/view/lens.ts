@@ -722,7 +722,14 @@ export class Lens {
         panId = -1;
         // a press on a wire that did not pan is a click on it (Why? traces it, else it is selected); a cancel is not
         if (u === true || u.type === 'pointercancel') return;
-        if (wire && (Math.abs(x - x0) + Math.abs(y - y0)) / (this.unitPx() || 1) <= TAP_SLOP) this.wireTap(b, Number(wire.getAttribute('data-net')));
+        const slop = (Math.abs(x - x0) + Math.abs(y - y0)) / (this.unitPx() || 1) <= TAP_SLOP;
+        if (wire && slop) this.wireTap(b, Number(wire.getAttribute('data-net')));
+        // a drag that started on a part is a pan: the click the browser sends on lifting over it must not select it
+        if (!slop && (e.target as Element).closest('.inst')) {
+          const eat = (c: Event) => { c.stopPropagation(); c.preventDefault(); };
+          window.addEventListener('click', eat, { capture: true, once: true });
+          setTimeout(() => window.removeEventListener('click', eat, { capture: true }), 400);
+        }
       };
       endPan = up;
       panId = id;
