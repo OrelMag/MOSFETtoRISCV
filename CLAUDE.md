@@ -1937,6 +1937,10 @@ get approval. Small fixes and additions inside an existing screen don't need one
      stage), and then on a runner: `gh workflow run gate.yml --ref <branch>`, not on this machine, where full suites crash under
      several sessions' load. All must pass; report failures instead of merging. The deploy still runs the full tests and smoke
      before anything goes live, so a miss stops the deploy: fix forward.
+     **No blind reruns.** After a failed gate, rerun only what the fix can affect: the failed tests, `vitest related` on the fix's
+     files, and any step the failure cut short (a smoke cancelled when the test job failed). Do not re-gate the whole deck for a
+     small fix to an otherwise green run: the deploy's full tests and smoke are the safety net, and "merge when green" holds once
+     the targeted rerun passes. A fix in shared code may justify a re-gate; say why.
   3. For visual changes, check `npm run dev` in light and dark themes.
 - **Merge with `--no-ff`** so every feature stays a visible merge commit, from the branch's worktree
   (never the shared checkout): `git checkout --detach origin/main && git merge --no-ff <branch>`, then
