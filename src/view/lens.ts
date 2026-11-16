@@ -132,6 +132,8 @@ interface Box {
 
 export class Lens {
   private boxes = new Map<string, Box>();
+  /** place() is setting an inside's camera: its camera listener lets that one through. */
+  private placing = false;
   /** The level the boxes belong to (path key). */
   private levelKey = '';
   private focus: [number, number] | null = null;
@@ -672,6 +674,13 @@ export class Lens {
     const view = new SchematicView(el, events);
     view.trace = !!this.host.events;
     view.show(child, false);
+    // the inside's camera is the box's, never its own: whatever moves it (a press the pan above does not take, a resize, a key)
+    // is undone at once, or its stubs and the box's ports pull apart
+    view.onCamera(() => {
+      if (this.placing || !b.shown || b.view !== view) return;
+      const r = this.boxPx(b.name);
+      if (r) this.place(b, r);
+    });
     b.ctx = child;
     b.view = view;
     b.el = el;
@@ -701,9 +710,11 @@ export class Lens {
     let endPan: ((u: PointerEvent | true) => void) | null = null, panId = -1, pinched = false;
     el.addEventListener('pointerdown', (e) => {
       // a press on an inner part pans too: left to the inside's own view it would move only the inside's camera, and its stubs and the
-      // box's ports (which stay with the box) would pull apart; the click that follows still selects the part
-      if (e.button !== 0) return;
+      // box's ports (which stay with the box) would pull apart; the click that follows still selects the part. The middle button
+      // pans too (the inside's own pan takes any button); the right one is the menu's
+      if (e.button !== 0 && e.button !== 1) return;
       e.stopPropagation();
+      if (e.button === 1) e.preventDefault(); // no autoscroll
       endPan?.(true);
       let x = e.clientX, y = e.clientY;
       const x0 = x, y0 = y, wire = (e.target as Element).closest('[data-net]'), id = e.pointerId;
@@ -723,7 +734,7 @@ export class Lens {
         // a press on a wire that did not pan is a click on it (Why? traces it, else it is selected); a cancel is not
         if (u === true || u.type === 'pointercancel') return;
         const slop = (Math.abs(x - x0) + Math.abs(y - y0)) / (this.unitPx() || 1) <= TAP_SLOP;
-        if (wire && slop) this.wireTap(b, Number(wire.getAttribute('data-net')));
+        if (wire && slop && e.button === 0) this.wireTap(b, Number(wire.getAttribute('data-net')));
         // a drag that started on a part is a pan: the click the browser sends on lifting over it must not select it
         if (!slop && (e.target as Element).closest('.inst')) {
           const eat = (c: Event) => { c.stopPropagation(); c.preventDefault(); };
@@ -822,7 +833,12 @@ export class Lens {
     const f = fitInside(box, e, b.band);
     if (!(f.k > 0) || !(r.w > 0)) return;
     // the inner point e.x sits at the fit's left edge: (f.x − box.x) outer units into the box, f.k outer units per inner unit
-    view.setView({ x: e.x - (f.x - box.x) / f.k, y: e.y - (f.y - box.y) / f.k, w: box.w / f.k, h: box.h / f.k }, { w: r.w, h: r.h });
+    this.placing = true;
+    try {
+      view.setView({ x: e.x - (f.x - box.x) / f.k, y: e.y - (f.y - box.y) / f.k, w: box.w / f.k, h: box.h / f.k }, { w: r.w, h: r.h });
+    } finally {
+      this.placing = false;
+    }
     this.paintRuns(b, (r.w / box.w) * f.k);
   }
 

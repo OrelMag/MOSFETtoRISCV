@@ -1147,10 +1147,10 @@ const lensAlignDrive = (part: string) => `(async () => {
     const drift = Math.max(...e.map((v, i) => Math.hypot((v[0] - e0[i][0]) * body.width, (v[1] - e0[i][1]) * body.height)));
     if (drift > 2) bad.push(what + ': stubs moved ' + drift.toFixed(1) + ' px off the box ports');
   };
-  const drag = async (target, x, y, id) => {
+  const drag = async (target, x, y, id, button = 0) => {
     // synthetic pointers have no capture to take: the board's pan asks for it
     for (const k of ['setPointerCapture', 'releasePointerCapture']) Element.prototype[k] = function () {};
-    const ev = (type, d) => new PointerEvent(type, { pointerId: id, pointerType: 'mouse', button: 0, buttons: 1, clientX: x + d, clientY: y + d / 2, bubbles: true, cancelable: true, isPrimary: true });
+    const ev = (type, d) => new PointerEvent(type, { pointerId: id, pointerType: 'mouse', button, buttons: button === 1 ? 4 : 1, clientX: x + d, clientY: y + d / 2, bubbles: true, cancelable: true, isPrimary: true });
     target.dispatchEvent(ev('pointerdown', 0));
     for (const d of [10, 30, 60]) { target.dispatchEvent(ev('pointermove', d)); window.dispatchEvent(ev('pointermove', d)); await wait(30); }
     target.dispatchEvent(ev('pointerup', 60)); window.dispatchEvent(ev('pointerup', 60));
@@ -1167,8 +1167,8 @@ const lensAlignDrive = (part: string) => `(async () => {
   if (grid) {
     const r = el.getBoundingClientRect();
     let hit = null;
-    for (let i = 0; i < 200 && !hit; i++) { const x = r.x + 3 + Math.random() * (r.width - 6), y = r.y + 3 + Math.random() * (r.height - 6), t = document.elementFromPoint(x, y); if (t === grid) hit = [x, y]; }
-    if (hit) { await drag(grid, hit[0], hit[1], 12); await check('drag on the inside empty space'); }
+    for (let i = 0; i < 2000 && !hit; i++) { const x = r.x + 3 + Math.random() * (r.width - 6), y = r.y + 3 + Math.random() * (r.height - 6), t = document.elementFromPoint(x, y); if (t && inner.contains(t) && t.classList.contains('grid-bg')) hit = [x, y, t]; }
+    if (hit) { await drag(hit[2], hit[0], hit[1], 12); await check('drag on the inside empty space'); await drag(hit[2], hit[0], hit[1], 14, 1); await check('middle-button drag on the inside'); } else bad.push('no empty space inside to drag');
   }
   const p0 = inner.querySelector('g.inst');
   if (p0) { const r = p0.getBoundingClientRect(); await drag(p0, r.x + r.width / 2, r.y + r.height / 2, 13); await check('drag from an inner part'); }
@@ -1178,6 +1178,8 @@ const lensAlignDrive = (part: string) => `(async () => {
   for (const key of ['ArrowLeft', 'ArrowUp']) { svg.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })); document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })); }
   await check('arrow keys');
   if (window.__lensMoves) bad.push('moves: ' + moves.join('; '));
+  document.querySelector('.stage [aria-label="Fit to screen"]')?.click();
+  await wait(300);
   return bad;
 })()`;
 
