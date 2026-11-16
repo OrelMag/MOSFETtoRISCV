@@ -18,6 +18,7 @@ import { cueWords, progress, ZoomOutGate } from './zoomout';
 import type { OverlayResult } from './overlays';
 import { SchematicView, type SchematicEvents } from './schematic';
 import type { MenuEntry } from '../ui/menu';
+import { HOLD_QUIET_MS, HoldPress } from '../ui/holdpress';
 import { netlistOf, type ComponentDef } from '../sim/types';
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -417,7 +418,11 @@ export class Lens {
       if (open) this.host.say(`${name}: its inside cannot be drawn in its box here; double-click to step in`);
       return false;
     }
-    this.pins.set(this.pinKey(name), open);
+    // with the setting on, View inside undoes a Hide: opened now, then the zoom's like its neighbours (a zoom out closes it)
+    if (open && this.auto) {
+      this.pins.delete(this.pinKey(name));
+      b.want = true;
+    } else this.pins.set(this.pinKey(name), open);
     if (open) {
       // built first: the build queue starts nearest the focus
       const r = this.boxPx(name), c = this.canvasRect();
@@ -806,9 +811,28 @@ export class Lens {
       window.addEventListener('pointerup', up);
       window.addEventListener('pointercancel', up);
     }, { capture: true });
+    // A held finger is the right-click on a touch screen (ui/holdpress.ts): the press above never reaches the inside's own view,
+    // whose hold would open its menu, so the hold is made here and its menu opened on what the finger is on (Hide inside…)
+    let holdOn: Element | null = null;
+    const hold = new HoldPress((x, y) => {
+      const t = holdOn;
+      holdOn = null;
+      if (!t || !b.shown) return;
+      // the lift's click on the inside (it would select what is under the finger), and the contextmenu Android sends for the
+      // same hold, are dropped as installHold drops them: on the inside only, so the menu's own rows still take a tap
+      const until = performance.now() + HOLD_QUIET_MS;
+      const eat = (c: Event) => { if (performance.now() < until && c !== mine) { c.stopPropagation(); c.preventDefault(); } };
+      for (const k of ['click', 'contextmenu']) el.addEventListener(k, eat, { capture: true });
+      setTimeout(() => { for (const k of ['click', 'contextmenu']) el.removeEventListener(k, eat, { capture: true }); }, HOLD_QUIET_MS);
+      const mine = new MouseEvent('contextmenu', { clientX: x, clientY: y, button: 2, bubbles: true, cancelable: true });
+      t.dispatchEvent(mine);
+    });
+    el.addEventListener('pointermove', (e) => { if (e.pointerType === 'touch') hold.move(e.pointerId, e.clientX, e.clientY); }, { capture: true });
+    for (const k of ['pointerup', 'pointercancel'] as const) el.addEventListener(k, (e) => { if (e.pointerType === 'touch') hold.end(e.pointerId); }, { capture: true });
     b.cancelTouch = (id) => {
       if (panId === id) endPan?.(true);
       pinched = true;
+      hold.cancel();
     };
     // a double-click off the inner parts (the letterbox, a wire) steps into the box itself
     el.addEventListener('dblclick', (e) => {
@@ -824,7 +848,12 @@ export class Lens {
     let down: { x: number; y: number; t: number; id: number } | null = null;
     el.addEventListener('pointerdown', (e) => {
       if (e.pointerType !== 'touch') return;
-      if (!e.isPrimary) return void (down = null);
+      if (!e.isPrimary) {
+        hold.cancel();
+        return void (down = null);
+      }
+      holdOn = e.target as Element;
+      hold.start(e.pointerId, e.clientX, e.clientY);
       pinched = false;
       down = { x: e.clientX, y: e.clientY, t: e.timeStamp, id: e.pointerId };
     }, { capture: true });

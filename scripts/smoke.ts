@@ -1107,11 +1107,25 @@ const lensPanDrive = (part: string) => `(async () => {
  * inside of it from its inside's empty ground closes it; a double-click drill then shows no "zoom out to go up" cue. `on`: zoomed
  * open, Hide inside from its inside closes it and further zooming leaves it closed; View inside on the block opens it again.
  */
-const lensMenuDrive = (part: string, mode: 'on' | 'off') => `(async () => {
+const lensMenuDrive = (part: string, mode: 'on' | 'off' | 'hold', lookInside?: string) => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  const svg = document.querySelector('.canvas > svg.schematic');
+  // the sandbox: Look inside a placed part first (editor/inside.ts), the same lens over its canvas
+  const sandbox = ${JSON.stringify(lookInside ?? null)};
+  if (sandbox) {
+    let pg;
+    for (let i = 0; i < 40 && !(pg = document.querySelector('svg.ed-svg [data-part="' + sandbox + '"]')); i++) await wait(250);
+    if (!pg) return ['no ' + sandbox + ' in the sandbox'];
+    const pr = pg.getBoundingClientRect();
+    pg.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: pr.x + pr.width / 2, clientY: pr.y + pr.height / 2 }));
+    for (let i = 0; i < 40 && !document.querySelector('.sb-inside-canvas > svg.schematic [data-inst="${part}"]'); i++) await wait(250);
+    await wait(300);
+  }
+  const svg = document.querySelector(sandbox ? '.sb-inside-canvas > svg.schematic' : '.canvas > svg.schematic');
   const g = () => svg?.querySelector('g.inst[data-inst="${part}"]');
   if (!svg || !g()) return ['no ${part} on the stage'];
+  // on a phone the stage is below the chapter's text
+  document.querySelector('.stage .canvas')?.scrollIntoView({ block: 'center', behavior: 'instant' });
+  await wait(300);
   const bad = [], hash = location.hash;
   const open = () => g().classList.contains('inside-on') && !!document.querySelector('.lens-layer .inside.on[data-inst="${part}"]');
   const until = async (f, ms = 4000) => { for (let t = 0; t < ms && !f(); t += 100) await wait(100); return f(); };
@@ -1119,8 +1133,14 @@ const lensMenuDrive = (part: string, mode: 'on' | 'off') => `(async () => {
   const wheel = (dy, n) => { for (let k = 0; k < n; k++) { const [x, y] = centre(g()); svg.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: x, clientY: y, bubbles: true, cancelable: true })); } };
   const rows = () => [...document.querySelectorAll('.ctx-menu [role^=menuitem]')];
   const row = (label) => rows().find((r) => (r.querySelector('.ctx-l')?.firstChild?.textContent ?? '').trim() === label);
+  // a right-click; 'hold': a held finger on a touch screen (ui/holdpress.ts), what a right-click is there
   const menuAt = async (target, x, y) => {
-    target.dispatchEvent(new MouseEvent('contextmenu', { clientX: x, clientY: y, button: 2, bubbles: true, cancelable: true }));
+    if (${mode === 'hold'}) {
+      const pe = (type) => new PointerEvent(type, { pointerId: 41, pointerType: 'touch', isPrimary: true, button: type === 'pointermove' ? -1 : 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y, bubbles: true, cancelable: true });
+      target.dispatchEvent(pe('pointerdown'));
+      await wait(750);
+      target.dispatchEvent(pe('pointerup'));
+    } else target.dispatchEvent(new MouseEvent('contextmenu', { clientX: x, clientY: y, button: 2, bubbles: true, cancelable: true }));
     await until(() => rows().length > 0, 3000);
   };
   const pick = async (label) => {
@@ -1135,15 +1155,21 @@ const lensMenuDrive = (part: string, mode: 'on' | 'off') => `(async () => {
     const el = document.querySelector('.lens-layer .inside.on[data-inst="${part}"]');
     const inner = el?.querySelector('svg.schematic');
     if (!inner) return bad.push('no drawn inside to right-click'), false;
-    const r = el.getBoundingClientRect();
-    for (const [fx, fy] of [[0.02, 0.02], [0.98, 0.02], [0.02, 0.98], [0.98, 0.98], [0.5, 0.01]]) {
+    // the part of it on screen (on a phone an opened box is wider than the screen)
+    const e0 = el.getBoundingClientRect(), cv = svg.getBoundingClientRect();
+    const x0 = Math.max(e0.left, cv.left, 0), y0 = Math.max(e0.top, cv.top, 0), x1 = Math.min(e0.right, cv.right, innerWidth), y1 = Math.min(e0.bottom, cv.bottom, innerHeight);
+    const r = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+    const spots = [[0.02, 0.02], [0.98, 0.02], [0.02, 0.98], [0.98, 0.98], [0.5, 0.01]];
+    for (let i = 1; i < 10; i++) for (let j = 1; j < 10; j++) spots.push([i / 10, j / 10]);
+    for (const [fx, fy] of spots) {
       const x = r.x + r.width * fx, y = r.y + r.height * fy, t = document.elementFromPoint(x, y);
       // (the inside's own div is named for its block: a part or wire is one inside its svg)
       const item = t?.closest('[data-net], [data-inst]');
       if (t && inner.contains(t) && !(item && inner.contains(item))) { await menuAt(t, x, y); return true; }
     }
     const seen = [[0.02, 0.02], [0.98, 0.98], [0.5, 0.01]].map(([fx, fy]) => { const t = document.elementFromPoint(r.x + r.width * fx, r.y + r.height * fy); return t ? t.tagName + '.' + (t.getAttribute('class') ?? '') + (inner.contains(t) ? '(in)' : '(out)') : 'none'; });
-    return bad.push('no empty ground on the inside of ${part}: ' + seen.join(', ')), false;
+    const box = (q) => [q.x, q.y, q.width, q.height].map(Math.round).join(' ');
+    return bad.push('no empty ground on the inside of ${part}: ' + seen.join(', ') + '; inside ' + box(e0) + ', canvas ' + box(cv) + ', window ' + innerWidth + 'x' + innerHeight), false;
   };
   if (${mode === 'off'}) {
     if (open()) return ['${part} open before anything was asked'];
@@ -1164,6 +1190,7 @@ const lensMenuDrive = (part: string, mode: 'on' | 'off') => `(async () => {
     if (!(await until(() => !g().classList.contains('inside-on')))) bad.push('Hide inside left ${part} open');
     await wait(400);
     if (document.querySelector('.lens-layer .inside[data-inst="${part}"]')) bad.push('the hidden inside is still in the page');
+    if (sandbox) return bad;
     // a plain drill with the setting off: no lens cue, and a zoom out does not go up
     g().dispatchEvent(new MouseEvent('dblclick', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
     await wait(900);
@@ -1948,6 +1975,7 @@ function routes(): Route[] {
   add('#/c/cpu/0', lensOn('dark'), ' (lens pan from an inner part, alu, dark)', undefined, lensPanDrive('alu'));
   // a block opened and hidden from the right-click menu: with the setting on, and off (only that block, no zoom navigation)
   add('#/c/cpu/0', lensOn('light'), ' (lens menu, hide and view inside, alu)', undefined, lensMenuDrive('alu', 'on'));
+  add('#/c/cpu/0', lensOn('dark'), ` (lens menu by a held finger, alu, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensMenuDrive('alu', 'hold'));
   add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, zoomOpen: false, coachDone: { stage: true, sandbox: true } }) }, ' (lens menu with the setting off, alu, dark)', undefined, lensMenuDrive('alu', 'off'));
   for (const part of ['alu', 'npc']) add('#/c/cpu/0', lensOn('dark'), ` (lens stubs stay on the ports, ${part}, dark)`, undefined, lensAlignDrive(part));
   add('#/workbench/zero8', lensOn('dark'), ' (lens gate opened, or, dark)', undefined, lensGateDrive('or'));
@@ -1965,6 +1993,9 @@ function routes(): Route[] {
     add(comp, { ...lensOn('light'), [SANDBOX_KEY]: ex.json }, ' (zoom lens in look inside)', undefined, lensInsideDrive('cpu', 'alu', true));
     add(comp, { ...lensOn('dark'), [SANDBOX_KEY]: ex.json }, ' (zoom lens in look inside, dark)', undefined, lensInsideDrive('cpu', 'alu', true));
     add(comp, { ...lensOff, [SANDBOX_KEY]: ex.json }, ' (look inside, zoom lens off)', undefined, lensInsideDrive('cpu', 'alu', false));
+    // blocks opened and hidden from the right-click menu in look inside, the setting off and on
+    add(comp, { ...lensOff, [SANDBOX_KEY]: ex.json }, ' (lens menu in look inside, setting off)', undefined, lensMenuDrive('alu', 'off', 'cpu'));
+    add(comp, { ...lensOn('dark'), [SANDBOX_KEY]: ex.json }, ' (lens menu in look inside, dark)', undefined, lensMenuDrive('alu', 'on', 'cpu'));
   }
   // a touch screen (DESIGN.md item 6): pinches onto the control unit open its inside like the wheel and a tap on a small inner
   // part steps in, at both phone widths in both themes; at its default (on since 2026-11-13) it opens, turned off nothing does
