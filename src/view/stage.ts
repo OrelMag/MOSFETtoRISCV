@@ -46,6 +46,7 @@ import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
 import { type CursorItem, firstItem, nextInDir } from './kcursor';
 import './stagekeys';
 import { isMenuKey, type MenuEntry } from '../ui/menu';
+import { isConstantDef } from '../sim/constant';
 import type { ElsewhereHost, ExplainHost, MeasureHost } from './tracemenu';
 import { powerOff } from './truthrule';
 import { WhyPanel } from './whypanel';
@@ -555,6 +556,7 @@ export class Stage {
       elsewhere: (t) => this.elsewhere(t),
       accuse: (flat, name) => this.accuser?.(flat, name) ?? [],
       layoutChanged: () => this.syncLayoutPill(),
+      insideRows: (c) => this.insideRows(c),
     });
     this.view.onCamera(() => this.syncReadable());
     this.syncLens();
@@ -1187,20 +1189,30 @@ export class Stage {
 
   // ---- the zoom lens (view/lens.ts, docs/transparent/DESIGN.md) ----------------------------
 
-  /** Load the lens while Open blocks as you zoom is on; off, it is torn down and nothing of it runs. */
+  /** The setting the lens was built for: a change builds it again (its blocks opened from the menu let go). */
+  private lensAuto = settings.zoomOpen;
+  /** The menu's View inside asked for the lens while the setting is off: loaded until the setting changes. */
+  private lensManual = false;
+  /** A View inside waiting for the lens's chunk: the block, and the level it was asked on. */
+  private lensPending: { name: string; at: string } | null = null;
+
+  /** Load the lens while Open blocks as you zoom is on, or once a block was opened from the menu; else nothing of it runs. */
   private syncLens(): void {
-    if (!settings.zoomOpen) {
+    if (settings.zoomOpen !== this.lensAuto) {
+      this.lensAuto = settings.zoomOpen;
+      this.lensManual = false;
       this.lens?.dispose();
       this.lens = null;
       this.showCue(null);
-      return;
     }
+    if (!settings.zoomOpen && !this.lensManual) return;
     if (this.lens || this.lensLoading) return;
     this.lensLoading = true;
     void import('./lens').then(({ Lens }) => {
       this.lensLoading = false;
-      if (!settings.zoomOpen || this.lens) return;
+      if ((!settings.zoomOpen && !this.lensManual) || this.lens) return;
       this.lens = new Lens({
+        auto: settings.zoomOpen,
         view: this.view,
         canvas: this.canvas,
         ctx: () => this.ctx,
@@ -1211,7 +1223,7 @@ export class Stage {
             .map((r) => ({ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height }));
           return [...this.covers(), ...tags];
         },
-        allowed: () => settings.zoomOpen && !this.boardOn && !this.leaf && this.scene?.engine !== 'nmos',
+        allowed: () => this.insideAllowed(),
         // the out-of-order core's levels are too large for one task yet (DESIGN.md phase 2f)
         // nothing is too large since phase 2f: the lens's own task is 8-24 ms on every part of the out-of-order core
         // (scripts/lens-ooo-measure.mjs; the dim and the crumb follow as tasks of their own). Parts whose inside cannot
@@ -1241,7 +1253,32 @@ export class Stage {
         say: (t) => this.say(t),
       });
       this.lens.lit(this.litFor(this.path));
+      const p = this.lensPending;
+      this.lensPending = null;
+      if (p && p.at === this.path.join('.')) this.lens.setPin(p.name, true);
     });
+  }
+
+  /** May a block's inside be drawn in its box on this scene (not on the breadboards, an NMOS scene, a leaf's widget)? */
+  private insideAllowed(): boolean {
+    return !this.boardOn && !this.leaf && this.scene?.engine !== 'nmos';
+  }
+
+  /** The part menu's View inside / Hide inside (under Look inside), for a block with an inside. */
+  private insideRows(name: string | null): MenuEntry[] {
+    const def = name ? this.ctx?.node.children?.get(name)?.def : null;
+    if (!name || !def || isConstantDef(def) || !this.ctx?.canOpen(name) || !this.insideAllowed()) return [];
+    return this.lens?.insideOpen(name)
+      ? [{ label: 'Hide inside', hint: 'Back to the closed block', run: () => this.lens?.setPin(name, false) }]
+      : [{ label: 'View inside', hint: 'Its inside drawn in the block, live', run: () => this.viewInside(name) }];
+  }
+
+  /** View inside: drawn in its box now, loading the lens first when Open blocks as you zoom is off. */
+  private viewInside(name: string): void {
+    if (this.lens) return void this.lens.setPin(name, true);
+    this.lensManual = true;
+    this.lensPending = { name, at: this.path.join('.') };
+    this.syncLens();
   }
 
   /** Close an open zoom lens (a tour starting). True when one was open. */

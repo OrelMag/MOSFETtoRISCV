@@ -117,6 +117,18 @@ export function decide(prev: boolean, px: number, openAt: number): boolean {
 }
 
 /**
+ * Whether a box is drawn open, the learner's choice for it first. `pin`: the menu's View inside (true) or Hide inside (false)
+ * on this box, undefined for none. Without one, only Open blocks as you zoom (`auto`) opens a box: once the zoom rule says so
+ * (`rule`), and an open box closes only on a zoom out (a pan, a resize or a panel moves the cap, not the zoom). Nothing opens
+ * where the host refuses insides (`ok`: a breadboard, an NMOS scene).
+ */
+export function wantOpen(o: { pin: boolean | undefined; auto: boolean; rule: boolean; was: boolean; zoomingOut: boolean; ok: boolean }): boolean {
+  if (!o.ok) return false;
+  if (o.pin !== undefined) return o.pin;
+  return o.auto && (o.rule || (o.was && !o.zoomingOut));
+}
+
+/**
  * Where the hand-off to a drill happens: the drawn inside (the fit, on screen) covers the canvas in width or in height.
  * `fitPx`: the fit's rectangle in canvas px.
  */

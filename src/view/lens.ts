@@ -13,10 +13,11 @@ import { ICON } from './boxtext';
 import { MIN_VIEW_UNITS, TAP_SLOP } from './camera';
 import type { ViewCtx } from './context';
 import { isConstantDef } from '../sim/constant';
-import { bandOf, NO_BAND, type Band, capOpenAt, decide, fitInside, FADE_MS, FLOOR_PX, runsOf, handOffView, handsOff, insideExtent, openAtPx, smallestNamed, type Rect } from './lensplan';
+import { bandOf, NO_BAND, type Band, capOpenAt, decide, wantOpen, fitInside, FADE_MS, FLOOR_PX, runsOf, handOffView, handsOff, insideExtent, openAtPx, smallestNamed, type Rect } from './lensplan';
 import { cueWords, progress, ZoomOutGate } from './zoomout';
 import type { OverlayResult } from './overlays';
 import { SchematicView, type SchematicEvents } from './schematic';
+import type { MenuEntry } from '../ui/menu';
 import { netlistOf, type ComponentDef } from '../sim/types';
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -76,6 +77,10 @@ export interface LensHost {
   covers?(): Rect[];
   /** May an inside open on this scene at all (not on the breadboards, an NMOS scene, a leaf's widget)? */
   allowed(): boolean;
+  /** Open blocks as you zoom is on (absent: on). Off, the lens is loaded for the menu's View inside only: it opens the
+   *  blocks the learner chose and nothing else (no zoom rule, no hint, no hand-off, no zooming out to go up). The host
+   *  builds a new lens when the setting changes. */
+  readonly auto?: boolean;
   /** Unused since phase 2f. */
   tooLarge?(ctx: ViewCtx, name: string): boolean;
   /** Step into a level (history as for a double-click); `vb`: the view box to show it at, so nothing jumps. */
@@ -132,6 +137,11 @@ interface Box {
 
 export class Lens {
   private boxes = new Map<string, Box>();
+  /** The menu's View inside (true) and Hide inside (false), by box (pinKey): the zoom rule's answer is overridden for it.
+   *  Kept across levels and scenes for the lens's life; a new lens (the setting changed) starts without. */
+  private pins = new Map<string, boolean>();
+  /** Open blocks as you zoom (LensHost.auto): off, only pinned boxes open and the zoom navigation is left alone. */
+  readonly auto: boolean;
   /** place() is setting an inside's camera: its camera listener lets that one through. */
   private placing = false;
   /** The level the boxes belong to (path key). */
@@ -167,13 +177,14 @@ export class Lens {
   private layer: HTMLElement;
 
   constructor(private host: LensHost) {
+    this.auto = host.auto ?? true;
     const v = host.view;
     this.layer = document.createElement('div');
     this.layer.className = 'lens-layer';
     host.canvas.append(this.layer);
     this.off.push(() => this.layer.remove());
     const wheel = (e: WheelEvent) => {
-      if (this.gate.wheel(e.timeStamp, e.deltaY) === 'up') return this.goUp();
+      if (this.auto && this.gate.wheel(e.timeStamp, e.deltaY) === 'up') return this.goUp();
       this.zoomed(e.clientX, e.clientY, e.deltaY < 0);
     };
     v.el.addEventListener('wheel', wheel, { passive: true });
@@ -323,7 +334,7 @@ export class Lens {
       const start = !this.pinchLive;
       this.pinchLive = true;
       // going up changes the level and the camera: not under the fingers, when they lift
-      if (this.gate.pinch(performance.now(), k, start) === 'up') {
+      if (this.auto && this.gate.pinch(performance.now(), k, start) === 'up') {
         if (this.fingers.size && this.gesture) this.gesture.up = true;
         else this.goUp();
       }
@@ -382,6 +393,50 @@ export class Lens {
     return false;
   }
 
+  /** A box of the level on screen as a key that holds across levels and scenes: the root's id and the box's path. */
+  private pinKey(name: string): string {
+    let r = this.host.ctx();
+    while (r?.parent) r = r.parent;
+    return `${r?.def.id ?? ''}:${this.levelKey ? `${this.levelKey}.` : ''}${name}`;
+  }
+
+  /** Is this block of the level on screen drawn open, or about to be (the menu's View inside / Hide inside)? */
+  insideOpen(name: string): boolean {
+    return !!this.boxes.get(name)?.want;
+  }
+
+  /**
+   * The menu's View inside (`open`) or Hide inside on a block of the level on screen: it stays so whatever the zoom does,
+   * until the other is chosen. False (and said) when its inside cannot be drawn in its box.
+   */
+  setPin(name: string, open: boolean): boolean {
+    const ctx = this.host.ctx();
+    if (ctx && ctx.path.join('.') === this.levelKey && !this.boxes.size) this.measure();
+    const b = this.boxes.get(name);
+    if (!b || !this.host.allowed()) {
+      if (open) this.host.say(`${name}: its inside cannot be drawn in its box here; double-click to step in`);
+      return false;
+    }
+    this.pins.set(this.pinKey(name), open);
+    if (open) {
+      // built first: the build queue starts nearest the focus
+      const r = this.boxPx(name), c = this.canvasRect();
+      if (r) this.focus = [c.left + r.x + r.w / 2, c.top + r.y + r.h / 2];
+    }
+    this.hideHint();
+    this.host.say(open ? `${name}: inside shown, live; right-click it to hide it` : `${name}: inside hidden`);
+    this.schedule();
+    return true;
+  }
+
+  /** The rows an opened inside adds to its own menus: hide it, step in. */
+  private insideRows(b: Box, child: ViewCtx): MenuEntry[] {
+    return [
+      { label: `Hide inside of ${b.name}`, hint: 'Back to the closed block', run: () => this.setPin(b.name, false) },
+      { label: `Step into ${b.name}`, key: 'double-click', run: () => this.stepIn(b, child) },
+    ];
+  }
+
   /** The level on screen changed (a drill, going up, a new scene): its blocks are measured again; a hand-off keeps its cue. */
   levelChanged(path: string[]): void {
     this.dropAll();
@@ -396,7 +451,7 @@ export class Lens {
     }
     // one step in from the level before, however it came (a hand-off, a double-click, the crumb): the way up is shown
     const now = this.host.ctx(), up = now?.parent;
-    if (!this.handed && now && up && now.path.join('.') === this.levelKey && up.path.join('.') === was && this.started) {
+    if (this.auto && !this.handed && now && up && now.path.join('.') === this.levelKey && up.path.join('.') === was && this.started) {
       this.handed = { path: now.path, parent: { label: up.path[up.path.length - 1] ?? up.def.name, path: up.path }, px: this.unitPx() };
     }
     this.measure();
@@ -488,7 +543,8 @@ export class Lens {
     this.capFor = key;
     for (const b of this.boxes.values()) {
       b.openAt = capOpenAt(b.base, b.size, { w: c.width, h: c.height });
-      this.groupOf(b.name)?.setAttribute('data-open-at', b.openAt.toFixed(2));
+      // without the setting no block opens at a zoom: none says it does
+      if (this.auto) this.groupOf(b.name)?.setAttribute('data-open-at', b.openAt.toFixed(2));
     }
   }
 
@@ -503,7 +559,7 @@ export class Lens {
     const px = this.unitPx();
     const c = this.canvasRect();
     this.cap(c);
-    this.host.view.el.classList.toggle('lens-bigicons', px * ICON > ICON_MAX_PX);
+    this.host.view.el.classList.toggle('lens-bigicons', this.auto && px * ICON > ICON_MAX_PX);
     const zoomingIn = this.lastPx > 0 && px > this.lastPx * 1.0001;
     // only a zoom out closes a box (R3.4): a panel docking or folding, a resize or a pan moves the cap or the box, not the zoom
     const zoomingOut = this.lastPx > 0 && px < this.lastPx * 0.9999;
@@ -513,8 +569,7 @@ export class Lens {
       const r = this.boxPx(b.name, c);
       const near = nearCanvas(r, c);
       // the answer is kept for a box panned out of reach (only its drawing goes), so it comes back as it left
-      const open = decide(b.want, px, b.openAt);
-      b.want = ok && (open || (b.want && !zoomingOut));
+      b.want = wantOpen({ pin: this.pins.get(this.pinKey(b.name)), auto: this.auto, rule: decide(b.want, px, b.openAt), was: b.want, zoomingOut, ok });
       if (!near) { if (b.view || b.child) this.drop(b); }
       else if (b.want && !b.view) wantBuild = true;
       else if (b.want) this.show(b);
@@ -528,6 +583,8 @@ export class Lens {
     // hand-off (R3.5) is reached however small the inside is drawn in its box
     const push = this.pushIn, atLimit = px >= (0.995 * c.width) / MIN_VIEW_UNITS;
     this.pushIn = false;
+    // without the setting the zoom never steps in: a block opened from the menu is looked at, not entered
+    if (!this.auto) return;
     // fingers down: the hand-off waits for them to lift (released), the gesture remembering a push at the limit
     if (this.fingers.size) {
       if (push && atLimit && this.gesture) this.gesture.limit = true;
@@ -552,7 +609,7 @@ export class Lens {
     const key = this.levelKey;
     this.evaluate();
     this.dropDeferred();
-    if (!g || this.levelKey !== key || !this.host.ctx() || this.host.ctx()!.path.join('.') !== key) return;
+    if (!this.auto || !g || this.levelKey !== key || !this.host.ctx() || this.host.ctx()!.path.join('.') !== key) return;
     const c = this.canvasRect(), px = this.unitPx();
     const atLimit = px >= (0.995 * c.width) / MIN_VIEW_UNITS;
     if (px > g.px * 1.0001 || (g.limit && atLimit)) this.maybeHandOff(c, g.limit && atLimit);
@@ -662,6 +719,7 @@ export class Lens {
     const events: SchematicEvents = {
       ...this.host.events?.(child),
       open: (p) => this.host.drill([...child.path, p]),
+      insideRows: () => this.insideRows(b, child),
       select: (p) => {
         b.sel = p;
         this.host.selected();
@@ -702,7 +760,7 @@ export class Lens {
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (this.gate.wheel(e.timeStamp, e.deltaY) === 'up') return this.goUp();
+      if (this.auto && this.gate.wheel(e.timeStamp, e.deltaY) === 'up') return this.goUp();
       this.host.view.wheelAt(e.deltaY, e.clientX, e.clientY);
       this.zoomed(e.clientX, e.clientY, e.deltaY < 0);
     }, { capture: true, passive: false });
@@ -796,7 +854,7 @@ export class Lens {
     const fit = this.fitPx(b, c);
     const parent = this.parentOf();
     this.host.drill(child.path, fit && b.extent ? handOffView(fit, b.extent, { w: c.width, h: c.height }) : undefined);
-    if (parent) this.handed = { path: child.path, parent, px: this.unitPx() };
+    if (parent && this.auto) this.handed = { path: child.path, parent, px: this.unitPx() };
   }
 
   private parentOf(): { label: string; path: string[] } | null {
@@ -968,7 +1026,8 @@ export class Lens {
   /** Hovering a closed block that can open: "zoom in to see inside (×2.4)", or past ×4 "double-click to step in". */
   private hover(name: string | null): void {
     const b = name ? this.boxes.get(name) : null;
-    if (!b || b.shown || !this.host.allowed()) return this.hideHint();
+    // no zoom opens a box without the setting, nor one the learner hid
+    if (!b || b.shown || !this.auto || this.pins.get(this.pinKey(b.name)) === false || !this.host.allowed()) return this.hideHint();
     const r = this.boxPx(b.name);
     if (!r) return this.hideHint();
     const need = b.openAt / (this.unitPx() || 1);
@@ -1054,7 +1113,7 @@ export class Lens {
   /** The `−` key or the zoom-out button, before it zooms: true when it went up a level instead (so the press does not
    *  also zoom the parent). */
   zoomOutKey(): boolean {
-    if (this.gate.key(performance.now()) !== 'up') return false;
+    if (!this.auto || this.gate.key(performance.now()) !== 'up') return false;
     this.goUp();
     return true;
   }
@@ -1098,7 +1157,7 @@ export class Lens {
     if (!this.boxes.size) this.measure();
     // drawn at once, without a fade: it is the drawing the learner was just looking at
     const b = this.boxes.get(name);
-    if (b && !b.view && decide(false, this.lastPx, b.openAt) && this.host.allowed()) {
+    if (b && !b.view && (this.pins.get(this.pinKey(name)) ?? decide(false, this.lastPx, b.openAt)) && this.host.allowed()) {
       b.want = true;
       this.build(b, true);
       const r = this.boxPx(name, c);

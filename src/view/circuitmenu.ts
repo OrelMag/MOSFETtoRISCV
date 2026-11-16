@@ -75,7 +75,8 @@ export function openNet(site: MenuSite, idx: number, x: number, y: number): bool
   });
   // a "find it" step's accusation rows lead the menu
   const acc = events.accuse?.(ctx.node.nets?.[idx] ?? [], f.name) ?? [];
-  const all = acc.length ? [...acc, null, ...rows] : rows;
+  const inside = items(events.insideRows?.(null) ?? []);
+  const all = [...(acc.length ? [...acc, null] : []), ...rows, ...(inside.length ? [null, ...inside] : [])];
   showMenu(x, y, site.layout.length ? [...all, null, ...site.layout] : all, { owner: site.owner, into, label: `Actions for wire ${f.name}`, ...(site.back ? { back: site.back } : {}) });
   return true;
 }
@@ -89,6 +90,7 @@ export function openPart(site: MenuSite, name: string, x: number, y: number): bo
   partHeader(into, name, node.def);
   const rows: Item[] = [
     { label: 'Look inside', key: 'double-click', run: () => events.open(name), ...(ctx.canOpen(name) ? {} : { why: 'A primitive of the simulator: it has no inside.' }) },
+    ...items(events.insideRows?.(name) ?? []),
     ...(events.inspect && events.canInspect?.() !== false ? [{ label: 'Inspect', hint: 'Its datasheet and cost', run: () => events.inspect!(name) }] : []),
     ...(events.measure ? items(partMeasure(name, events.measure({ inst: name }))) : []),
     ...explainOf(events, name),

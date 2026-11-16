@@ -1102,6 +1102,94 @@ const lensPanDrive = (part: string) => `(async () => {
 })()`;
 
 /**
+ * A block opened and hidden from the right-click menu (view/lens.ts setPin). `off` (Open blocks as you zoom off): View inside on
+ * `part` draws it open at fit, it stays open through zooming out and in, nothing hands off, no block says it opens at a zoom; Hide
+ * inside of it from its inside's empty ground closes it; a double-click drill then shows no "zoom out to go up" cue. `on`: zoomed
+ * open, Hide inside from its inside closes it and further zooming leaves it closed; View inside on the block opens it again.
+ */
+const lensMenuDrive = (part: string, mode: 'on' | 'off') => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const svg = document.querySelector('.canvas > svg.schematic');
+  const g = () => svg?.querySelector('g.inst[data-inst="${part}"]');
+  if (!svg || !g()) return ['no ${part} on the stage'];
+  const bad = [], hash = location.hash;
+  const open = () => g().classList.contains('inside-on') && !!document.querySelector('.lens-layer .inside.on[data-inst="${part}"]');
+  const until = async (f, ms = 4000) => { for (let t = 0; t < ms && !f(); t += 100) await wait(100); return f(); };
+  const centre = (el) => { const r = el.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; };
+  const wheel = (dy, n) => { for (let k = 0; k < n; k++) { const [x, y] = centre(g()); svg.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: x, clientY: y, bubbles: true, cancelable: true })); } };
+  const rows = () => [...document.querySelectorAll('.ctx-menu [role^=menuitem]')];
+  const row = (label) => rows().find((r) => (r.querySelector('.ctx-l')?.firstChild?.textContent ?? '').trim() === label);
+  const menuAt = async (target, x, y) => {
+    target.dispatchEvent(new MouseEvent('contextmenu', { clientX: x, clientY: y, button: 2, bubbles: true, cancelable: true }));
+    await until(() => rows().length > 0, 3000);
+  };
+  const pick = async (label) => {
+    const r = row(label);
+    if (!r) { bad.push('no "' + label + '" in the menu: ' + rows().map((x) => x.textContent.trim()).join(' | ')); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await wait(200); return false; }
+    r.click();
+    await wait(200);
+    return true;
+  };
+  // the inside's empty ground: a corner of its element (the letterbox and the port band), off every inner part and wire
+  const ground = async () => {
+    const el = document.querySelector('.lens-layer .inside.on[data-inst="${part}"]');
+    const inner = el?.querySelector('svg.schematic');
+    if (!inner) return bad.push('no drawn inside to right-click'), false;
+    const r = el.getBoundingClientRect();
+    for (const [fx, fy] of [[0.02, 0.02], [0.98, 0.02], [0.02, 0.98], [0.98, 0.98], [0.5, 0.01]]) {
+      const x = r.x + r.width * fx, y = r.y + r.height * fy, t = document.elementFromPoint(x, y);
+      // (the inside's own div is named for its block: a part or wire is one inside its svg)
+      const item = t?.closest('[data-net], [data-inst]');
+      if (t && inner.contains(t) && !(item && inner.contains(item))) { await menuAt(t, x, y); return true; }
+    }
+    const seen = [[0.02, 0.02], [0.98, 0.98], [0.5, 0.01]].map(([fx, fy]) => { const t = document.elementFromPoint(r.x + r.width * fx, r.y + r.height * fy); return t ? t.tagName + '.' + (t.getAttribute('class') ?? '') + (inner.contains(t) ? '(in)' : '(out)') : 'none'; });
+    return bad.push('no empty ground on the inside of ${part}: ' + seen.join(', ')), false;
+  };
+  if (${mode === 'off'}) {
+    if (open()) return ['${part} open before anything was asked'];
+    const [x, y] = centre(g());
+    await menuAt(g(), x, y);
+    if (!(await pick('View inside'))) return bad;
+    if (!(await until(open))) return [...bad, 'View inside did not open ${part}'];
+    if (svg.querySelector('[data-open-at]')) bad.push('a block says it opens at a zoom with the setting off');
+    wheel(100, 3); await wait(800);
+    if (!open()) bad.push('zooming out closed ${part}, opened from the menu');
+    wheel(-100, 12); await wait(1200);
+    if (location.hash !== hash) bad.push('zooming in handed off to ' + location.hash + ' with the setting off');
+    else if (!open()) bad.push('zooming in closed ${part}');
+    document.querySelector('.stage [aria-label="Fit to screen"]')?.click();
+    await wait(500);
+    if (!(await ground())) return bad;
+    if (!(await pick('Hide inside of ${part}'))) return bad;
+    if (!(await until(() => !g().classList.contains('inside-on')))) bad.push('Hide inside left ${part} open');
+    await wait(400);
+    if (document.querySelector('.lens-layer .inside[data-inst="${part}"]')) bad.push('the hidden inside is still in the page');
+    // a plain drill with the setting off: no lens cue, and a zoom out does not go up
+    g().dispatchEvent(new MouseEvent('dblclick', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+    await wait(900);
+    if (location.hash === hash) bad.push('double-click did not step into ${part}');
+    const cue = document.querySelector('.lens-cue');
+    if (cue && cue.getBoundingClientRect().width > 0) bad.push('a lens cue after a drill with the setting off: ' + cue.textContent);
+    return bad;
+  }
+  for (let k = 0; k < 60 && !open() && location.hash === hash; k++) { wheel(-100, 1); await wait(450); }
+  if (!open()) return ['${part} never opened by zoom'];
+  await wait(400);
+  if (!(await ground())) return bad;
+  if (!(await pick('Hide inside of ${part}'))) return bad;
+  if (!(await until(() => !g().classList.contains('inside-on')))) return [...bad, 'Hide inside left ${part} open'];
+  wheel(-100, 2); await wait(900);
+  if (location.hash !== hash) bad.push('zooming on a hidden block handed off to ' + location.hash);
+  else if (g().classList.contains('inside-on')) bad.push('zooming in opened ${part} again after Hide inside');
+  if (location.hash === hash) {
+    const [x, y] = centre(g());
+    await menuAt(g(), x, y);
+    if (await pick('View inside') && !(await until(open))) bad.push('View inside did not open ${part} again');
+  }
+  return bad;
+})()`;
+
+/**
  * The stubs stay on the box's ports whatever pans the stage: each stub's first point, on screen, measured against the box's own
  * outline after a drag on the board, a drag on the inside's empty space, a drag from an inner part, a horizontal / vertical
  * scroll (a trackpad's two-finger pan) and the arrow keys.
@@ -1858,6 +1946,9 @@ function routes(): Route[] {
   add('#/c/pipeline/1', lensOn('dark'), ' (lens hone, pipeline register FD, dark)', undefined, honeDrive('FD'));
   add('#/c/ooo/11', lensOn('dark'), ' (lens hone, out of order, dark)', undefined, honeDrive('div'));
   add('#/c/cpu/0', lensOn('dark'), ' (lens pan from an inner part, alu, dark)', undefined, lensPanDrive('alu'));
+  // a block opened and hidden from the right-click menu: with the setting on, and off (only that block, no zoom navigation)
+  add('#/c/cpu/0', lensOn('light'), ' (lens menu, hide and view inside, alu)', undefined, lensMenuDrive('alu', 'on'));
+  add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, zoomOpen: false, coachDone: { stage: true, sandbox: true } }) }, ' (lens menu with the setting off, alu, dark)', undefined, lensMenuDrive('alu', 'off'));
   for (const part of ['alu', 'npc']) add('#/c/cpu/0', lensOn('dark'), ` (lens stubs stay on the ports, ${part}, dark)`, undefined, lensAlignDrive(part));
   add('#/workbench/zero8', lensOn('dark'), ' (lens gate opened, or, dark)', undefined, lensGateDrive('or'));
   // View options ▸ Opened blocks without colour: the opened alu on the board's colour, closed boxes keep theirs; the dark board

@@ -73,6 +73,9 @@ export interface SchematicEvents {
   layoutChanged?(): void;
   /** A "find it" step (widgets/findfault.ts): its rows for a wire, given the wire's flat nets and name, first in its menu. */
   accuse?(flat: readonly number[], name: string): MenuEntry[];
+  /** Open blocks in place (view/lens.ts): for a part, View inside / Hide inside under Look inside; for a wire or empty
+   *  ground (null), what the level offers (an opened block's inside: hide it, step in). */
+  insideRows?(child: string | null): MenuEntry[];
 }
 
 type MenuItem = NonNullable<MenuEntry>;
@@ -1728,8 +1731,13 @@ export class SchematicView {
 
   /** What the menu holds for what is under the pointer: on empty ground, a way to everything else first. */
   private menuItems(target: Element | null): MenuItem[] {
-    const items = this.layoutItems(target);
-    if (!this.pickable || !this.ctx || target?.closest('[data-net], [data-inst]')) return items;
+    // a part or wire of this drawing (not an element around it: an opened block's inside sits in a div named for its block)
+    const hit = target?.closest('[data-net], [data-inst]');
+    const onItem = !!hit && this.el.contains(hit);
+    // an opened block's inside: its own rows on its empty ground (hide it, step in), where it has no layout rows
+    const own = onItem ? [] : (this.events.insideRows?.(null) ?? []).filter((r): r is MenuItem => !!r);
+    const items = [...own, ...this.layoutItems(target)];
+    if (!this.pickable || !this.ctx || onItem) return items;
     // the groups' rows load when one opens (view/circuitmenu.ts)
     const later = (label: string, which: 'explain' | 'elsewhere'): MenuItem => ({ label, sub: () => import('./circuitmenu').then((m) => m.levelGroup(this.events, which)) });
     const more: MenuItem[] = [
@@ -1745,8 +1753,10 @@ export class SchematicView {
   private traceMenu(target: Element, x: number, y: number): boolean {
     const ctx = this.ctx;
     if (!this.trace || !ctx) return false;
-    const ni = target.closest('[data-net]')?.getAttribute('data-net');
-    const name = ni == null ? target.closest('[data-inst]')?.getAttribute('data-inst') : null;
+    // only this drawing's own (an opened block's inside sits in a div named for its block)
+    const mine = (sel: string) => { const x = target.closest(sel); return x && this.el.contains(x) ? x : null; };
+    const ni = mine('[data-net]')?.getAttribute('data-net');
+    const name = ni == null ? mine('[data-inst]')?.getAttribute('data-inst') : null;
     if (ni == null && (!name || !ctx.node.children?.has(name))) return false;
     if (ni != null) {
       const idx = Number(ni);
