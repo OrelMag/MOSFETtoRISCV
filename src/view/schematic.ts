@@ -279,6 +279,7 @@ export class SchematicView {
   /** Drop the drawing and its context (which holds the simulation), until the next show(). */
   clear(): void {
     this.closeMenu();
+    this.boxCls.clear();
     this.ctx = null;
     this.base = null;
     this.selected = null;
@@ -314,6 +315,8 @@ export class SchematicView {
 
   /** Draw the inside of ctx. `interactive` makes the root input pins clickable. */
   show(ctx: ViewCtx, interactive: boolean, keepView = false): void {
+    // another level: the lens's box classes were for the parts of the one before
+    if (this.ctx?.def.id !== ctx.def.id || this.ctx?.path.join('.') !== ctx.path.join('.')) this.boxCls.clear();
     this.ctx = ctx;
     if (this.trace) prefetchMenu(this.pickable);
     this.interactive = interactive;
@@ -545,6 +548,7 @@ export class SchematicView {
         e.stopPropagation();
         if (openable && this.taps.dblclick(e.timeStamp)) this.events.open(inst.name);
       });
+      for (const c of this.boxCls.get(inst.name) ?? []) g.classList.add(c);
       this.insts.set(inst.name, g);
       instG.append(g);
       this.paintOv(inst.name, g);
@@ -911,7 +915,12 @@ export class SchematicView {
   /** A class on a drawn part's group (the zoom lens: its inside shown, its outline lit by the CPU panel). */
   boxClass(name: string, cls: string, on: boolean): void {
     this.insts.get(name)?.classList.toggle(cls, on);
+    // kept, so a redraw of the level (a part moved, a layout reset) draws the box with it again
+    let set = this.boxCls.get(name);
+    if (on) { if (!set) this.boxCls.set(name, (set = new Set())); set.add(cls); } else set?.delete(cls);
   }
+  /** boxClass's classes by part name, put back on each redraw of the same level. */
+  private boxCls = new Map<string, Set<string>>();
 
   /** A drawn part's box, grid units. */
   boxOf(name: string): Rect | undefined {
@@ -1282,12 +1291,14 @@ export class SchematicView {
    */
   private pressInst(e: PointerEvent, name: string): void {
     if (e.button !== 0 || (e.target as Element).closest('.open-badge')) return;
-    if (this.arrange === true && this.movable && (e.pointerType !== 'touch' || this.selected === name || this.group.has(name))) {
+    // a box opened by the zoom lens is a window onto its inside: a drag on its rim or name pans, as one on the inside does
+    const opened = this.boxCls.get(name)?.has('inside-on') ?? false;
+    if (!opened && this.arrange === true && this.movable && (e.pointerType !== 'touch' || this.selected === name || this.group.has(name))) {
       this.dragInst(e, name);
       return;
     }
     if (e.shiftKey && this.arrange === true) return;
-    this.panFrom(e, this.arrange === true && !settings.moveParts && !this.original);
+    this.panFrom(e, !opened && this.arrange === true && !settings.moveParts && !this.original);
   }
 
   /** Pan the view from a press on a part (installPanZoom pans only from the board): past the slop, the part's click is

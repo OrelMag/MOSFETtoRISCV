@@ -1172,6 +1172,15 @@ const lensAlignDrive = (part: string) => `(async () => {
   }
   const p0 = inner.querySelector('g.inst');
   if (p0) { const r = p0.getBoundingClientRect(); await drag(p0, r.x + r.width / 2, r.y + r.height / 2, 13); await check('drag from an inner part'); }
+  // the opened box's own name (outside the inside): a pan too, never a move of the part, and the box stays opened
+  const nmEl = g().querySelector('.inst-name');
+  if (!nmEl) bad.push('the opened ${part} has no name to drag');
+  else {
+    const r = nmEl.getBoundingClientRect();
+    await drag(nmEl, r.x + r.width / 2, r.y + r.height / 2, 15);
+    await check('drag on the opened box name');
+    if (/parts? moved/.test(document.body.innerText)) bad.push('a drag on the opened box name moved the part');
+  }
   wheelOn(el, 0, 40); await check('horizontal scroll over the inside');
   wheelOn(svg, 0, 40); await check('horizontal scroll over the board');
   wheelOn(svg, 30, 0, { shiftKey: true }); await check('shift-scroll over the board');
