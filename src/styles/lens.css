@@ -64,6 +64,10 @@ svg.schematic g.inst.lens-lit { filter: drop-shadow(0 0 0.5px var(--lens-rim)) d
 :root[data-lens-fill='plain'] svg.schematic g.inst.inside-on .sym-shadow { opacity: 0; }
 :root[data-lens-fill='plain'] svg.schematic g.inst.inside-on .sym-port { fill: var(--text-2); }
 
+/* Working gates (cmos.css) draw a gate's own transistors inside its symbol: under an opened gate they would show through the
+   real inside, the same circuit twice. */
+:root[data-gates='cmos'] svg.schematic g.inst.inside-on .sym .cmos { display: none; }
+
 /* Hovering a closed block that can open: how much more zoom it needs, below the box (lens.ts places it). */
 .inside-hint {
   position: absolute;

@@ -214,7 +214,7 @@ describe('opened blocks without colour', () => {
     for (const r of paints) for (const s of r.sel.split(/,(?![^(]*\))/)) if (s.includes('data-lens-fill')) expect(s).toContain('g.inst.inside-on');
     // the fade belongs to the option and gives way to reduced motion (the setting and the system's preference)
     expect(rules.filter((r) => /transition:\s*none/.test(r.body)).length).toBe(2);
-    // gates keep their blue: no rule reaches a gate body
-    expect(lens).not.toMatch(/data-lens-fill[^{]*kind-(nand|and|or|not)/);
+    // an opened gate is a box too: its body takes the board's colour (the author's call, 2026-11-15; it once kept its blue)
+    expect(lens).toMatch(/data-lens-fill[^{]*inside-on[^{]*kind-nand/);
   });
 });

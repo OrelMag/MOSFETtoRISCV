@@ -1065,6 +1065,39 @@ const lensPlainDrive = (part: string, on: boolean) => `(async () => {
   return bad;
 })()`;
 
+/**
+ * Panning inside an opened block (view/lens.ts wire): a drag that starts on an inner part pans the stage's camera, never the
+ * inside's own: its view box (set from the box's outline alone) stays put, so its stubs and the box's ports stay together.
+ */
+const lensPanDrive = (part: string) => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const svg = document.querySelector('.canvas > svg.schematic');
+  const g = () => svg?.querySelector('[data-inst="${part}"]');
+  if (!svg || !g()) return ['no ${part} on the stage'];
+  const wheel = (dy) => { const r = g().getBoundingClientRect(); svg.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); };
+  const hash = location.hash;
+  for (let k = 0; k < 60 && !g().classList.contains('inside-on') && location.hash === hash; k++) { wheel(-100); await wait(450); }
+  if (!g().classList.contains('inside-on')) return ['${part} never opened'];
+  await wait(600);
+  const el = document.querySelector('.lens-layer .inside.on[data-inst="${part}"]');
+  const inner = el?.querySelector('svg.schematic');
+  const part0 = inner?.querySelector('g.inst');
+  if (!el || !inner || !part0) return ['no drawn inside with a part to press on'];
+  const vb = () => inner.getAttribute('viewBox');
+  const before = vb(), at = el.getBoundingClientRect();
+  const r = part0.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2;
+  const ev = (type, dx, dy) => new PointerEvent(type, { pointerId: 7, pointerType: 'mouse', button: 0, buttons: 1, clientX: x + dx, clientY: y + dy, bubbles: true, cancelable: true, isPrimary: true });
+  part0.dispatchEvent(ev('pointerdown', 0, 0));
+  for (const d of [10, 30, 60]) { window.dispatchEvent(ev('pointermove', d, d / 2)); part0.dispatchEvent(ev('pointermove', d, d / 2)); await wait(40); }
+  window.dispatchEvent(ev('pointerup', 60, 30));
+  await wait(300);
+  const bad = [];
+  if (vb() !== before) bad.push('a drag from an inner part moved the inside own view: ' + before + ' to ' + vb());
+  const now = el.getBoundingClientRect();
+  if (Math.abs(now.x - at.x) + Math.abs(now.y - at.y) < 20) bad.push('the drag did not pan the stage (the inside stayed at ' + Math.round(now.x) + ',' + Math.round(now.y) + ')');
+  return bad;
+})()`;
+
 const honeDrive = (part: string) => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const CLOSE_SHARE = 0.75, SETTLE = 450;
@@ -1702,6 +1735,7 @@ function routes(): Route[] {
   add('#/c/pipeline/1', lensOn('light'), ' (lens hone, pipeline register FD)', undefined, honeDrive('FD'));
   add('#/c/pipeline/1', lensOn('dark'), ' (lens hone, pipeline register FD, dark)', undefined, honeDrive('FD'));
   add('#/c/ooo/11', lensOn('dark'), ' (lens hone, out of order, dark)', undefined, honeDrive('div'));
+  add('#/c/cpu/0', lensOn('dark'), ' (lens pan from an inner part, alu, dark)', undefined, lensPanDrive('alu'));
   // View options ▸ Opened blocks without colour: the opened alu on the board's colour, closed boxes keep theirs; the dark board
   // and the light canvas; off, the opened alu keeps its hue
   const plainOn = (theme: 'light' | 'dark', board: boolean, lensPlain: boolean) =>
